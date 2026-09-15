@@ -18,6 +18,7 @@ import java.util.regex.Pattern;
 
 public final class StreamResolver {
     private static final String USER_AGENT = AppInfo.USER_AGENT;
+    private static final int MAX_REDIRECTS = 4;
     private static final String[] BASES = {
             "https://all.api.radio-browser.info",
             "https://de1.api.radio-browser.info",
@@ -66,20 +67,27 @@ public final class StreamResolver {
     }
 
     private static String probe(String raw, int depth) {
-        if (depth > 3 || !isSafeHttp(raw)) return null;
+        if (depth > MAX_REDIRECTS || !isSafeHttp(raw)) return null;
         HttpURLConnection c = null;
         try {
             URL original = new URL(raw);
             c = (HttpURLConnection) original.openConnection();
             c.setConnectTimeout(6500);
             c.setReadTimeout(6500);
-            c.setInstanceFollowRedirects(true);
+            c.setInstanceFollowRedirects(false);
             c.setUseCaches(false);
             c.setRequestProperty("User-Agent", USER_AGENT);
             c.setRequestProperty("Icy-MetaData", "0");
             c.setRequestProperty("Accept", "audio/*,application/ogg,application/vnd.apple.mpegurl,application/x-mpegURL,*/*;q=0.5");
             int status = c.getResponseCode();
-            if (status < 200 || status >= 400) return null;
+            if (isRedirect(status)) {
+                String location = safe(c.getHeaderField("Location"));
+                if (location.isEmpty()) return null;
+                URL redirected = new URL(original, location);
+                String next = redirected.toString();
+                return isSafeHttp(next) ? probe(next, depth + 1) : null;
+            }
+            if (status < 200 || status >= 300) return null;
             String finalUrl = c.getURL().toString();
             if (!isSafeHttp(finalUrl)) return null;
             String contentType = safe(c.getContentType()).toLowerCase(Locale.ROOT);
@@ -101,6 +109,15 @@ public final class StreamResolver {
         } finally {
             if (c != null) c.disconnect();
         }
+    }
+
+    private static boolean isRedirect(int status) {
+        return status == HttpURLConnection.HTTP_MULT_CHOICE
+                || status == HttpURLConnection.HTTP_MOVED_PERM
+                || status == HttpURLConnection.HTTP_MOVED_TEMP
+                || status == HttpURLConnection.HTTP_SEE_OTHER
+                || status == 307
+                || status == 308;
     }
 
     private static boolean isHls(String u, String ct) {
@@ -133,7 +150,10 @@ public final class StreamResolver {
             } catch (Throwable ignored) { }
         }
         Matcher m = ABSOLUTE_URL.matcher(body);
-        if (m.find()) return m.group();
+        if (m.find()) {
+            String candidate = m.group();
+            return isSafeHttp(candidate) ? candidate : null;
+        }
         return null;
     }
 
@@ -162,9 +182,10 @@ public final class StreamResolver {
             try {
                 URL u = new URL(base + "/json/stations/byuuid/" + stationUuid);
                 c = (HttpURLConnection) u.openConnection();
-                c.setConnectTimeout(5000); c.setReadTimeout(7000); c.setUseCaches(false);
+                c.setConnectTimeout(5000); c.setReadTimeout(7000); c.setUseCaches(false); c.setInstanceFollowRedirects(false);
                 c.setRequestProperty("User-Agent", USER_AGENT); c.setRequestProperty("Accept", "application/json");
-                if (c.getResponseCode() < 200 || c.getResponseCode() >= 310) continue;
+                int status = c.getResponseCode();
+                if (status < 200 || status >= 300) continue;
                 String json = readLimited(c, 512 * 1024);
                 JSONArray a = new JSONArray(json);
                 for (int i = 0; i < a.length(); i++) {
@@ -185,15 +206,26 @@ public final class StreamResolver {
     }
 
     public static List<String> discoverFromHomepage(String homepage) {
+        return discoverFromHomepage(homepage, 0);
+    }
+
+    private static List<String> discoverFromHomepage(String homepage, int depth) {
         List<String> out = new ArrayList<>();
-        if (!isSafeHttp(homepage)) return out;
+        if (depth > MAX_REDIRECTS || !isSafeHttp(homepage)) return out;
         HttpURLConnection c = null;
         try {
-            c = (HttpURLConnection) new URL(homepage).openConnection();
-            c.setConnectTimeout(6000); c.setReadTimeout(8000); c.setUseCaches(false); c.setInstanceFollowRedirects(true);
+            URL requested = new URL(homepage);
+            c = (HttpURLConnection) requested.openConnection();
+            c.setConnectTimeout(6000); c.setReadTimeout(8000); c.setUseCaches(false); c.setInstanceFollowRedirects(false);
             c.setRequestProperty("User-Agent", USER_AGENT); c.setRequestProperty("Accept", "text/html,*/*;q=0.5");
             int status = c.getResponseCode();
-            if (status < 200 || status >= 400) return out;
+            if (isRedirect(status)) {
+                String location = safe(c.getHeaderField("Location"));
+                if (location.isEmpty()) return out;
+                String next = new URL(requested, location).toString();
+                return isSafeHttp(next) ? discoverFromHomepage(next, depth + 1) : out;
+            }
+            if (status < 200 || status >= 300) return out;
             String body = readLimited(c, 1024 * 1024).replace("\\/", "/").replace("&amp;", "&");
             URL base = c.getURL();
             if (!isSafeHttp(base.toString())) return out;
