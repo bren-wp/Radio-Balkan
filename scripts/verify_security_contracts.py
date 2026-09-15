@@ -65,11 +65,16 @@ def main() -> None:
     )
 
     require(
+        "apps/windows/portable/main.go",
+        "if u.User != nil {",
+    )
+    require(
         "apps/windows/portable/main_test.go",
         "TestSafeHTTPURLRejectsPrivateAndCredentialedTargets",
         "http://127.0.0.1/live",
         "http://10.0.0.4/live",
         "http://192.168.1.10/live",
+        "https://user:pass@example.com/live",
         "TestValidateStateDropsUnsafeReplacementURLs",
     )
     forbid(
