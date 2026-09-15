@@ -8,6 +8,7 @@ on:
       - apps/**
       - extensions/**
       - scripts/check_clean_worktree.py
+      - scripts/generate_release_checksums.py
       - .github/workflows/publish.yml
   workflow_dispatch:
 
@@ -121,8 +122,8 @@ jobs:
       - name: Generate and verify checksums
         run: |
           VERSION=$(cat VERSION)
+          python scripts/generate_release_checksums.py release-assets "$VERSION"
           cd release-assets
-          sha256sum * > "RadioBalkan-v${VERSION}-SHA256.txt"
           sha256sum -c "RadioBalkan-v${VERSION}-SHA256.txt"
       - name: Publish release assets
         env:
