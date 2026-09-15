@@ -48,6 +48,8 @@ jobs:
       - name: Build extensions
         working-directory: extensions
         run: python tools/build_extensions.py
+      - name: Verify browser build leaves repository clean
+        run: python scripts/check_clean_worktree.py
 
   windows:
     runs-on: windows-latest
@@ -72,13 +74,7 @@ jobs:
         shell: pwsh
         run: ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
       - name: Verify Windows build leaves repository clean
-        shell: pwsh
-        run: |
-          $changes = @(git status --porcelain --untracked-files=all)
-          if ($changes.Count -gt 0) {
-            $changes | ForEach-Object { Write-Error $_ }
-            throw 'Windows release build modified or left files in the repository workspace.'
-          }
+        run: python scripts/check_clean_worktree.py
 
   android:
     runs-on: ubuntu-latest
@@ -101,3 +97,5 @@ jobs:
       - name: Android unit tests, lint and release build
         working-directory: apps/android
         run: gradle --no-daemon --console=plain testReleaseUnitTest lintRelease assembleRelease
+      - name: Verify Android build leaves repository clean
+        run: python scripts/check_clean_worktree.py
