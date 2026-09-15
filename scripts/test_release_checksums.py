@@ -7,6 +7,8 @@ from pathlib import Path
 
 from generate_release_checksums import write_manifest
 
+TEST_VERSION = "9.9.9"
+
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -15,15 +17,15 @@ def sha256(data: bytes) -> str:
 def main() -> None:
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)
-        portable = root / "RadioBalkan-Portable-v0.0.12.exe"
-        browser = root / "RadioBalkan-Chrome-Extension-v0.0.12.zip"
-        manifest = root / "RadioBalkan-v0.0.12-SHA256.txt"
+        portable = root / f"RadioBalkan-Portable-v{TEST_VERSION}.exe"
+        browser = root / f"RadioBalkan-Chrome-Extension-v{TEST_VERSION}.zip"
+        manifest = root / f"RadioBalkan-v{TEST_VERSION}-SHA256.txt"
 
         portable.write_bytes(b"portable-release-bytes")
         browser.write_bytes(b"browser-release-bytes")
         manifest.write_text("stale self-referential manifest\n", encoding="utf-8")
 
-        generated = write_manifest(root, "0.0.12")
+        generated = write_manifest(root, TEST_VERSION)
         assert generated == manifest
         text = generated.read_text(encoding="ascii")
         lines = text.splitlines()
