@@ -1,0 +1,44 @@
+name: Product screenshots
+
+on:
+  push:
+    branches: [main, "chatgpt/**"]
+    paths-ignore: ["assets/screenshots/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  screenshots:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - name: Build Windows application
+        shell: pwsh
+        working-directory: apps/windows
+        run: ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
+      - name: Capture real Windows UI
+        shell: pwsh
+        run: ./scripts/capture-windows.ps1 -Exe "apps/windows/dist/RadioBalkan-Portable-v$((Get-Content VERSION).Trim()).exe" -Output "assets/screenshots/windows.png"
+      - name: Capture real browser popup UI
+        shell: pwsh
+        run: |
+          $server = Start-Process python -ArgumentList '-m','http.server','8765','--directory','extensions/shared' -PassThru -WindowStyle Hidden
+          try {
+            Start-Sleep -Seconds 2
+            $edge = "$env:ProgramFiles(x86)\Microsoft\Edge\Application\msedge.exe"
+            if (-not (Test-Path $edge)) { $edge = "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe" }
+            & $edge --headless=new --disable-gpu --window-size=420,600 --hide-scrollbars --screenshot="$PWD\assets\screenshots\browser-extension.png" http://127.0.0.1:8765/popup.html
+          } finally { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }
+      - name: Commit screenshots
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/screenshots/*.png
+          if (git diff --cached --quiet) { exit 0 }
+          git commit -m "docs: add real Radio Balkan application screenshots"
+          git push origin HEAD:${{ github.ref_name }}
