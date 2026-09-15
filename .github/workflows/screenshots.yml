@@ -30,23 +30,45 @@ jobs:
           try {
             Start-Sleep -Seconds 2
             $candidates = @(
+              "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+              "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
               "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
               "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
-              "$env:LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe",
-              "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
-              "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
+              "$env:LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe"
             )
             $browser = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
             if (-not $browser) {
-              foreach ($name in @('msedge.exe','chrome.exe')) {
+              foreach ($name in @('chrome.exe','msedge.exe')) {
                 $cmd = Get-Command $name -ErrorAction SilentlyContinue
                 if ($cmd) { $browser = $cmd.Source; break }
               }
             }
             if (-not $browser) { throw 'Edge/Chrome executable was not found on the GitHub runner.' }
-            & $browser --headless=new --disable-gpu --window-size=420,600 --hide-scrollbars --screenshot="$PWD\assets\screenshots\browser-extension.png" http://127.0.0.1:8765/popup.html
-            if (-not (Test-Path 'assets/screenshots/browser-extension.png')) { throw 'Browser screenshot was not created.' }
-          } finally { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }
+
+            $output = Join-Path $PWD 'assets\screenshots\browser-extension.png'
+            $profile = Join-Path $env:RUNNER_TEMP 'radio-balkan-browser-profile'
+            if (Test-Path $profile) { Remove-Item $profile -Recurse -Force }
+            New-Item -ItemType Directory -Force -Path (Split-Path $output) | Out-Null
+            $args = @(
+              '--headless=new',
+              '--disable-gpu',
+              '--disable-background-networking',
+              '--no-first-run',
+              '--no-default-browser-check',
+              "--user-data-dir=$profile",
+              '--window-size=420,600',
+              '--hide-scrollbars',
+              "--screenshot=$output",
+              'http://127.0.0.1:8765/popup.html'
+            )
+            $process = Start-Process -FilePath $browser -ArgumentList $args -PassThru -Wait
+            if ($process.ExitCode -ne 0) { throw "Headless browser exited with code $($process.ExitCode)." }
+            if (-not (Test-Path $output)) { throw 'Browser screenshot was not created.' }
+            if ((Get-Item $output).Length -lt 1024) { throw 'Browser screenshot is unexpectedly small.' }
+          } finally {
+            Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+            Get-Process msedge,chrome -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          }
       - name: Commit screenshots
         shell: pwsh
         run: |
