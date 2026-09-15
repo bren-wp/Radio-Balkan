@@ -1,5 +1,23 @@
 # Izdavanja
 
+## 0.0.7
+
+Izdanje 0.0.7 dodatno učvršćuje Android mrežni i playback sloj te uvodi izvršne regresijske testove u svaki release build.
+
+- Android stream resolver više ne dopušta automatsko HTTP preusmjeravanje; svaki redirect hop ručno se razrješava i prolazi `isSafeHttp` provjeru prije novog mrežnog zahtjeva
+- redirect lanac ograničen je na četiri preusmjeravanja, a privatni, loopback, link-local, CGNAT, metadata i credentialed URL-ovi ostaju blokirani
+- homepage discovery i playlist fallback sada primjenjuju isti safe-URL contract; repaired stream više ne može zaobići strožu provjeru preko običnog `isHttp`
+- ispravljen je Android MediaPlayer stale/double-callback race zbog kojeg je zakašnjeli callback mogao povećati `currentCandidate` i preskočiti valjani fallback stream
+- neuspjeli `resume()` sada oslobađa neispravni player i kontrolirano prelazi na sljedeći kandidat umjesto ponavljanja rada nad pokvarenim playerom
+- foreground notification i interni state broadcast pozivi izolirani su od OEM/runtime iznimki, a greška pri traženju audio fokusa više se ne tretira kao odobren fokus
+- ICY metadata request više automatski ne slijedi redirect
+- dodani su Android JUnit testovi za private, link-local, metadata, CGNAT, IPv6 i credentialed URL ciljeve te normalne javne HTTP/HTTPS streamove
+- Android CI i release pipeline sada obavezno izvršavaju `testReleaseUnitTest` prije `lintRelease` i `assembleRelease`
+- security-contract verifier čuva ručno redirect praćenje, safe repair putanju, player ownership guard i prisutnost Android URL regresijskih testova
+- Windows produkcijska verzija sada se tretira kao linker-injected vrijednost iz `build-release.ps1`; version bump više ne prepisuje velike Win32 source datoteke samo radi fallback verzijskog stringa
+
+Zaštita URL-ova smanjuje rizik od lokalnih i metadata ciljeva, ali ne predstavlja opće jamstvo protiv svih DNS-rebinding ili mrežnih TOCTOU scenarija.
+
 ## 0.0.6
 
 Izdanje 0.0.6 fokusirano je na stabilnost playera, sigurnije mrežne ulaze i strože regresijske provjere prije objave.

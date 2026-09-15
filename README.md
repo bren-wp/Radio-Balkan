@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.6" src="assets/badges/version.svg">
+  <img alt="version 0.0.7" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -52,7 +52,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary i stvarni 
 
 ## Preuzimanje
 
-Gotovi v0.0.6 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.6):
+Gotovi v0.0.7 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.7):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -88,10 +88,10 @@ python scripts/verify_security_contracts.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.7
+python scripts/bump_version.py 0.0.8
 ```
 
-Detaljni build postupci: [`docs/BUILD.md`](docs/BUILD.md). GitHub Actions dodatno provjerava JavaScript, browser pakiranje i player-state ugovore, Go test/vet/build, Android lint/release build, sigurnosne kontrakte i usklađenost verzija.
+Detaljni build postupci: [`docs/BUILD.md`](docs/BUILD.md). GitHub Actions dodatno provjerava JavaScript, browser pakiranje i player-state ugovore, Go test/vet/build, Android unit testove, lint/release build, sigurnosne kontrakte i usklađenost verzija.
 
 ## Dokumentacija
 

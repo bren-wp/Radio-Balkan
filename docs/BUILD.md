@@ -5,10 +5,10 @@
 Kanonska verzija nalazi se u root `VERSION` datoteci. Za novo izdanje koristi jedan sinkronizirani bump, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.7
+python scripts/bump_version.py 0.0.8
 ```
 
-Skripta sinkronizira Windows, Android, browser metapodatke, README i version badge te zatim pokreće `scripts/check_versions.py`.
+Skripta sinkronizira Windows build default, Android, browser metapodatke, README i version badge te zatim pokreće `scripts/check_versions.py`. Windows produkcijski Portable i Setup dobivaju `appVersion` kroz Go linker `-X main.appVersion=$Version`, pa release bump ne prepisuje velike Win32 source datoteke samo radi verzijskog fallback stringa.
 
 ## Windows
 
@@ -19,7 +19,7 @@ cd apps/windows
 ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
 ```
 
-Skripta radi `gofmt`, `go vet`, `go test`, gradi Portable, ugrađuje isti binary u Setup i generira SHA-256.
+Skripta radi `gofmt`, `go vet`, `go test`, gradi Portable, ugrađuje isti binary u Setup, linkerom postavlja produkcijsku verziju i generira SHA-256.
 
 ## Browser ekstenzije
 
@@ -39,8 +39,8 @@ cd apps/android
 ./build-apk.sh
 ```
 
-Produkcijski Android CI izvršava `lintRelease` i `assembleRelease`; release se ne smatra spremnim dok Android Lint prijavljuje error. Za potpisani release koristi GitHub Actions Secrets / environment varijable opisane u `apps/android/README-HR.md`. Privatni ključevi ne pripadaju repozitoriju.
+Produkcijski Android build izvršava `testReleaseUnitTest`, `lintRelease` i `assembleRelease`; release se ne smatra spremnim dok unit testovi ili Android Lint prijavljuju grešku. Za potpisani release koristi GitHub Actions Secrets / environment varijable opisane u `apps/android/README-HR.md`. Privatni ključevi ne pripadaju repozitoriju.
 
 ## CI provjere
 
-Prije promocije na `main` GitHub CI provodi sinkronizaciju verzija, `scripts/verify_security_contracts.py`, browser build, Windows test/vet/build i Android release lint/build.
+Prije promocije na `main` GitHub CI provodi sinkronizaciju verzija, `scripts/verify_security_contracts.py`, browser build, Windows test/vet/build i Android unit testove + release lint/build.
