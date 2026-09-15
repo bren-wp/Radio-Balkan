@@ -35,13 +35,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Test portable
-        working-directory: apps/windows/portable
-        run: go test ./...; go vet ./...
-      - name: Test setup
-        working-directory: apps/windows/setup
-        run: go test ./...; go vet ./...
-      - name: Build Windows release
+      - name: Test and build Windows release
         working-directory: apps/windows
         shell: pwsh
         run: ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
@@ -58,7 +52,11 @@ jobs:
         with:
           gradle-version: '8.11.1'
       - name: Install Android 36 build components
-        run: yes | sdkmanager "platforms;android-36" "build-tools;36.0.0" >/dev/null
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          yes | "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" >/dev/null
       - name: Android lint and release build
         working-directory: apps/android
         run: gradle --no-daemon --console=plain lintRelease assembleRelease
