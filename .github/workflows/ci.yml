@@ -65,6 +65,6 @@ jobs:
           test -x "$SDKMANAGER"
           (yes | "$SDKMANAGER" --licenses >/dev/null) || true
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" >/dev/null
-      - name: Android lint and release build
+      - name: Android unit tests, lint and release build
         working-directory: apps/android
-        run: gradle --no-daemon --console=plain lintRelease assembleRelease
+        run: gradle --no-daemon --console=plain testReleaseUnitTest lintRelease assembleRelease
