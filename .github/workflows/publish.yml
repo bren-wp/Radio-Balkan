@@ -53,7 +53,8 @@ jobs:
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           test -x "$SDKMANAGER"
-          yes | "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" >/dev/null
+          (yes | "$SDKMANAGER" --licenses >/dev/null) || true
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" >/dev/null
       - name: Prepare optional release signing
         working-directory: apps/android
         env:
