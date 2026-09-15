@@ -48,6 +48,16 @@ class Element {
   }
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 const ids = [
   'search', 'country', 'stations', 'status', 'refresh', 'heroPlay',
   'playerToggle', 'favoritesOnly', 'playerFav', 'playerState',
@@ -80,6 +90,7 @@ let runtimeListener = null;
 let getState = { epoch: 'epoch-a', revision: 1, station: stationA, playing: true };
 let toggleResult = null;
 let getStateCalls = 0;
+const toggleQueue = [];
 
 function copy(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -97,6 +108,7 @@ const runtime = {
       return copy(getState);
     }
     if (message?.type === 'RB_TOGGLE') {
+      if (toggleQueue.length) return await toggleQueue.shift().promise;
       return copy(toggleResult || getState);
     }
     if (message?.type === 'RB_PLAY') {
@@ -196,6 +208,20 @@ async function main() {
   await flush();
   assert.equal(elements.playerName.textContent, 'Radio B', 'stale command reply from a retired epoch cannot replace current station');
   assert.equal(elements.playerState.textContent, 'Sada svira', 'authoritative resync must win over stale command status');
+
+  toggleResult = null;
+  const olderToggle = deferred();
+  const newerToggle = deferred();
+  toggleQueue.push(olderToggle, newerToggle);
+  elements.playerToggle.dispatch('click');
+  elements.playerToggle.dispatch('click');
+  newerToggle.resolve({ epoch: 'epoch-b', revision: 4, station: stationB, playing: false });
+  await flush();
+  assert.equal(elements.playerState.textContent, 'Pauzirano', 'newer command result must update the player');
+  olderToggle.resolve({ epoch: 'epoch-b', revision: 5, station: stationB, playing: true });
+  await flush();
+  assert.equal(elements.playerState.textContent, 'Pauzirano', 'older promise reply cannot override a newer command even with a higher revision');
+  assert.equal(elements.playerName.textContent, 'Radio B');
 
   console.log('Browser popup state regression tests OK');
 }
