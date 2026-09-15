@@ -190,11 +190,25 @@ def main() -> None:
         "Repository workspace clean after build",
     )
     require(
+        "scripts/generate_release_checksums.py",
+        "path.name != manifest.name",
+        "os.replace(temporary, manifest)",
+        "No release assets found for checksum manifest",
+    )
+    require(
+        "scripts/test_release_checksums.py",
+        "stale self-referential manifest",
+        "checksum manifest must never include itself",
+        "Release checksum manifest regression test OK",
+    )
+    require(
         ".github/workflows/ci.yml",
         "Verify browser build leaves repository clean",
         "Verify Windows build leaves repository clean",
         "Verify Android build leaves repository clean",
         "python scripts/check_clean_worktree.py",
+        "Test release checksum manifest",
+        "python scripts/test_release_checksums.py",
     )
     require(
         ".github/workflows/publish.yml",
@@ -202,6 +216,7 @@ def main() -> None:
         "Verify browser build leaves repository clean",
         "Verify Android build leaves repository clean",
         "Generate and verify checksums",
+        'python scripts/generate_release_checksums.py release-assets "$VERSION"',
         'sha256sum -c "RadioBalkan-v${VERSION}-SHA256.txt"',
     )
     require(
