@@ -144,6 +144,9 @@ api.runtime.onMessage.addListener(async msg => {
   if (msg.type === 'RB_STOP') {
     generation += 1;
     resetAudio();
+    currentSessionId = null;
+    candidates = [];
+    idx = 0;
     commitState({ playing: false });
     return snapshot();
   }
