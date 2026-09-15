@@ -44,6 +44,25 @@ def main() -> None:
         "apps/android/app/src/main/java/net/radiobalkan/app/RadioPlayerService.java",
         'INTERNAL_STATE_PERMISSION = "net.radiobalkan.app.permission.INTERNAL_STATE"',
         "sendBroadcast(i, INTERNAL_STATE_PERMISSION);",
+        "StreamResolver.isSafeHttp(repaired.url)",
+        "pendingPlayer == mp || player == mp",
+        "setInstanceFollowRedirects(false)",
+    )
+    require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
+        "MAX_REDIRECTS = 4",
+        "setInstanceFollowRedirects(false)",
+        "return isSafeHttp(next) ? probe(next, depth + 1) : null;",
+    )
+    require(
+        "apps/android/app/src/test/java/net/radiobalkan/app/StreamResolverTest.java",
+        "rejectsPrivateCredentialedAndMetadataTargets",
+        "https://user:pass@example.com/live",
+        "http://169.254.169.254/latest/meta-data/",
+    )
+    forbid(
+        "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
+        "setInstanceFollowRedirects(true)",
     )
 
     require(
