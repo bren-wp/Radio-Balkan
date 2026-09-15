@@ -1,0 +1,225 @@
+const RB = (() => {
+  const API_FALLBACKS = [
+    'https://de1.api.radio-browser.info',
+    'https://de2.api.radio-browser.info',
+    'https://at1.api.radio-browser.info',
+    'https://nl1.api.radio-browser.info'
+  ];
+  const COUNTRIES = [
+    ['HR','Hrvatska'], ['BA','Bosna i Hercegovina'], ['RS','Srbija'],
+    ['SI','Slovenija'], ['MK','Sjeverna Makedonija'], ['AL','Albanija'], ['ME','Crna Gora']
+  ];
+  const ALLOWED = new Set(COUNTRIES.map(x => x[0]));
+  const PAGE = 200, MAX_PER_COUNTRY = 1600, MAX_CATALOG = 7000, CACHE_MS = 12 * 60 * 60 * 1000;
+  const ext = globalThis.browser || globalThis.chrome;
+
+  const clean = value => String(value ?? '')
+    .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+    .replace(/\s+/g, ' ').trim().slice(0, 2048);
+  const fold = value => clean(value).toLocaleLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^\p{L}\p{N}]+/gu, '');
+
+  const safeHttp = RBNet.safeHttp;
+  async function fetchWithTimeout(url, options = {}, timeoutMs = 9000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  const host = raw => { try { return new URL(raw).hostname.toLowerCase().replace(/^www\./, ''); } catch { return ''; } };
+  const logo = station => {
+    if (safeHttp(station.favicon)) return station.favicon;
+    try {
+      const u = new URL(station.homepage);
+      if (safeHttp(u.href)) { u.pathname = '/favicon.ico'; u.search = ''; u.hash = ''; return u.href; }
+    } catch { }
+    return '';
+  };
+  const identity = station => {
+    const name = fold(station.name), country = clean(station.countrycode).toUpperCase();
+    if (!name || !ALLOWED.has(country)) return '';
+    const homepageHost = host(station.homepage);
+    if (homepageHost) return `${country}|${name}|home:${homepageHost}`;
+    try {
+      const u = new URL(station.url_resolved || station.url);
+      return `${country}|${name}|stream:${u.hostname.toLowerCase()}${u.pathname.toLowerCase().replace(/\/$/, '')}`;
+    } catch { return `${country}|${name}`; }
+  };
+  const quality = station => (station.lastcheckok ? 1000000 : 0) + (Number(station.votes) || 0) +
+    (logo(station) ? 20000 : 0) + (safeHttp(station.homepage) ? 10000 : 0) +
+    (safeHttp(station.url_resolved) ? 5000 : 0) + Math.min(512, Math.max(0, Number(station.bitrate) || 0));
+
+  function normalize(raw) {
+    // Keep only fields that the production UI/player actually uses. Radio Browser
+    // responses contain many additional metrics; dropping them here substantially
+    // reduces popup memory use and extension storage size for large regional catalogs.
+    const s = {
+      stationuuid: clean(raw?.stationuuid),
+      name: clean(raw?.name),
+      url: clean(raw?.url),
+      url_resolved: clean(raw?.url_resolved),
+      homepage: clean(raw?.homepage),
+      favicon: clean(raw?.favicon),
+      tags: clean(raw?.tags),
+      country: clean(raw?.country),
+      countrycode: clean(raw?.countrycode).toUpperCase(),
+      state: clean(raw?.state),
+      language: clean(raw?.language),
+      codec: clean(raw?.codec),
+      votes: Math.max(0, Number(raw?.votes) || 0),
+      bitrate: Math.max(0, Number(raw?.bitrate) || 0),
+      lastcheckok: Number(raw?.lastcheckok) || 0
+    };
+    s.logo = logo(s);
+    return s;
+  }
+  function merge(a, b) {
+    let primary = quality(b) > quality(a) ? { ...b } : { ...a };
+    const other = primary.stationuuid === b.stationuuid && primary.name === b.name ? a : b;
+    for (const key of ['stationuuid','name','url','url_resolved','homepage','favicon','tags','country','countrycode','state','language','codec']) {
+      if (!clean(primary[key])) primary[key] = other[key] || '';
+    }
+    primary.votes = Math.max(+primary.votes || 0, +other.votes || 0);
+    primary.bitrate = Math.max(+primary.bitrate || 0, +other.bitrate || 0);
+    primary.lastcheckok = Math.max(+primary.lastcheckok || 0, +other.lastcheckok || 0);
+    return normalize(primary);
+  }
+  function dedupe(list) {
+    const out = [], byUuid = new Map(), byIdentity = new Map();
+    for (const raw of list || []) {
+      const station = normalize(raw);
+      if (!ALLOWED.has(station.countrycode) || !station.name || (!safeHttp(station.url) && !safeHttp(station.url_resolved))) continue;
+      const id = identity(station), uuid = station.stationuuid;
+      let pos = uuid ? byUuid.get(uuid) : undefined;
+      if (pos === undefined && id) pos = byIdentity.get(id);
+      if (pos !== undefined) {
+        out[pos] = merge(out[pos], station);
+        const merged = out[pos];
+        if (merged.stationuuid) byUuid.set(merged.stationuuid, pos);
+        const mergedId = identity(merged); if (mergedId) byIdentity.set(mergedId, pos);
+        continue;
+      }
+      if (out.length >= MAX_CATALOG) break;
+      pos = out.length; out.push(station);
+      if (uuid) byUuid.set(uuid, pos); if (id) byIdentity.set(id, pos);
+    }
+    return out;
+  }
+
+  async function bases() {
+    try {
+      const response = await fetchWithTimeout('https://all.api.radio-browser.info/json/servers', { cache: 'no-store' }, 6500);
+      if (response.ok) {
+        const body = await response.json();
+        const dynamic = body.map(x => x?.name ? `https://${x.name}` : '').filter(Boolean);
+        if (dynamic.length) return [...new Set([...dynamic, ...API_FALLBACKS])];
+      }
+    } catch { }
+    return API_FALLBACKS;
+  }
+
+  async function fetchCountry(base, code) {
+    const rows = [];
+    for (let offset = 0; offset < MAX_PER_COUNTRY; offset += PAGE) {
+      const url = `${base}/json/stations/search?countrycode=${encodeURIComponent(code)}&hidebroken=true&order=votes&reverse=true&limit=${PAGE}&offset=${offset}`;
+      const response = await fetchWithTimeout(url, { cache: 'no-store' }, 10000);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const page = await response.json();
+      if (!Array.isArray(page) || !page.length) break;
+      let accepted = 0;
+      for (const raw of page) {
+        const station = normalize(raw);
+        const actual = station.countrycode || code;
+        if (actual !== code) continue;
+        station.countrycode = code;
+        if (!station.country) station.country = COUNTRIES.find(x => x[0] === code)?.[1] || code;
+        rows.push(station); accepted++;
+      }
+      if (page.length < PAGE || accepted === 0) break;
+    }
+    return dedupe(rows);
+  }
+
+  async function fetchCountryFromAny(code, serverList) {
+    let lastError;
+    for (const base of serverList) {
+      try {
+        const list = await fetchCountry(base, code);
+        if (list.length) return list;
+      } catch (error) { lastError = error; }
+    }
+    throw lastError || new Error(`Katalog ${code} nije dostupan`);
+  }
+
+  async function storageGet(keys) {
+    const api = ext.storage.local;
+    try {
+      const result = api.get(keys);
+      if (result && typeof result.then === 'function') return await result;
+    } catch { }
+    return await new Promise((resolve, reject) => {
+      try { api.get(keys, value => ext.runtime?.lastError ? reject(new Error(ext.runtime.lastError.message)) : resolve(value || {})); }
+      catch (error) { reject(error); }
+    });
+  }
+  async function storageSet(values) {
+    const api = ext.storage.local;
+    try {
+      const result = api.set(values);
+      if (result && typeof result.then === 'function') { await result; return; }
+    } catch { }
+    await new Promise((resolve, reject) => {
+      try { api.set(values, () => ext.runtime?.lastError ? reject(new Error(ext.runtime.lastError.message)) : resolve()); }
+      catch (error) { reject(error); }
+    });
+  }
+
+  function mergeMissingCountries(online, cached) {
+    const onlineList = dedupe(online), cacheList = dedupe(cached);
+    const present = new Set(onlineList.map(x => x.countrycode));
+    const merged = [...onlineList];
+    for (const code of ALLOWED) if (!present.has(code)) merged.push(...cacheList.filter(x => x.countrycode === code));
+    return dedupe(merged).sort((a, b) => COUNTRIES.findIndex(x => x[0] === a.countrycode) - COUNTRIES.findIndex(x => x[0] === b.countrycode) || b.votes - a.votes || a.name.localeCompare(b.name)).slice(0, MAX_CATALOG);
+  }
+
+  async function freshCatalog(cached) {
+    const serverList = await bases();
+    const results = new Map(); let cursor = 0;
+    async function worker() {
+      while (true) {
+        const index = cursor++; if (index >= COUNTRIES.length) return;
+        const code = COUNTRIES[index][0];
+        try { results.set(code, await fetchCountryFromAny(code, serverList)); }
+        catch { results.set(code, []); }
+      }
+    }
+    await Promise.all([worker(), worker()]);
+    let online = [];
+    for (const [code] of COUNTRIES) online.push(...(results.get(code) || []));
+    const merged = mergeMissingCountries(online, cached);
+    if (merged.length < 600 && cached.length > merged.length) return dedupe([...merged, ...cached]).slice(0, MAX_CATALOG);
+    return merged;
+  }
+
+  async function load(force = false) {
+    const cachedState = await storageGet(['rbCatalog','rbCatalogAt']);
+    const cached = dedupe(Array.isArray(cachedState.rbCatalog) ? cachedState.rbCatalog : []);
+    if (!force && cached.length && Date.now() - (+cachedState.rbCatalogAt || 0) < CACHE_MS) return cached;
+    try {
+      const list = await freshCatalog(cached);
+      if (!list.length) throw new Error('Regionalni katalog nije dostupan');
+      await storageSet({ rbCatalog: list, rbCatalogAt: Date.now() });
+      return list;
+    } catch (error) {
+      if (cached.length) return cached;
+      throw error;
+    }
+  }
+  async function favorites() { const x = await storageGet(['rbFavorites']); return x.rbFavorites || {}; }
+  async function setFavorite(key, on) { const f = await favorites(); if (on) f[key] = true; else delete f[key]; await storageSet({ rbFavorites: f }); return f; }
+  function key(station) { return station.stationuuid || identity(station) || `${station.countrycode}|${fold(station.name)}|${station.url_resolved || station.url}`; }
+  return { load, favorites, setFavorite, key, fold, safeHttp, ext, COUNTRIES, ALLOWED };
+})();

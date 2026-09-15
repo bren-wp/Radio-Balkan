@@ -1,0 +1,8 @@
+<network-security-config>
+    <!-- Some public radio streams are still HTTP. Catalog/API traffic remains HTTPS-only. -->
+    <base-config cleartextTrafficPermitted="true" />
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.radio-browser.info</domain>
+        <domain includeSubdomains="true">radio-browser.info</domain>
+    </domain-config>
+</network-security-config>

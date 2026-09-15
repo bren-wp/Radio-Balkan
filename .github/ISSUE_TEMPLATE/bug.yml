@@ -1,0 +1,32 @@
+name: Bug report
+description: Prijavi reproduktibilan problem u Radio Balkan aplikaciji
+title: "[Bug] "
+body:
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platforma
+      options: [Windows, Android, Chrome, Edge, Opera, Firefox]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Verzija
+      placeholder: 0.0.5
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Koraci za reprodukciju
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Očekivano ponašanje
+  - type: textarea
+    id: actual
+    attributes:
+      label: Stvarno ponašanje

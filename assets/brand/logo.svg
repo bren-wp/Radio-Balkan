@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 108 108" role="img" aria-labelledby="title desc">
+  <title id="title">Radio Balkan</title>
+  <desc id="desc">Službeni Radio Balkan znak</desc>
+  <rect width="108" height="108" rx="24" fill="#15110F"/>
+  <circle cx="54" cy="54" r="32" fill="#EB5323"/>
+  <path d="M48 41 72 54 48 67Z" fill="#15110F"/>
+  <path d="M28 54a26 26 0 0 1 7-17l4 4a20 20 0 0 0 0 26l-4 4a26 26 0 0 1-7-17Zm52 0a26 26 0 0 0-7-17l-4 4a20 20 0 0 1 0 26l4 4a26 26 0 0 0 7-17Z" fill="#fff" fill-opacity=".9"/>
+</svg>

@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Radio Balkan</string>
+    <string name="channel_name">Radio reprodukcija</string>
+    <string name="channel_description">Kontrole za aktivnu radio stanicu</string>
+</resources>

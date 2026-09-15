@@ -1,0 +1,20 @@
+# Build output
+**/dist/
+**/build/
+**/.gradle/
+**/*.tmp
+**/*.log
+
+# Local tooling
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Signing/private material
+*.jks
+*.keystore
+*.p12
+*.pfx
+.env
+.env.*

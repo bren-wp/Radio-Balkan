@@ -1,0 +1,37 @@
+{
+  "manifest_version": 2,
+  "name": "Radio Balkan",
+  "description": "Radio stanice iz Hrvatske, BiH, Srbije, Slovenije, Sjeverne Makedonije, Albanije i Crne Gore.",
+  "browser_action": {
+    "default_title": "Radio Balkan",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "background": {
+    "page": "background.html",
+    "persistent": true
+  },
+  "permissions": [
+    "storage",
+    "http://*/*",
+    "https://*/*"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "radiobalkan@brendigo",
+      "strict_min_version": "115.0"
+    }
+  },
+  "content_security_policy": "script-src 'self'; object-src 'self'"
+}

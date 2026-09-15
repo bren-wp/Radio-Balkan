@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="hr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Radio Balkan</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="app" aria-label="Radio Balkan">
+    <header class="topbar">
+      <div class="brand">
+        <img src="icon48.png" alt="" width="40" height="40">
+        <div class="brandCopy">
+          <strong>Radio Balkan</strong>
+          <span>7 zemalja · radio uživo</span>
+        </div>
+      </div>
+      <button id="refresh" class="iconButton" type="button" aria-label="Osvježi katalog" title="Osvježi katalog">↻</button>
+    </header>
+
+    <section class="hero" aria-labelledby="heroName">
+      <div class="heroCopy">
+        <span class="liveBadge"><i></i> UŽIVO</span>
+        <h1 id="heroName">Odaberi stanicu</h1>
+        <p id="heroMeta">Radio iz Hrvatske i regije</p>
+      </div>
+      <button id="heroPlay" class="primaryButton" type="button">▶ Slušaj</button>
+    </section>
+
+    <section class="tools" aria-label="Pretraživanje i filtriranje">
+      <label class="searchField">
+        <span aria-hidden="true">⌕</span>
+        <input id="search" type="search" placeholder="Pretraži stanice, gradove, žanrove…" autocomplete="off" spellcheck="false">
+      </label>
+      <select id="country" aria-label="Filtriraj po državi">
+        <option value="">Sve zemlje</option>
+      </select>
+    </section>
+
+    <div class="summary">
+      <span id="status" role="status" aria-live="polite">Učitavam stanice…</span>
+      <button id="favoritesOnly" class="textButton" type="button" aria-pressed="false">♡ Omiljene</button>
+    </div>
+
+    <section id="stations" class="stations" aria-label="Radio stanice"></section>
+
+    <footer class="player" aria-label="Player">
+      <img id="playerLogo" src="icon48.png" alt="" width="52" height="52">
+      <div class="playerCopy">
+        <small>Sada svira</small>
+        <strong id="playerName">Ništa</strong>
+        <span id="playerMeta">Odaberi stanicu</span>
+      </div>
+      <button id="playerFav" class="playerIcon" type="button" aria-label="Dodaj ili ukloni iz omiljenih">♡</button>
+      <button id="playerToggle" class="roundPlay" type="button" aria-label="Pokreni ili pauziraj">▶</button>
+    </footer>
+  </main>
+  <script src="network.js"></script>
+  <script src="catalog.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
