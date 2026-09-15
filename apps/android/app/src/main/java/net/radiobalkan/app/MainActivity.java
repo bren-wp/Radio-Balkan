@@ -814,6 +814,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         catch (Throwable t) { AppLog.e(this, "player-query", t); }
     }
 
+    // Pre-33 registration is protected by INTERNAL_STATE_PERMISSION; lint cannot infer that custom signature permission.
+    @android.annotation.SuppressLint("UnspecifiedRegisterReceiverFlag")
     private void registerPlayerReceiver() {
         try {
             IntentFilter f = new IntentFilter(RadioPlayerService.ACTION_STATE);
