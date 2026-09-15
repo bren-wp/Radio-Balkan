@@ -1,5 +1,21 @@
 # Izdavanja
 
+## 0.0.11
+
+Izdanje 0.0.11 učvršćuje reproducibilnost Windows builda i uklanja nuspojave koje su tijekom CI/screenshot builda mijenjale working tree i ostavljale privremeni installer payload.
+
+- Windows `build-release.ps1` više ne izvršava `gofmt -w` nad produkcijskim sourceom; formatiranje se provjerava read-only preko `gofmt -d`, pa build ne prepisuje `portable/main.go` ni `setup/main.go`
+- eventualni format diff prijavljuje se kao build warning bez promjene source datoteke; `go vet`, `go test` i produkcijski `go build` ostaju obavezni
+- Portable binary potreban za `//go:embed RadioBalkan-Portable.exe` i dalje se kopira u setup direktorij samo prije setup builda, ali se sada bezuvjetno uklanja u `finally` bloku
+- čišćenje embedded payload datoteke izvršava se i kada `go vet`, `go test` ili setup build završe greškom
+- Windows CI nakon release builda izvršava `git status --porcelain --untracked-files=all` i ruši job ako build ostavi bilo kakav tracked ili neignorirani untracked sadržaj
+- novi clean-workspace guard prošao je na stvarnom GitHub Windows runneru zajedno s Portable/Setup test/vet/build koracima
+- screenshot-only commitovi ostaju izuzeti iz punog multi-platform CI-ja, dok Product screenshots workflow i dalje samostalno gradi stvarni Windows binary i snima production UI
+- browser epoch/revision/session zaštite, popup i Firefox izvršni race regression testovi iz 0.0.10 ostaju aktivni i obavezni u svakom CI prolazu
+- nisu dodane nove runtime ovisnosti, browser dozvole, telemetry komponente ni rebranding postavke
+
+Promjena je namjerno ograničena na build/release higijenu: runtime ponašanje Windows, Android i browser klijenata nije mijenjano bez potvrđenog funkcionalnog razloga.
+
 ## 0.0.10
 
 Izdanje 0.0.10 dodatno učvršćuje browser state ordering i usklađuje Firefox STOP semantiku s Chromium playerom, uz izvršne regresijske testove koji reproduciraju race scenarije umjesto da provjeravaju samo statičke fragmente sourcea.
