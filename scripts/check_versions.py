@@ -1,5 +1,6 @@
 from pathlib import Path
 import json, re, sys
+
 root = Path(__file__).resolve().parents[1]
 version = (root / 'VERSION').read_text(encoding='utf-8').strip()
 checks = {
@@ -8,6 +9,8 @@ checks = {
     'apps/windows/build-release.ps1': rf'\$Version\s*=\s*"{re.escape(version)}"',
     'apps/android/app/build.gradle.kts': rf'versionName\s*=\s*"{re.escape(version)}"',
     'apps/android/app/src/main/java/net/radiobalkan/app/AppInfo.java': rf'VERSION\s*=\s*"{re.escape(version)}"',
+    'README.md': rf'version {re.escape(version)}',
+    'assets/badges/version.svg': rf'version: {re.escape(version)}',
 }
 errors=[]
 for rel, pattern in checks.items():
