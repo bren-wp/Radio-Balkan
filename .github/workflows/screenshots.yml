@@ -10,6 +10,7 @@ on:
       - assets/brand/**
       - scripts/capture-windows.ps1
       - scripts/browser-screenshot-runtime.js
+      - scripts/check_clean_worktree.py
       - .github/workflows/screenshots.yml
   workflow_dispatch:
 
@@ -32,6 +33,8 @@ jobs:
         shell: pwsh
         working-directory: apps/windows
         run: ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
+      - name: Verify screenshot build leaves repository clean
+        run: python scripts/check_clean_worktree.py
       - name: Capture real Windows UI
         shell: pwsh
         run: ./scripts/capture-windows.ps1 -Exe "apps/windows/dist/RadioBalkan-Portable-v$((Get-Content VERSION).Trim()).exe" -Output "assets/screenshots/windows.png"
