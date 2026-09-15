@@ -1,16 +1,36 @@
 'use strict';
 
 const api = globalThis.browser || globalThis.chrome;
-const state = { station: null, playing: false };
+const epoch = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+const state = { station: null, playing: false, revision: 0, epoch };
 let audio = null;
 let candidates = [];
 let idx = 0;
 let generation = 0;
+let sessionCounter = 0;
+let currentSessionId = null;
 
 function urls(station) { return RBNet.candidateUrls(station); }
 
+function snapshot(extra = {}) {
+  return { ...state, sessionId: currentSessionId, generation, ...extra };
+}
+
 function report() {
-  Promise.resolve(api.runtime.sendMessage({ type: 'RB_STATE', ...state })).catch(() => {});
+  Promise.resolve(api.runtime.sendMessage({ type: 'RB_STATE', ...snapshot() })).catch(() => {});
+}
+
+function commitState(patch, notify = true) {
+  if (Object.prototype.hasOwnProperty.call(patch, 'station')) state.station = patch.station;
+  if (Object.prototype.hasOwnProperty.call(patch, 'playing')) state.playing = !!patch.playing;
+  state.revision += 1;
+  if (notify) report();
+  return snapshot();
+}
+
+function newSessionId() {
+  sessionCounter += 1;
+  return `${epoch}:${sessionCounter}`;
 }
 
 function disposeAudio(target = audio) {
@@ -32,58 +52,59 @@ function resetAudio() {
   state.playing = false;
 }
 
-function playbackFailed(token, instance) {
-  if (token !== generation || audio !== instance || !state.playing) return;
+function playbackFailed(token, expectedSession, instance) {
+  if (token !== generation || currentSessionId !== expectedSession || audio !== instance || !state.playing) return;
   state.playing = false;
   idx += 1;
   disposeAudio(instance);
-  void start();
+  void start(expectedSession);
 }
 
-function createAudio(token, candidate) {
+function createAudio(token, expectedSession, candidate) {
   const instance = document.createElement('audio');
   instance.preload = 'none';
   instance.src = candidate;
-  instance.onerror = () => playbackFailed(token, instance);
-  instance.onended = () => playbackFailed(token, instance);
+  instance.onerror = () => playbackFailed(token, expectedSession, instance);
+  instance.onended = () => playbackFailed(token, expectedSession, instance);
   instance.onplaying = () => {
-    if (token !== generation || audio !== instance) return;
-    state.playing = true;
-    report();
+    if (token !== generation || currentSessionId !== expectedSession || audio !== instance) return;
+    if (!state.playing) commitState({ playing: true });
   };
   instance.onpause = () => {
-    if (token !== generation || audio !== instance || !state.playing) return;
-    state.playing = false;
-    report();
+    if (token !== generation || currentSessionId !== expectedSession || audio !== instance || !state.playing) return;
+    commitState({ playing: false });
   };
   audio = instance;
   return instance;
 }
 
-async function start() {
+async function start(expectedSession) {
   const token = ++generation;
-  while (idx < candidates.length && token === generation) {
+  while (idx < candidates.length && token === generation && currentSessionId === expectedSession) {
     const candidate = candidates[idx];
     state.playing = false;
     disposeAudio();
-    const instance = createAudio(token, candidate);
+    const instance = createAudio(token, expectedSession, candidate);
     try {
       await instance.play();
-      if (token !== generation || audio !== instance) return false;
-      state.playing = true;
-      report();
-      return true;
+      if (token !== generation || currentSessionId !== expectedSession || audio !== instance) {
+        return { ok: false, stale: true };
+      }
+      if (!state.playing) commitState({ playing: true });
+      return { ok: true };
     } catch {
-      if (token !== generation || audio !== instance) return false;
+      if (token !== generation || currentSessionId !== expectedSession || audio !== instance) {
+        return { ok: false, stale: true };
+      }
       disposeAudio(instance);
       idx += 1;
     }
   }
-  if (token === generation) {
+  if (token === generation && currentSessionId === expectedSession) {
     resetAudio();
-    report();
+    commitState({ playing: false });
   }
-  return false;
+  return { ok: false };
 }
 
 api.runtime.onMessage.addListener(async msg => {
@@ -91,38 +112,45 @@ api.runtime.onMessage.addListener(async msg => {
 
   if (msg.type === 'RB_PLAY') {
     const list = urls(msg.station);
-    if (!list.length) return { ...state, error: 'Stanica nije dostupna ili URL nije dopušten' };
+    if (!list.length) return snapshot({ error: 'Stanica nije dostupna ili URL nije dopušten' });
+    const requestedSession = newSessionId();
+    currentSessionId = requestedSession;
     generation += 1;
     resetAudio();
-    state.station = msg.station;
     candidates = list;
     idx = 0;
-    const ok = await start();
-    return ok ? { ...state } : { ...state, error: 'Stanica trenutačno nije dostupna' };
+    commitState({ station: msg.station, playing: false });
+    const result = await start(requestedSession);
+    if (currentSessionId !== requestedSession) return snapshot({ stale: true });
+    return result.ok ? snapshot() : snapshot({ error: 'Stanica trenutačno nije dostupna' });
   }
 
   if (msg.type === 'RB_TOGGLE') {
-    if (!state.station || !candidates.length) return { ...state };
+    const requestedSession = currentSessionId;
+    if (!requestedSession || !state.station || !candidates.length) return snapshot();
     if (audio && !audio.paused) {
       generation += 1;
       try { audio.pause(); } catch { }
       state.playing = false;
-      report();
-      return { ...state };
+      commitState({ playing: false });
+      return snapshot();
     }
     if (idx >= candidates.length) idx = 0;
-    const ok = await start();
-    return ok ? { ...state } : { ...state, error: 'Reprodukcija trenutačno nije dostupna' };
+    const result = await start(requestedSession);
+    if (currentSessionId !== requestedSession) return snapshot({ stale: true });
+    return result.ok ? snapshot() : snapshot({ error: 'Reprodukcija trenutačno nije dostupna' });
   }
 
   if (msg.type === 'RB_STOP') {
     generation += 1;
     resetAudio();
-    report();
-    return { ...state };
+    commitState({ playing: false });
+    return snapshot();
   }
 
   if (msg.type === 'RB_GET_STATE') {
-    return { ...state, playing: !!state.playing && !!audio && !audio.paused };
+    const actualPlaying = !!state.playing && !!audio && !audio.paused;
+    if (actualPlaying !== state.playing) commitState({ playing: actualPlaying });
+    return snapshot();
   }
 });
