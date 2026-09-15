@@ -106,6 +106,10 @@ def main() -> None:
         "currentSessionId !== expectedSession",
         "instance.onerror = () => playbackFailed(token, expectedSession, instance);",
         "instance.onended = () => playbackFailed(token, expectedSession, instance);",
+        "if (msg.type === 'RB_STOP')",
+        "currentSessionId = null;",
+        "candidates = [];",
+        "idx = 0;",
     )
     require(
         "extensions/shared/popup.js",
@@ -138,6 +142,14 @@ def main() -> None:
         "a foreign epoch must trigger authoritative RB_GET_STATE resync",
         "retired worker epoch cannot restore stale state",
         "stale command reply from a retired epoch cannot replace current station",
+        "older promise reply cannot override a newer command even with a higher revision",
+    )
+    require(
+        "scripts/test_firefox_player_contract.js",
+        "stop must terminate the Firefox playback session",
+        "toggle after stop must not revive the stopped session",
+        "superseded play request must be marked stale",
+        "slow old playback must not replace the newer station",
     )
     forbid(
         "extensions/platform/chromium/offscreen.js",
