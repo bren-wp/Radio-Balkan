@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -34,6 +34,7 @@ jobs:
           node --check extensions/platform/chromium/service_worker.js
           node --check extensions/platform/chromium/offscreen.js
           node --check extensions/platform/firefox/background-firefox.js
+          node --check scripts/browser-screenshot-runtime.js
       - name: Build extensions
         working-directory: extensions
         run: python tools/build_extensions.py
@@ -42,6 +43,20 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate screenshot PowerShell
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'scripts/capture-windows.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw 'scripts/capture-windows.ps1 contains PowerShell syntax errors.'
+          }
       - name: Test and build Windows release
         working-directory: apps/windows
         shell: pwsh
