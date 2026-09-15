@@ -1,0 +1,111 @@
+name: Publish GitHub release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - VERSION
+      - apps/**
+      - extensions/**
+      - .github/workflows/publish.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - working-directory: apps/windows
+        shell: pwsh
+        run: ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: apps/windows/dist/*
+
+  browsers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - working-directory: extensions
+        run: python tools/build_extensions.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browsers
+          path: extensions/dist/*.zip
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Install Android 36 build components
+        run: yes | sdkmanager "platforms;android-36" "build-tools;36.0.0" >/dev/null
+      - name: Prepare optional release signing
+        working-directory: apps/android
+        env:
+          KEYSTORE_B64: ${{ secrets.RADIO_BALKAN_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.RADIO_BALKAN_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RADIO_BALKAN_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RADIO_BALKAN_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 --decode > radio-balkan-release.jks
+            echo "RADIO_BALKAN_KEYSTORE=$PWD/radio-balkan-release.jks" >> "$GITHUB_ENV"
+            echo "RADIO_BALKAN_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "RADIO_BALKAN_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "RADIO_BALKAN_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          fi
+      - name: Build Android release
+        working-directory: apps/android
+        run: gradle --no-daemon --console=plain lintRelease assembleRelease
+      - name: Normalize Android artifact name
+        working-directory: apps/android
+        run: |
+          VERSION=$(cat ../../VERSION)
+          mkdir -p dist
+          APK=$(find app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)
+          test -n "$APK"
+          if echo "$APK" | grep -q 'unsigned'; then
+            cp "$APK" "dist/RadioBalkan-Android-v${VERSION}-unsigned.apk"
+          else
+            cp "$APK" "dist/RadioBalkan-Android-v${VERSION}.apk"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: apps/android/dist/*.apk
+
+  release:
+    needs: [windows, browsers, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+      - name: Generate checksums
+        run: |
+          VERSION=$(cat VERSION)
+          cd release-assets
+          sha256sum * > "RadioBalkan-v${VERSION}-SHA256.txt"
+      - name: Publish release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(cat VERSION)
+          TAG="v${VERSION}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --target main --title "Radio Balkan ${TAG}" --notes "Produkcijsko izdanje Radio Balkan ${TAG}. Detalji: docs/RELEASES.md"
+          fi
+          gh release upload "$TAG" release-assets/* --clobber
