@@ -22,6 +22,7 @@ concurrency:
 jobs:
   screenshots:
     runs-on: windows-latest
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,6 +38,7 @@ jobs:
         shell: pwsh
         run: |
           $server = Start-Process python -ArgumentList '-m','http.server','8765','--directory','extensions/shared' -PassThru -WindowStyle Hidden
+          $process = $null
           try {
             Start-Sleep -Seconds 2
             $candidates = @(
@@ -71,11 +73,16 @@ jobs:
               "--screenshot=$output",
               'http://127.0.0.1:8765/popup.html'
             )
-            $process = Start-Process -FilePath $browser -ArgumentList $args -PassThru -Wait
+            $process = Start-Process -FilePath $browser -ArgumentList $args -PassThru
+            if (-not $process.WaitForExit(30000)) {
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+              throw 'Headless browser screenshot timed out after 30 seconds.'
+            }
             if ($process.ExitCode -ne 0) { throw "Headless browser exited with code $($process.ExitCode)." }
             if (-not (Test-Path $output)) { throw 'Browser screenshot was not created.' }
             if ((Get-Item $output).Length -lt 1024) { throw 'Browser screenshot is unexpectedly small.' }
           } finally {
+            if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
             Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
             Get-Process msedge,chrome -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           }
