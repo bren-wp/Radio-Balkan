@@ -1,26 +1,36 @@
+'use strict';
+
 importScripts('network.js');
 
 let state = { station: null, playing: false };
+let offscreenCreating = null;
 
 function validStation(station) { return RBNet.validStation(station); }
 
 async function hasOffscreen() {
   return !!(chrome.offscreen?.hasDocument && await chrome.offscreen.hasDocument());
 }
+
 async function ensureOffscreen() {
   if (!chrome.offscreen) throw new Error('Reprodukcija u pozadini nije podržana u ovom pregledniku');
   if (await hasOffscreen()) return;
-  await chrome.offscreen.createDocument({
-    url: 'offscreen.html', reasons: ['AUDIO_PLAYBACK'],
-    justification: 'Reprodukcija korisnički odabrane radio stanice dok je popup zatvoren.'
-  });
+  if (!offscreenCreating) {
+    offscreenCreating = chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['AUDIO_PLAYBACK'],
+      justification: 'Reprodukcija korisnički odabrane radio stanice dok je popup zatvoren.'
+    }).finally(() => { offscreenCreating = null; });
+  }
+  await offscreenCreating;
 }
+
 async function offscreen(message) {
   const result = await chrome.runtime.sendMessage({ target: 'offscreen', ...message });
   if (result?.station && validStation(result.station)) state.station = result.station;
   state.playing = !!result?.playing;
   return result;
 }
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || msg.target === 'offscreen') return;
   (async () => {
@@ -31,14 +41,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         state.station = msg.station;
         const actual = await offscreen({ type: 'PLAY', station: msg.station });
         if (!actual?.ok || !actual.playing) return { ...state, error: 'Stanica trenutačno nije dostupna' };
-        return state;
+        return { ...state };
       }
       if (msg.type === 'RB_TOGGLE') {
-        if (!validStation(state.station)) { state.playing = false; return state; }
+        if (!validStation(state.station)) { state.playing = false; return { ...state }; }
         await ensureOffscreen();
         const actual = await offscreen({ type: 'TOGGLE' });
         if (!actual?.ok && !actual?.playing) return { ...state, error: 'Reprodukcija trenutačno nije dostupna' };
-        return state;
+        return { ...state };
       }
       if (msg.type === 'RB_STOP') {
         if (await hasOffscreen()) {
@@ -46,13 +56,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           try { await chrome.offscreen.closeDocument(); } catch { }
         }
         state.playing = false;
-        return state;
+        return { ...state };
       }
       if (msg.type === 'RB_GET_STATE') {
         if (await hasOffscreen()) {
           try { await offscreen({ type: 'GET_STATE' }); } catch { state.playing = false; }
-        } else state.playing = false;
-        return state;
+        } else {
+          state.playing = false;
+        }
+        return { ...state };
       }
       if (msg.type === 'RB_OFFSCREEN_STATE') {
         if (msg.station && validStation(msg.station)) state.station = msg.station;
