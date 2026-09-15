@@ -16,6 +16,7 @@ func TestSafeHTTPURLRejectsPrivateAndCredentialedTargets(t *testing.T) {
 		"http://169.254.169.254/latest/meta-data/",
 		"http://100.64.0.1/live",
 		"https://metadata.google.internal/computeMetadata/v1/",
+		"https://user:pass@example.com/live",
 	}
 	for _, raw := range tests {
 		if safeHTTPURL(raw) {
