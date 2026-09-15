@@ -1,5 +1,22 @@
 # Izdavanja
 
+## 0.0.9
+
+Izdanje 0.0.9 zatvara preostale race probleme između browser playera, background sloja i popup UI-ja te stabilizira automatizirano snimanje produkcijskog sučelja.
+
+- Chromium offscreen player sada uz svaki state/result prenosi playback `sessionId` i monotoni `generation`, pa zakašnjeli rezultat stare sesije više ne može upravljati novom reprodukcijom
+- Chromium service worker uvodi vlastiti `epoch`, `revision` i `commandGeneration`, prati aktivni session i ignorira state s drugog sessiona ili starijom generation vrijednošću
+- Firefox background player koristi isti princip epoch/revision/session identiteta i instance ownershipa kroz cijeli playback lifecycle
+- popup UI prati background `epoch` i monotoni `revision`, odbacuje zakašnjele `RB_PLAY`/`RB_TOGGLE` Promise rezultate i ne dopušta početnom `RB_GET_STATE` odgovoru da prepiše noviju korisničku akciju
+- playback status odvojen je od kataloškog statusa: `Povezujem`, `Pauziram`, `Sada svira`, `Pauzirano` i `Nedostupno` više se ne brišu pri ponovnom renderiranju broja stanica
+- browser packaging i cross-platform security verifier sada zahtijevaju session/revision/command ordering ugovore te dedicated `playerState` UI
+- Windows screenshot capture više ne može neograničeno blokirati runner u native `PrintWindow` pozivu; capture se izvršava u zasebnom child procesu s tvrdim timeoutom od 30 sekundi i gašenjem cijelog process treeja
+- browser screenshot koristi stvarni produkcijski popup HTML/CSS/JavaScript iz privremene kopije, uz CI-only lokalni runtime adapter koji se nikada ne uključuje u produkcijske ZIP-ove
+- screenshot job ima kraći globalni timeout, determinističan lokalni katalog i eksplicitno čišćenje privremenog browser profila i preview direktorija
+- CI dodatno provjerava sintaksu screenshot runtime JavaScripta i PowerShell capture skripte te dijeli concurrency ključ između push/PR provjera istog brancha kako ne bi nepotrebno trošio dvostruke runnere
+
+Browser URL validator i dalje blokira izravne private/loopback/link-local/CGNAT/metadata i credentialed URL-ove. Media redirect ponašanje ostaje pod kontrolom samog preglednika bez uvođenja širih `webRequest` dozvola.
+
 ## 0.0.8
 
 Izdanje 0.0.8 učvršćuje browser playback lifecycle za Chrome, Edge, Opera i Firefox bez dodavanja novih širokih browser dozvola.

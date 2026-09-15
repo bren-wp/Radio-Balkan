@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.8" src="assets/badges/version.svg">
+  <img alt="version 0.0.9" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -43,7 +43,7 @@ Službeni znak i paleta nalaze se u [`assets/brand`](assets/brand). Browser mani
 
 ## Snimke stvarnih aplikacija
 
-GitHub workflow `Product screenshots` pokreće stvarni Windows binary i stvarni browser popup te sprema snimke zaslona u repozitorij.
+GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser snimka koristi isti produkcijski popup HTML/CSS/JavaScript iz `extensions/shared`, uz izolirani CI-only runtime adapter koji se ubacuje samo u privremenu preview kopiju i nikada se ne paketira u produkcijsku ekstenziju.
 
 <p align="center">
   <img src="assets/screenshots/windows.png" width="720" alt="Radio Balkan Windows aplikacija"><br><br>
@@ -52,7 +52,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary i stvarni 
 
 ## Preuzimanje
 
-Gotovi v0.0.8 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.8):
+Gotovi v0.0.9 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.9):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -88,10 +88,10 @@ python scripts/verify_security_contracts.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.9
+python scripts/bump_version.py 0.0.10
 ```
 
-Detaljni build postupci: [`docs/BUILD.md`](docs/BUILD.md). GitHub Actions dodatno provjerava JavaScript, browser pakiranje i session-bound player ugovore, Go test/vet/build, Android unit testove, lint/release build, sigurnosne kontrakte i usklađenost verzija.
+Detaljni build postupci: [`docs/BUILD.md`](docs/BUILD.md). GitHub Actions dodatno provjerava JavaScript, browser pakiranje, session/revision player-state ugovore, Go test/vet/build, Android unit testove, lint/release build, PowerShell screenshot tooling, sigurnosne kontrakte i usklađenost verzija.
 
 ## Dokumentacija
 
