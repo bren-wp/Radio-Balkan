@@ -209,7 +209,7 @@ public final class RadioPlayerService extends Service {
         }
         state.setLastStation(key, currentName, meta);
         notifyState("Povezujem…", false);
-        startForeground(NOTIFICATION_ID, buildNotification(false, "Povezujem…"));
+        updateForeground(false, "Povezujem…");
         updateMediaSession();
         executeWorker(() -> tryCurrentCandidate(gen));
     }
@@ -243,7 +243,7 @@ public final class RadioPlayerService extends Service {
             country = currentCountry;
         }
         StreamResolver.Resolution repaired = StreamResolver.repair(Collections.emptyList(), uuid, homepage, country);
-        if (repaired != null && StreamResolver.isHttp(repaired.url)) {
+        if (repaired != null && StreamResolver.isSafeHttp(repaired.url)) {
             synchronized (lock) {
                 if (gen != generation) return;
                 if (!currentCandidates.contains(repaired.url)) currentCandidates.add(repaired.url);
@@ -274,7 +274,7 @@ public final class RadioPlayerService extends Service {
         if (unavailable) {
             notifyState("Stanica trenutno nije dostupna", false);
             stopForeground(false);
-                abandonAudioFocus();
+            abandonAudioFocus();
             return;
         }
         notifyState("Ponovno povezujem…", false);
@@ -341,7 +341,7 @@ public final class RadioPlayerService extends Service {
                 updateMediaSessionLocked();
             }
             notifyState("Audio trenutno koristi druga aplikacija", false);
-            startForeground(NOTIFICATION_ID, buildNotification(false, "Pauzirano"));
+            updateForeground(false, "Pauzirano");
             return;
         }
         try {
@@ -369,25 +369,30 @@ public final class RadioPlayerService extends Service {
         state.addRecent(currentKey);
         state.addBackup(currentKey, stream);
         notifyState("Uživo", true);
-        startForeground(NOTIFICATION_ID, buildNotification(true, "Uživo"));
+        updateForeground(true, "Uživo");
         startMetadataLoop(gen, stream);
     }
 
     private void onAsyncPlayerError(int gen, MediaPlayer mp) {
+        boolean retry = false;
         synchronized (lock) {
-            if (pendingPlayer == mp) { cancelPrepareTimeoutLocked(); pendingPlayer = null; }
-            if (player == mp) player = null;
+            if (gen == generation && (pendingPlayer == mp || player == mp)) {
+                if (pendingPlayer == mp) {
+                    cancelPrepareTimeoutLocked();
+                    pendingPlayer = null;
+                }
+                if (player == mp) player = null;
+                playing = false;
+                currentNowPlaying = "";
+                metadataGeneration++;
+                currentCandidate++;
+                status = "Ponovno povezujem…";
+                updateMediaSessionLocked();
+                retry = true;
+            }
         }
         release(mp);
-        synchronized (lock) {
-            if (gen != generation) return;
-            playing = false;
-            currentNowPlaying = "";
-            metadataGeneration++;
-            currentCandidate++;
-            status = "Ponovno povezujem…";
-            updateMediaSessionLocked();
-        }
+        if (!retry) return;
         notifyState("Ponovno povezujem…", false);
         executeWorker(() -> tryCurrentCandidate(gen));
     }
@@ -402,7 +407,7 @@ public final class RadioPlayerService extends Service {
         }
         if (abandonFocus) abandonAudioFocus();
         notifyState(newStatus, false);
-        startForeground(NOTIFICATION_ID, buildNotification(false, newStatus));
+        updateForeground(false, newStatus);
     }
 
     private void resume() {
@@ -422,13 +427,35 @@ public final class RadioPlayerService extends Service {
             notifyState("Audio trenutno koristi druga aplikacija", false);
             return;
         }
+        MediaPlayer failed = null;
         synchronized (lock) {
             if (gen != generation || player == null) return;
-            try { player.start(); playing = true; pausedByFocus = false; status = "Uživo"; updateMediaSessionLocked(); }
-            catch (Throwable t) { AppLog.e(this, "resume", t); executeWorker(() -> tryCurrentCandidate(gen)); return; }
+            try {
+                player.start();
+                playing = true;
+                pausedByFocus = false;
+                status = "Uživo";
+                updateMediaSessionLocked();
+            } catch (Throwable t) {
+                AppLog.e(this, "resume", t);
+                failed = player;
+                player = null;
+                playing = false;
+                currentNowPlaying = "";
+                metadataGeneration++;
+                currentCandidate++;
+                status = "Ponovno povezujem…";
+                updateMediaSessionLocked();
+            }
+        }
+        if (failed != null) {
+            release(failed);
+            notifyState("Ponovno povezujem…", false);
+            executeWorker(() -> tryCurrentCandidate(gen));
+            return;
         }
         notifyState("Uživo", true);
-        startForeground(NOTIFICATION_ID, buildNotification(true, "Uživo"));
+        updateForeground(true, "Uživo");
         String stream;
         synchronized (lock) { stream = currentResolved; }
         if (!stream.isEmpty()) startMetadataLoop(gen, stream);
@@ -512,7 +539,7 @@ public final class RadioPlayerService extends Service {
 
     private boolean requestAudioFocus() {
         try { return audioManager == null || audioManager.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED; }
-        catch (Throwable t) { AppLog.e(this, "audio-focus", t); return true; }
+        catch (Throwable t) { AppLog.e(this, "audio-focus", t); return false; }
     }
 
     private void abandonAudioFocus() {
@@ -550,6 +577,14 @@ public final class RadioPlayerService extends Service {
         return b.build();
     }
 
+    private void updateForeground(boolean isPlaying, String notificationStatus) {
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification(isPlaying, notificationStatus));
+        } catch (Throwable t) {
+            AppLog.e(this, "foreground-notification", t);
+        }
+    }
+
     private void notifyState(String newStatus, boolean isPlaying) {
         final String key;
         final String name;
@@ -575,7 +610,11 @@ public final class RadioPlayerService extends Service {
         i.putExtra(EXTRA_STATUS, newStatus);
         i.putExtra(EXTRA_URL, resolved);
         i.putExtra(EXTRA_NOW_PLAYING, nowPlaying);
-        sendBroadcast(i, INTERNAL_STATE_PERMISSION);
+        try {
+            sendBroadcast(i, INTERNAL_STATE_PERMISSION);
+        } catch (Throwable t) {
+            AppLog.e(this, "state-broadcast", t);
+        }
     }
 
     private void updateMediaSession() {
@@ -612,7 +651,7 @@ public final class RadioPlayerService extends Service {
                         }
                     }
                     notifyState("Uživo", true);
-                    try { startForeground(NOTIFICATION_ID, buildNotification(true, "Uživo")); } catch (Throwable ignored) { }
+                    updateForeground(true, "Uživo");
                 }
                 for (int i = 0; i < 24; i++) {
                     try { Thread.sleep(5000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); return; }
@@ -629,11 +668,11 @@ public final class RadioPlayerService extends Service {
         HttpURLConnection c = null;
         try {
             c = (HttpURLConnection) new URL(raw).openConnection();
-            c.setConnectTimeout(5000); c.setReadTimeout(7500); c.setInstanceFollowRedirects(true); c.setUseCaches(false);
+            c.setConnectTimeout(5000); c.setReadTimeout(7500); c.setInstanceFollowRedirects(false); c.setUseCaches(false);
             c.setRequestProperty("User-Agent", AppInfo.USER_AGENT);
             c.setRequestProperty("Icy-MetaData", "1");
             int statusCode = c.getResponseCode();
-            if (statusCode < 200 || statusCode >= 400) return "";
+            if (statusCode < 200 || statusCode >= 300) return "";
             if (!StreamResolver.isSafeHttp(c.getURL().toString())) return "";
             int interval;
             try { interval = Integer.parseInt(c.getHeaderField("icy-metaint")); } catch (Throwable ignored) { return ""; }
@@ -677,7 +716,8 @@ public final class RadioPlayerService extends Service {
         NotificationChannel channel = new NotificationChannel(CHANNEL_ID, getString(R.string.channel_name), NotificationManager.IMPORTANCE_LOW);
         channel.setDescription(getString(R.string.channel_description));
         channel.setShowBadge(false);
-        ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE)).createNotificationChannel(channel);
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) manager.createNotificationChannel(channel);
     }
 
     private void registerNoisyReceiver() {
