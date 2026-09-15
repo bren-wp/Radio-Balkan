@@ -2,11 +2,14 @@
 
 Radio Balkan tretira URL-ove streamova i logotipa kao nepouzdani mrežni ulaz.
 
-- Browser ekstenzije centralno blokiraju privatne, loopback, link-local, CGNAT i druge lokalne ciljeve.
+- Browser ekstenzije centralno blokiraju privatne, loopback, link-local, CGNAT i druge lokalne ciljeve te održavaju eksplicitno player stanje u strict-mode runtimeu.
+- Chromium offscreen player koristi single-flight kreiranje dokumenta i generacijske tokene kako zastarjeli asinkroni pokušaji ne bi mijenjali novije stanje reprodukcije.
 - Android validira stream kandidate i ograničava veličinu mrežnih odgovora i slika.
 - Android player-state broadcast ostaje interni kanal: na novijim Android verzijama receiver je `RECEIVER_NOT_EXPORTED`, a na podržanim starijim verzijama kanal je zaštićen aplikacijskom `signature` permission dozvolom.
 - Pre-Android 13 receiver registracija koristi isti `signature` permission. Usko scoped `UnspecifiedRegisterReceiverFlag` lint suppression postoji samo zato što Android Lint ne inferira zaštitu custom signature permissiona kroz stariji overload; nije zamjena za sigurnosnu kontrolu.
+- Windows blokira loopback, private, link-local, CGNAT i poznate metadata ciljeve te odbija URL-ove s ugrađenim korisničkim podacima (`user:password@host`).
 - Windows ograničava katalog, cache i paralelne health provjere te koristi timeoute i recovery putanje.
+- Cross-platform sigurnosni ugovori i Windows URL regresijski testovi izvršavaju se u GitHub CI-ju prije produkcijskog mergea.
 - Nema telemetry SDK-a, oglasnih SDK-ova ni skrivenog praćenja.
 - Tajne za potpisivanje Android izdanja ne smiju biti commitane; koriste se isključivo GitHub Actions Secrets.
 
