@@ -9,6 +9,7 @@ on:
       - extensions/shared/**
       - assets/brand/**
       - scripts/capture-windows.ps1
+      - scripts/browser-screenshot-runtime.js
       - .github/workflows/screenshots.yml
   workflow_dispatch:
 
@@ -22,7 +23,7 @@ concurrency:
 jobs:
   screenshots:
     runs-on: windows-latest
-    timeout-minutes: 12
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,10 +35,22 @@ jobs:
       - name: Capture real Windows UI
         shell: pwsh
         run: ./scripts/capture-windows.ps1 -Exe "apps/windows/dist/RadioBalkan-Portable-v$((Get-Content VERSION).Trim()).exe" -Output "assets/screenshots/windows.png"
-      - name: Capture real browser popup UI
+      - name: Capture production browser popup UI
         shell: pwsh
         run: |
-          $server = Start-Process python -ArgumentList '-m','http.server','8765','--directory','extensions/shared' -PassThru -WindowStyle Hidden
+          $preview = Join-Path $env:RUNNER_TEMP 'radio-balkan-popup-preview'
+          if (Test-Path $preview) { Remove-Item $preview -Recurse -Force }
+          New-Item -ItemType Directory -Force -Path $preview | Out-Null
+          Copy-Item 'extensions/shared/*' $preview -Force
+          Copy-Item 'scripts/browser-screenshot-runtime.js' (Join-Path $preview 'browser-screenshot-runtime.js') -Force
+          $popupPath = Join-Path $preview 'popup.html'
+          $popup = Get-Content $popupPath -Raw
+          $needle = '<script src="network.js"></script>'
+          if (-not $popup.Contains($needle)) { throw 'Browser popup script anchor was not found.' }
+          $popup = $popup.Replace($needle, '<script src="browser-screenshot-runtime.js"></script>' + [Environment]::NewLine + '  ' + $needle)
+          Set-Content -Path $popupPath -Value $popup -Encoding UTF8
+
+          $server = Start-Process python -ArgumentList '-m','http.server','8765','--directory',"`"$preview`"" -PassThru -WindowStyle Hidden
           $process = $null
           try {
             Start-Sleep -Seconds 2
@@ -85,6 +98,7 @@ jobs:
             if ($process -and -not $process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
             Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
             Get-Process msedge,chrome -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            if (Test-Path $preview) { Remove-Item $preview -Recurse -Force -ErrorAction SilentlyContinue }
           }
       - name: Commit screenshots
         shell: pwsh
@@ -93,5 +107,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/screenshots/*.png
           if (git diff --cached --quiet) { exit 0 }
-          git commit -m "docs: add real Radio Balkan application screenshots"
+          git commit -m "docs: refresh Radio Balkan application screenshots"
           git push origin HEAD:${{ github.ref_name }}
