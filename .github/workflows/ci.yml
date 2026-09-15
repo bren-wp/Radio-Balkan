@@ -40,8 +40,11 @@ jobs:
           node --check extensions/platform/firefox/background-firefox.js
           node --check scripts/browser-screenshot-runtime.js
           node --check scripts/test_browser_state_contract.js
+          node --check scripts/test_firefox_player_contract.js
       - name: Test browser player state contract
         run: node scripts/test_browser_state_contract.js
+      - name: Test Firefox player session contract
+        run: node scripts/test_firefox_player_contract.js
       - name: Build extensions
         working-directory: extensions
         run: python tools/build_extensions.py
