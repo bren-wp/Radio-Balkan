@@ -43,6 +43,15 @@ def require_fragments(path: Path, fragments: tuple[str, ...]) -> None:
 
 
 def validate_player_contract(browser: str, target: Path) -> None:
+    session_contract = (
+        "let audio = null;",
+        "function disposeAudio(",
+        "function createAudio(token, candidate)",
+        "document.createElement('audio')",
+        "audio !== instance",
+        "instance.onerror = () => playbackFailed(token, instance);",
+        "instance.onended = () => playbackFailed(token, instance);",
+    )
     if browser == "firefox":
         require_fragments(
             target / "background-firefox.js",
@@ -52,7 +61,8 @@ def validate_player_contract(browser: str, target: Path) -> None:
                 "let candidates = [];",
                 "let idx = 0;",
                 "let generation = 0;",
-                "if (token !== generation) return false;",
+                "if (token !== generation || audio !== instance) return false;",
+                *session_contract,
             ),
         )
         return
@@ -74,7 +84,8 @@ def validate_player_contract(browser: str, target: Path) -> None:
             "let index = 0;",
             "let generation = 0;",
             "let playing = false;",
-            "if (token !== generation) return false;",
+            "if (token !== generation || audio !== instance) return false;",
+            *session_contract,
         ),
     )
 
