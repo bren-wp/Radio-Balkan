@@ -34,6 +34,51 @@ def validate_js(folder: Path) -> None:
             raise SystemExit(f"JS syntax error in {js.name}:\n{result.stderr}")
 
 
+def require_fragments(path: Path, fragments: tuple[str, ...]) -> None:
+    text = path.read_text(encoding="utf-8")
+    missing = [fragment for fragment in fragments if fragment not in text]
+    if missing:
+        joined = ", ".join(repr(item) for item in missing)
+        raise SystemExit(f"{path.name}: missing player-state contract: {joined}")
+
+
+def validate_player_contract(browser: str, target: Path) -> None:
+    if browser == "firefox":
+        require_fragments(
+            target / "background-firefox.js",
+            (
+                "'use strict';",
+                "const state = { station: null, playing: false };",
+                "let candidates = [];",
+                "let idx = 0;",
+                "let generation = 0;",
+                "if (token !== generation) return false;",
+            ),
+        )
+        return
+
+    require_fragments(
+        target / "service_worker.js",
+        (
+            "'use strict';",
+            "let offscreenCreating = null;",
+            "if (!offscreenCreating)",
+        ),
+    )
+    require_fragments(
+        target / "offscreen.js",
+        (
+            "'use strict';",
+            "let station = null;",
+            "let candidates = [];",
+            "let index = 0;",
+            "let generation = 0;",
+            "let playing = false;",
+            "if (token !== generation) return false;",
+        ),
+    )
+
+
 def materialize(browser: str, platform: str, target: Path) -> None:
     target.mkdir(parents=True, exist_ok=True)
     for item in SHARED.iterdir():
@@ -68,6 +113,7 @@ def materialize(browser: str, platform: str, target: Path) -> None:
     missing = [name for name in required if not (target / name).exists()]
     if missing:
         raise SystemExit(f"{browser}: missing platform files: {', '.join(missing)}")
+    validate_player_contract(browser, target)
 
 
 def package_folder(folder: Path, target: Path) -> None:
