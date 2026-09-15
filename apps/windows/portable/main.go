@@ -628,6 +628,9 @@ func safeHTTPURL(raw string) bool {
 	if err != nil || u == nil {
 		return false
 	}
+	if u.User != nil {
+		return false
+	}
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return false
 	}
