@@ -78,9 +78,9 @@ jobs:
             echo "RADIO_BALKAN_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
             echo "RADIO_BALKAN_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
           fi
-      - name: Build Android release
+      - name: Test and build Android release
         working-directory: apps/android
-        run: gradle --no-daemon --console=plain lintRelease assembleRelease
+        run: gradle --no-daemon --console=plain testReleaseUnitTest lintRelease assembleRelease
       - name: Normalize Android artifact name
         working-directory: apps/android
         run: |
