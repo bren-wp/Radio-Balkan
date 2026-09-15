@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   windows:
     runs-on: windows-latest
@@ -63,7 +67,11 @@ jobs:
           KEY_ALIAS: ${{ secrets.RADIO_BALKAN_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.RADIO_BALKAN_KEY_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then
+          if [ -n "$KEYSTORE_B64$STORE_PASSWORD$KEY_ALIAS$KEY_PASSWORD" ]; then
+            if [ -z "$KEYSTORE_B64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+              echo "::error::Android signing is partially configured. Configure all four RADIO_BALKAN signing secrets or none of them."
+              exit 1
+            fi
             printf '%s' "$KEYSTORE_B64" | base64 --decode > radio-balkan-release.jks
             echo "RADIO_BALKAN_KEYSTORE=$PWD/radio-balkan-release.jks" >> "$GITHUB_ENV"
             echo "RADIO_BALKAN_STORE_PASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
@@ -89,6 +97,10 @@ jobs:
         with:
           name: android
           path: apps/android/dist/*.apk
+      - name: Remove signing material
+        if: always()
+        working-directory: apps/android
+        run: rm -f radio-balkan-release.jks
 
   release:
     needs: [windows, browsers, android]
@@ -110,7 +122,15 @@ jobs:
         run: |
           VERSION=$(cat VERSION)
           TAG="v${VERSION}"
+          TAG_SHA=$(git ls-remote origin "refs/tags/${TAG}^{}" | awk '{print $1}')
+          if [ -z "$TAG_SHA" ]; then
+            TAG_SHA=$(git ls-remote origin "refs/tags/${TAG}" | awk '{print $1}')
+          fi
+          if [ -n "$TAG_SHA" ] && [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
+            echo "::error::${TAG} already points to ${TAG_SHA}; bump VERSION before publishing a different commit."
+            exit 1
+          fi
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --target main --title "Radio Balkan ${TAG}" --notes "Produkcijsko izdanje Radio Balkan ${TAG}. Detalji: docs/RELEASES.md"
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "Radio Balkan ${TAG}" --notes "Produkcijsko izdanje Radio Balkan ${TAG}. Detalji: docs/RELEASES.md"
           fi
           gh release upload "$TAG" release-assets/* --clobber
