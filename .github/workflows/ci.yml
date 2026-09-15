@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "release/**", "chatgpt/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python scripts/check_versions.py
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate JavaScript
+        run: |
+          node --check extensions/shared/network.js
+          node --check extensions/shared/catalog.js
+          node --check extensions/shared/popup.js
+          node --check extensions/platform/chromium/service_worker.js
+          node --check extensions/platform/chromium/offscreen.js
+          node --check extensions/platform/firefox/background-firefox.js
+      - name: Build extensions
+        working-directory: extensions
+        run: python tools/build_extensions.py
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test portable
+        working-directory: apps/windows/portable
+        run: go test ./...; go vet ./...
+      - name: Test setup
+        working-directory: apps/windows/setup
+        run: go test ./...; go vet ./...
+      - name: Build Windows release
+        working-directory: apps/windows
+        shell: pwsh
+        run: ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Install Android 36 build components
+        run: yes | sdkmanager "platforms;android-36" "build-tools;36.0.0" >/dev/null
+      - name: Android lint and release build
+        working-directory: apps/android
+        run: gradle --no-daemon --console=plain lintRelease assembleRelease
