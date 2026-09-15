@@ -1,0 +1,34 @@
+name: v0.0.6 version sync
+
+on:
+  push:
+    branches: ["chatgpt/v0.0.6-production"]
+    paths: [".github/workflows/v006-version-sync.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.0.6-production
+          fetch-depth: 0
+      - name: Synchronize 0.0.6 metadata
+        run: python scripts/bump_version.py 0.0.6
+      - name: Commit synchronized version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VERSION \
+                  apps/windows/portable/main.go \
+                  apps/windows/setup/main.go \
+                  apps/windows/build-release.ps1 \
+                  apps/android/app/build.gradle.kts \
+                  apps/android/app/src/main/java/net/radiobalkan/app/AppInfo.java \
+                  extensions/version.json
+          git diff --cached --quiet && exit 0
+          git commit -m "build: synchronize Radio Balkan v0.0.6"
+          git push origin HEAD:chatgpt/v0.0.6-production
