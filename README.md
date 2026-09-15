@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.5" src="assets/badges/version.svg">
+  <img alt="version 0.0.6" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -41,7 +41,6 @@ Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrva
 
 Službeni znak i paleta nalaze se u [`assets/brand`](assets/brand). Browser manifesti, toolbar naziv i produkcijski build guard zaključani su na **Radio Balkan**.
 
-
 ## Snimke stvarnih aplikacija
 
 GitHub workflow `Product screenshots` pokreće stvarni Windows binary i stvarni browser popup te sprema snimke zaslona u repozitorij.
@@ -53,7 +52,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary i stvarni 
 
 ## Preuzimanje
 
-Gotovi v0.0.5 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.5):
+Gotovi v0.0.6 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.6):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -76,16 +75,23 @@ extensions/     Chrome, Edge, Opera i Firefox
 assets/         službeni branding i slike
 docs/           arhitektura, sigurnost, privatnost, build i release dokumentacija
 .github/        GitHub Actions, issue i PR predlošci
-scripts/        provjere repozitorija
+scripts/        version, security i repository provjere
 ```
 
 ## Build i provjere
 
 ```bash
 python scripts/check_versions.py
+python scripts/verify_security_contracts.py
 ```
 
-Detaljni build postupci: [`docs/BUILD.md`](docs/BUILD.md). GitHub Actions dodatno provjerava JavaScript, browser pakiranje, Go test/vet/build, Android lint/release build i usklađenost verzija.
+Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
+
+```bash
+python scripts/bump_version.py 0.0.7
+```
+
+Detaljni build postupci: [`docs/BUILD.md`](docs/BUILD.md). GitHub Actions dodatno provjerava JavaScript, browser pakiranje i player-state ugovore, Go test/vet/build, Android lint/release build, sigurnosne kontrakte i usklađenost verzija.
 
 ## Dokumentacija
 
