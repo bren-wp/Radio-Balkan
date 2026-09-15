@@ -46,46 +46,64 @@ def validate_player_contract(browser: str, target: Path) -> None:
     session_contract = (
         "let audio = null;",
         "function disposeAudio(",
-        "function createAudio(token, candidate)",
         "document.createElement('audio')",
+        "expectedSession",
         "audio !== instance",
-        "instance.onerror = () => playbackFailed(token, instance);",
-        "instance.onended = () => playbackFailed(token, instance);",
+        "instance.onerror = () => playbackFailed(token, expectedSession, instance);",
+        "instance.onended = () => playbackFailed(token, expectedSession, instance);",
     )
     if browser == "firefox":
         require_fragments(
             target / "background-firefox.js",
             (
                 "'use strict';",
-                "const state = { station: null, playing: false };",
-                "let candidates = [];",
-                "let idx = 0;",
+                "revision: 0, epoch",
                 "let generation = 0;",
-                "if (token !== generation || audio !== instance) return false;",
+                "let currentSessionId = null;",
+                "function newSessionId()",
+                "function commitState(",
+                "currentSessionId !== expectedSession",
                 *session_contract,
             ),
         )
-        return
+    else:
+        require_fragments(
+            target / "service_worker.js",
+            (
+                "'use strict';",
+                "revision: 0, epoch",
+                "let offscreenCreating = null;",
+                "let commandGeneration = 0;",
+                "let currentSessionId = null;",
+                "let lastOffscreenGeneration = -1;",
+                "function acceptOffscreenState(",
+                "if (!offscreenCreating)",
+            ),
+        )
+        require_fragments(
+            target / "offscreen.js",
+            (
+                "'use strict';",
+                "let generation = 0;",
+                "let playing = false;",
+                "let sessionId = null;",
+                "function stateEnvelope(",
+                "sessionId !== expectedSession",
+                *session_contract,
+            ),
+        )
 
     require_fragments(
-        target / "service_worker.js",
+        target / "popup.js",
         (
-            "'use strict';",
-            "let offscreenCreating = null;",
-            "if (!offscreenCreating)",
-        ),
-    )
-    require_fragments(
-        target / "offscreen.js",
-        (
-            "'use strict';",
-            "let station = null;",
-            "let candidates = [];",
-            "let index = 0;",
-            "let generation = 0;",
-            "let playing = false;",
-            "if (token !== generation || audio !== instance) return false;",
-            *session_contract,
+            "let commandGeneration = 0;",
+            "let activeCommandToken = 0;",
+            "let stateEpoch = '';",
+            "let lastRevision = -1;",
+            "function acceptStateEnvelope(",
+            "if (token !== commandGeneration) return;",
+            "message?.type !== 'RB_STATE' || activeCommandToken",
+            "$('playerState').textContent = playerStatus;",
         ),
     )
 
@@ -117,6 +135,8 @@ def materialize(browser: str, platform: str, target: Path) -> None:
     popup = (target / "popup.html").read_text(encoding="utf-8")
     if "<title>Radio Balkan</title>" not in popup or "<strong>Radio Balkan</strong>" not in popup:
         raise SystemExit(f"{browser}: locked Radio Balkan branding missing from popup")
+    if 'id="playerState"' not in popup:
+        raise SystemExit(f"{browser}: dedicated playback status is missing from popup")
     if browser == "firefox":
         required = ("background.html", "background-firefox.js")
     else:
