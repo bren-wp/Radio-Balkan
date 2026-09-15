@@ -29,9 +29,23 @@ jobs:
           $server = Start-Process python -ArgumentList '-m','http.server','8765','--directory','extensions/shared' -PassThru -WindowStyle Hidden
           try {
             Start-Sleep -Seconds 2
-            $edge = "$env:ProgramFiles(x86)\Microsoft\Edge\Application\msedge.exe"
-            if (-not (Test-Path $edge)) { $edge = "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe" }
-            & $edge --headless=new --disable-gpu --window-size=420,600 --hide-scrollbars --screenshot="$PWD\assets\screenshots\browser-extension.png" http://127.0.0.1:8765/popup.html
+            $candidates = @(
+              "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+              "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
+              "$env:LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe",
+              "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+              "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe"
+            )
+            $browser = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+            if (-not $browser) {
+              foreach ($name in @('msedge.exe','chrome.exe')) {
+                $cmd = Get-Command $name -ErrorAction SilentlyContinue
+                if ($cmd) { $browser = $cmd.Source; break }
+              }
+            }
+            if (-not $browser) { throw 'Edge/Chrome executable was not found on the GitHub runner.' }
+            & $browser --headless=new --disable-gpu --window-size=420,600 --hide-scrollbars --screenshot="$PWD\assets\screenshots\browser-extension.png" http://127.0.0.1:8765/popup.html
+            if (-not (Test-Path 'assets/screenshots/browser-extension.png')) { throw 'Browser screenshot was not created.' }
           } finally { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue }
       - name: Commit screenshots
         shell: pwsh
