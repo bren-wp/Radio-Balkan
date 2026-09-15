@@ -7,6 +7,7 @@ on:
       - VERSION
       - apps/**
       - extensions/**
+      - scripts/check_clean_worktree.py
       - .github/workflows/publish.yml
   workflow_dispatch:
 
@@ -25,6 +26,8 @@ jobs:
       - working-directory: apps/windows
         shell: pwsh
         run: ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
+      - name: Verify Windows build leaves repository clean
+        run: python scripts/check_clean_worktree.py
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -36,6 +39,8 @@ jobs:
       - uses: actions/checkout@v4
       - working-directory: extensions
         run: python tools/build_extensions.py
+      - name: Verify browser build leaves repository clean
+        run: python scripts/check_clean_worktree.py
       - uses: actions/upload-artifact@v4
         with:
           name: browsers
@@ -93,6 +98,8 @@ jobs:
           else
             cp "$APK" "dist/RadioBalkan-Android-v${VERSION}.apk"
           fi
+      - name: Verify Android build leaves repository clean
+        run: python scripts/check_clean_worktree.py
       - uses: actions/upload-artifact@v4
         with:
           name: android
@@ -111,11 +118,12 @@ jobs:
         with:
           path: release-assets
           merge-multiple: true
-      - name: Generate checksums
+      - name: Generate and verify checksums
         run: |
           VERSION=$(cat VERSION)
           cd release-assets
           sha256sum * > "RadioBalkan-v${VERSION}-SHA256.txt"
+          sha256sum -c "RadioBalkan-v${VERSION}-SHA256.txt"
       - name: Publish release assets
         env:
           GH_TOKEN: ${{ github.token }}
