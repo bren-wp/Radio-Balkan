@@ -57,16 +57,9 @@ def main() -> None:
 
     version_file.write_text(version + "\n", encoding="utf-8")
 
-    replace_once(
-        ROOT / "apps/windows/portable/main.go",
-        r'var appVersion\s*=\s*"[^"]+"',
-        f'var appVersion = "{version}"',
-    )
-    replace_once(
-        ROOT / "apps/windows/setup/main.go",
-        r'var appVersion\s*=\s*"[^"]+"',
-        f'var appVersion = "{version}"',
-    )
+    # Windows production binaries receive appVersion through Go -ldflags -X.
+    # Keep version synchronization out of the large source files so VERSION and
+    # build-release.ps1 remain the canonical release inputs.
     replace_once(
         ROOT / "apps/windows/build-release.ps1",
         r'\[string\]\$Version\s*=\s*"[^"]+"',
