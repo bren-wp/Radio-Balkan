@@ -817,7 +817,11 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private void registerPlayerReceiver() {
         try {
             IntentFilter f = new IntentFilter(RadioPlayerService.ACTION_STATE);
-            if (Build.VERSION.SDK_INT >= 33) registerReceiver(playerReceiver, f, Context.RECEIVER_NOT_EXPORTED); else registerReceiver(playerReceiver, f);
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(playerReceiver, f, RadioPlayerService.INTERNAL_STATE_PERMISSION, null, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(playerReceiver, f, RadioPlayerService.INTERNAL_STATE_PERMISSION, null);
+            }
             receiverRegistered = true;
         } catch (Throwable t) {
             AppLog.e(this, "player-receiver", t);

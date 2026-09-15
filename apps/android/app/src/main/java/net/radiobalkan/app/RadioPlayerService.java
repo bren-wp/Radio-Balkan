@@ -41,6 +41,7 @@ public final class RadioPlayerService extends Service {
     public static final String ACTION_QUERY = "net.radiobalkan.app.QUERY";
     public static final String ACTION_VOLUME = "net.radiobalkan.app.VOLUME";
     public static final String ACTION_STATE = "net.radiobalkan.app.STATE";
+    public static final String INTERNAL_STATE_PERMISSION = "net.radiobalkan.app.permission.INTERNAL_STATE";
     public static final String EXTRA_KEY = "key";
     public static final String EXTRA_NAME = "name";
     public static final String EXTRA_META = "meta";
@@ -574,7 +575,7 @@ public final class RadioPlayerService extends Service {
         i.putExtra(EXTRA_STATUS, newStatus);
         i.putExtra(EXTRA_URL, resolved);
         i.putExtra(EXTRA_NOW_PLAYING, nowPlaying);
-        sendBroadcast(i);
+        sendBroadcast(i, INTERNAL_STATE_PERMISSION);
     }
 
     private void updateMediaSession() {
