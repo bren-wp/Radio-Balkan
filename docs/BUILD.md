@@ -29,4 +29,4 @@ cd apps/android
 ./build-apk.sh
 ```
 
-Za potpisani release koristi GitHub Actions Secrets / environment varijable opisane u `apps/android/README-HR.md`. Privatni ključevi ne pripadaju repozitoriju.
+Produkcijski Android CI izvršava `lintRelease` i `assembleRelease`; release se ne smatra spremnim dok Android Lint prijavljuje error. Za potpisani release koristi GitHub Actions Secrets / environment varijable opisane u `apps/android/README-HR.md`. Privatni ključevi ne pripadaju repozitoriju.
