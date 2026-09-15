@@ -132,6 +132,13 @@ def main() -> None:
         'id="playerState"',
         'aria-live="polite"',
     )
+    require(
+        "scripts/test_browser_state_contract.js",
+        "lower revision from the current epoch must be ignored",
+        "a foreign epoch must trigger authoritative RB_GET_STATE resync",
+        "retired worker epoch cannot restore stale state",
+        "stale command reply from a retired epoch cannot replace current station",
+    )
     forbid(
         "extensions/platform/chromium/offscreen.js",
         "window.generation",
