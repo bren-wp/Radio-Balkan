@@ -12,27 +12,43 @@ if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
     throw "Go nije pronađen u PATH-u. Instaliraj aktualni Go SDK pa ponovno pokreni skriptu."
 }
 
+function Test-GoFormatting([string]$Path) {
+    $diff = (& gofmt -d $Path | Out-String)
+    if ($LASTEXITCODE -ne 0) {
+        throw "gofmt provjera nije uspjela za $Path"
+    }
+    if ($diff.Trim()) {
+        Write-Warning "$Path nije potpuno gofmt formatiran; build ne mijenja source datoteku."
+    }
+}
+
 New-Item -ItemType Directory -Force -Path $Output | Out-Null
 $portable = Join-Path $Output "RadioBalkan-Portable-v$Version.exe"
 $setup = Join-Path $Output "RadioBalkan-Setup-v$Version.exe"
+$embeddedPortable = Join-Path $PSScriptRoot "setup\RadioBalkan-Portable.exe"
 
 Push-Location (Join-Path $PSScriptRoot "portable")
 try {
-    gofmt -w main.go
+    Test-GoFormatting "main.go"
     go vet ./...
     go test ./...
     go build -trimpath -buildvcs=false -ldflags "-s -w -H=windowsgui -X main.appVersion=$Version" -o $portable .
-} finally { Pop-Location }
+} finally {
+    Pop-Location
+}
 
-Copy-Item -Force $portable (Join-Path $PSScriptRoot "setup\RadioBalkan-Portable.exe")
+Copy-Item -Force $portable $embeddedPortable
 
 Push-Location (Join-Path $PSScriptRoot "setup")
 try {
-    gofmt -w main.go
+    Test-GoFormatting "main.go"
     go vet ./...
     go test ./...
     go build -trimpath -buildvcs=false -ldflags "-s -w -H=windowsgui -X main.appVersion=$Version" -o $setup .
-} finally { Pop-Location }
+} finally {
+    Pop-Location
+    Remove-Item -Force -ErrorAction SilentlyContinue $embeddedPortable
+}
 
 $hashes = @(
     Get-FileHash -Algorithm SHA256 $portable
