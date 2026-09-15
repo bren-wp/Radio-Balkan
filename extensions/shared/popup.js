@@ -16,6 +16,8 @@
   let activeCommandToken = 0;
   let stateEpoch = '';
   let lastRevision = -1;
+  let stateSyncPromise = null;
+  const retiredEpochs = new Set();
 
   const search = $('search');
   const country = $('country');
@@ -34,22 +36,37 @@
     return RB.fold(name).slice(0, 2).toUpperCase() || 'RB';
   }
 
-  function acceptStateEnvelope(value) {
+  function rememberRetiredEpoch(epoch) {
+    if (!epoch) return;
+    retiredEpochs.add(epoch);
+    while (retiredEpochs.size > 8) {
+      retiredEpochs.delete(retiredEpochs.values().next().value);
+    }
+  }
+
+  function acceptStateEnvelope(value, allowEpochChange = false) {
     if (!value || typeof value !== 'object') return false;
     const epoch = String(value.epoch || '');
     const revision = Number(value.revision);
-    if (!epoch || !Number.isInteger(revision) || revision < 0) return false;
-    if (epoch !== stateEpoch) {
+    if (!epoch || !Number.isInteger(revision) || revision < 0 || retiredEpochs.has(epoch)) return false;
+
+    if (!stateEpoch) {
+      stateEpoch = epoch;
+      lastRevision = -1;
+    } else if (epoch !== stateEpoch) {
+      if (!allowEpochChange) return false;
+      rememberRetiredEpoch(stateEpoch);
       stateEpoch = epoch;
       lastRevision = -1;
     }
+
     if (revision < lastRevision) return false;
     lastRevision = revision;
     return true;
   }
 
-  function applyStateEnvelope(value, updateStatus = true) {
-    if (!acceptStateEnvelope(value)) return false;
+  function applyStateEnvelope(value, updateStatus = true, allowEpochChange = false) {
+    if (!acceptStateEnvelope(value, allowEpochChange)) return false;
     const hasRemoteStation = !!value.station;
     if (hasRemoteStation) current = value.station;
     playing = !!value.playing;
@@ -59,6 +76,33 @@
       else playerStatus = 'Spremno';
     }
     return true;
+  }
+
+  async function applyCommandResult(result, token) {
+    if (token !== commandGeneration) return false;
+    const incomingEpoch = String(result?.epoch || '');
+    if (stateEpoch && incomingEpoch && incomingEpoch !== stateEpoch) {
+      const confirmed = await ext.runtime.sendMessage({ type: 'RB_GET_STATE' }).catch(() => null);
+      if (token !== commandGeneration) return false;
+      return applyStateEnvelope(confirmed, false, true);
+    }
+    return applyStateEnvelope(result, false, !stateEpoch);
+  }
+
+  function synchronizePlayerState() {
+    if (stateSyncPromise) return stateSyncPromise;
+    const syncToken = commandGeneration;
+    stateSyncPromise = Promise.resolve(ext.runtime.sendMessage({ type: 'RB_GET_STATE' }))
+      .then(result => {
+        if (syncToken !== commandGeneration || activeCommandToken) return false;
+        if (!applyStateEnvelope(result, true, true)) return false;
+        updatePlayer();
+        render();
+        return true;
+      })
+      .catch(() => false)
+      .finally(() => { stateSyncPromise = null; });
+    return stateSyncPromise;
   }
 
   function fillCountries() {
@@ -177,7 +221,8 @@
     try {
       const result = await ext.runtime.sendMessage({ type: 'RB_PLAY', station });
       if (token !== commandGeneration) return;
-      applyStateEnvelope(result, false);
+      await applyCommandResult(result, token);
+      if (token !== commandGeneration) return;
       if (result?.error && !playing) playerStatus = 'Nedostupno';
       else playerStatus = playing ? 'Sada svira' : 'Nedostupno';
     } catch {
@@ -202,7 +247,8 @@
     try {
       const result = await ext.runtime.sendMessage({ type: 'RB_TOGGLE' });
       if (token !== commandGeneration) return;
-      applyStateEnvelope(result, false);
+      await applyCommandResult(result, token);
+      if (token !== commandGeneration) return;
       if (result?.error && !playing) playerStatus = 'Nedostupno';
       else playerStatus = playing ? 'Sada svira' : 'Pauzirano';
     } catch {
@@ -273,7 +319,12 @@
 
   ext.runtime.onMessage.addListener(message => {
     if (message?.type !== 'RB_STATE' || activeCommandToken) return;
-    if (!applyStateEnvelope(message, true)) return;
+    const incomingEpoch = String(message.epoch || '');
+    if (stateEpoch && incomingEpoch && incomingEpoch !== stateEpoch) {
+      void synchronizePlayerState();
+      return;
+    }
+    if (!applyStateEnvelope(message, true, !stateEpoch)) return;
     updatePlayer();
     render();
   });
@@ -289,7 +340,7 @@
       apply();
       const readToken = commandGeneration;
       const playerState = await ext.runtime.sendMessage({ type: 'RB_GET_STATE' }).catch(() => null);
-      if (readToken === commandGeneration && applyStateEnvelope(playerState, true)) {
+      if (readToken === commandGeneration && applyStateEnvelope(playerState, true, true)) {
         updatePlayer();
         render();
       } else {
