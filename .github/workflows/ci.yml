@@ -13,7 +13,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python scripts/check_versions.py
+      - name: Check synchronized versions
+        run: python scripts/check_versions.py
+      - name: Verify security contracts
+        run: python scripts/verify_security_contracts.py
 
   browser:
     runs-on: ubuntu-latest
