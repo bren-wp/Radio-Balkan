@@ -1,8 +1,6 @@
 'use strict';
 
-const audio = document.getElementById('audio');
-audio.preload = 'none';
-
+let audio = null;
 let station = null;
 let candidates = [];
 let index = 0;
@@ -16,16 +14,56 @@ async function report() {
     await chrome.runtime.sendMessage({
       type: 'RB_OFFSCREEN_STATE',
       station,
-      playing: !!playing && !audio.paused
+      playing: !!playing && !!audio && !audio.paused
     });
   } catch { }
 }
 
+function disposeAudio(target = audio) {
+  if (!target) return;
+  if (audio === target) audio = null;
+  target.onerror = null;
+  target.onended = null;
+  target.onplaying = null;
+  target.onpause = null;
+  try { target.pause(); } catch { }
+  try {
+    target.removeAttribute('src');
+    target.load();
+  } catch { }
+}
+
 function resetAudio() {
-  audio.pause();
-  audio.removeAttribute('src');
-  audio.load();
+  disposeAudio();
   playing = false;
+}
+
+function playbackFailed(token, instance) {
+  if (token !== generation || audio !== instance || !playing) return;
+  playing = false;
+  index += 1;
+  disposeAudio(instance);
+  void start();
+}
+
+function createAudio(token, candidate) {
+  const instance = document.createElement('audio');
+  instance.preload = 'none';
+  instance.src = candidate;
+  instance.onerror = () => playbackFailed(token, instance);
+  instance.onended = () => playbackFailed(token, instance);
+  instance.onplaying = () => {
+    if (token !== generation || audio !== instance) return;
+    playing = true;
+    void report();
+  };
+  instance.onpause = () => {
+    if (token !== generation || audio !== instance || !playing) return;
+    playing = false;
+    void report();
+  };
+  audio = instance;
+  return instance;
 }
 
 async function start() {
@@ -33,16 +71,17 @@ async function start() {
   while (index < candidates.length && token === generation) {
     const candidate = candidates[index];
     playing = false;
-    audio.pause();
-    audio.src = candidate;
+    disposeAudio();
+    const instance = createAudio(token, candidate);
     try {
-      await audio.play();
-      if (token !== generation) return false;
+      await instance.play();
+      if (token !== generation || audio !== instance) return false;
       playing = true;
       await report();
       return true;
     } catch {
-      if (token !== generation) return false;
+      if (token !== generation || audio !== instance) return false;
+      disposeAudio(instance);
       index += 1;
     }
   }
@@ -52,24 +91,6 @@ async function start() {
   }
   return false;
 }
-
-audio.addEventListener('error', () => {
-  if (!playing) return;
-  playing = false;
-  index += 1;
-  void start();
-});
-
-audio.addEventListener('playing', () => {
-  playing = true;
-  void report();
-});
-
-audio.addEventListener('pause', () => {
-  if (!playing) return;
-  playing = false;
-  void report();
-});
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.target !== 'offscreen') return;
@@ -96,9 +117,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: false, station, playing: false });
       return;
     }
-    if (!audio.paused) {
+    if (audio && !audio.paused) {
       generation += 1;
-      audio.pause();
+      try { audio.pause(); } catch { }
       playing = false;
       void report();
       sendResponse({ ok: true, station, playing: false });
@@ -120,6 +141,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === 'GET_STATE') {
-    sendResponse({ ok: true, station, playing: !!playing && !audio.paused });
+    sendResponse({ ok: true, station, playing: !!playing && !!audio && !audio.paused });
   }
 });
