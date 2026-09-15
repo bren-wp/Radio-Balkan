@@ -13,6 +13,10 @@ Izdanje 0.0.6 fokusirano je na stabilnost playera, sigurnije mrežne ulaze i str
 - dodan je cross-platform `verify_security_contracts.py` koji u CI-ju čuva Android internal-broadcast izolaciju, browser player-state zaštite i Windows sigurnosne testove
 - dodan je kanonski `scripts/bump_version.py` za sinkronizaciju Windows, Android, browser, README i version badge metapodataka
 - `check_versions.py` sada provjerava i README/version badge kako dokumentacija ne bi ostala na staroj verziji
+- CI sada otkazuje zastarjele validation runove na istoj grani, čime se smanjuje nepotrebno zauzeće GitHub runnera pri brzim uzastopnim commitovima
+- product screenshot workflow automatski se pokreće samo na `main` i samo za UI-relevantne promjene, umjesto na svaki branch/doc push
+- Android release signing sada odbija djelomično konfigurirane secrets umjesto tihog fallbacka, a privremeni keystore briše se nakon builda
+- GitHub release workflow provjerava postojeći version tag i odbija prepisivanje istog taga artefaktima s drugog commita
 
 ## 0.0.5
 
