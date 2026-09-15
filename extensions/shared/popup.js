@@ -11,6 +11,11 @@
   let favoritesOnly = false;
   let searchTimer = 0;
   let renderLimit = PAGE;
+  let playerStatus = 'Spremno';
+  let commandGeneration = 0;
+  let activeCommandToken = 0;
+  let stateEpoch = '';
+  let lastRevision = -1;
 
   const search = $('search');
   const country = $('country');
@@ -27,6 +32,33 @@
 
   function initials(name) {
     return RB.fold(name).slice(0, 2).toUpperCase() || 'RB';
+  }
+
+  function acceptStateEnvelope(value) {
+    if (!value || typeof value !== 'object') return false;
+    const epoch = String(value.epoch || '');
+    const revision = Number(value.revision);
+    if (!epoch || !Number.isInteger(revision) || revision < 0) return false;
+    if (epoch !== stateEpoch) {
+      stateEpoch = epoch;
+      lastRevision = -1;
+    }
+    if (revision < lastRevision) return false;
+    lastRevision = revision;
+    return true;
+  }
+
+  function applyStateEnvelope(value, updateStatus = true) {
+    if (!acceptStateEnvelope(value)) return false;
+    const hasRemoteStation = !!value.station;
+    if (hasRemoteStation) current = value.station;
+    playing = !!value.playing;
+    if (updateStatus) {
+      if (playing) playerStatus = 'Sada svira';
+      else if (hasRemoteStation) playerStatus = 'Pauzirano';
+      else playerStatus = 'Spremno';
+    }
+    return true;
   }
 
   function fillCountries() {
@@ -135,49 +167,59 @@
 
   async function play(station) {
     if (!station) return;
+    const token = ++commandGeneration;
+    activeCommandToken = token;
     current = station;
-    status.textContent = `Povezujem · ${station.name}`;
+    playing = false;
+    playerStatus = 'Povezujem…';
     updatePlayer();
     render();
     try {
       const result = await ext.runtime.sendMessage({ type: 'RB_PLAY', station });
-      if (result?.error) {
-        playing = false;
-        status.textContent = result.error;
-      } else {
-        playing = result?.playing !== false;
-        status.textContent = playing ? 'Reprodukcija je pokrenuta' : 'Stanica trenutačno nije dostupna';
-      }
+      if (token !== commandGeneration) return;
+      applyStateEnvelope(result, false);
+      if (result?.error && !playing) playerStatus = 'Nedostupno';
+      else playerStatus = playing ? 'Sada svira' : 'Nedostupno';
     } catch {
-      playing = false;
-      status.textContent = 'Reprodukcija trenutačno nije dostupna';
+      if (token !== commandGeneration) return;
+      playerStatus = playing ? 'Sada svira' : 'Nedostupno';
+    } finally {
+      if (token === commandGeneration) {
+        activeCommandToken = 0;
+        updatePlayer();
+        render();
+      }
     }
-    updatePlayer();
-    render();
   }
 
   async function toggle() {
     if (!current && visible.length) return play(visible[0]);
     if (!current) return;
+    const token = ++commandGeneration;
+    activeCommandToken = token;
+    playerStatus = playing ? 'Pauziram…' : 'Povezujem…';
+    updatePlayer();
     try {
       const result = await ext.runtime.sendMessage({ type: 'RB_TOGGLE' });
-      if (result?.error) {
-        playing = false;
-        status.textContent = result.error;
-      } else {
-        playing = !!result?.playing;
-        status.textContent = playing ? 'Reprodukcija je pokrenuta' : 'Pauzirano';
-      }
+      if (token !== commandGeneration) return;
+      applyStateEnvelope(result, false);
+      if (result?.error && !playing) playerStatus = 'Nedostupno';
+      else playerStatus = playing ? 'Sada svira' : 'Pauzirano';
     } catch {
-      playing = false;
-      status.textContent = 'Reprodukcija trenutačno nije dostupna';
+      if (token !== commandGeneration) return;
+      playerStatus = playing ? 'Sada svira' : 'Nedostupno';
+    } finally {
+      if (token === commandGeneration) {
+        activeCommandToken = 0;
+        updatePlayer();
+        render();
+      }
     }
-    updatePlayer();
-    render();
   }
 
   function updatePlayer() {
     const station = current;
+    $('playerState').textContent = playerStatus;
     $('playerName').textContent = station ? station.name : 'Ništa';
     $('playerMeta').textContent = station ? stationMeta(station) : 'Odaberi stanicu';
     $('heroName').textContent = station ? station.name : (all[0]?.name || 'Radio Balkan');
@@ -206,7 +248,6 @@
     void play(station);
   });
 
-
   search.addEventListener('input', () => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(apply, 130);
@@ -231,9 +272,8 @@
   });
 
   ext.runtime.onMessage.addListener(message => {
-    if (message?.type !== 'RB_STATE') return;
-    playing = !!message.playing;
-    if (message.station) current = message.station;
+    if (message?.type !== 'RB_STATE' || activeCommandToken) return;
+    if (!applyStateEnvelope(message, true)) return;
     updatePlayer();
     render();
   });
@@ -247,11 +287,14 @@
       fillCountries();
       if (!current && all.length) current = all[0];
       apply();
+      const readToken = commandGeneration;
       const playerState = await ext.runtime.sendMessage({ type: 'RB_GET_STATE' }).catch(() => null);
-      if (playerState?.station) current = playerState.station;
-      playing = !!playerState?.playing;
-      updatePlayer();
-      render();
+      if (readToken === commandGeneration && applyStateEnvelope(playerState, true)) {
+        updatePlayer();
+        render();
+      } else {
+        updatePlayer();
+      }
     } catch {
       status.textContent = 'Katalog trenutačno nije dostupan';
       const empty = document.createElement('div');
