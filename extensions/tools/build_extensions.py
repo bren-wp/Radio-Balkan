@@ -63,6 +63,10 @@ def validate_player_contract(browser: str, target: Path) -> None:
                 "function newSessionId()",
                 "function commitState(",
                 "currentSessionId !== expectedSession",
+                "if (msg.type === 'RB_STOP')",
+                "currentSessionId = null;",
+                "candidates = [];",
+                "idx = 0;",
                 *session_contract,
             ),
         )
