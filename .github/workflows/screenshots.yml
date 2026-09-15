@@ -2,12 +2,22 @@ name: Product screenshots
 
 on:
   push:
-    branches: [main, "chatgpt/**"]
-    paths-ignore: ["assets/screenshots/**"]
+    branches: [main]
+    paths:
+      - VERSION
+      - apps/windows/**
+      - extensions/shared/**
+      - assets/brand/**
+      - scripts/capture-windows.ps1
+      - .github/workflows/screenshots.yml
   workflow_dispatch:
 
 permissions:
   contents: write
+
+concurrency:
+  group: screenshots-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   screenshots:
