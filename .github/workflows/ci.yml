@@ -71,6 +71,14 @@ jobs:
         working-directory: apps/windows
         shell: pwsh
         run: ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
+      - name: Verify Windows build leaves repository clean
+        shell: pwsh
+        run: |
+          $changes = @(git status --porcelain --untracked-files=all)
+          if ($changes.Count -gt 0) {
+            $changes | ForEach-Object { Write-Error $_ }
+            throw 'Windows release build modified or left files in the repository workspace.'
+          }
 
   android:
     runs-on: ubuntu-latest
