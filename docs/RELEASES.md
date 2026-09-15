@@ -1,5 +1,24 @@
 # Izdavanja
 
+## 0.0.10
+
+Izdanje 0.0.10 dodatno učvršćuje browser state ordering i usklađuje Firefox STOP semantiku s Chromium playerom, uz izvršne regresijske testove koji reproduciraju race scenarije umjesto da provjeravaju samo statičke fragmente sourcea.
+
+- popup više ne prihvaća promjenu background `epoch` vrijednosti iz proizvoljne zakašnjele `RB_STATE` poruke; novi epoch mora biti potvrđen autoritativnim `RB_GET_STATE` resyncom
+- napušteni worker epoch ulazi u ograničeni `retiredEpochs` set i više ne može vratiti zastarjelu stanicu ili playback stanje čak ni s većom revision vrijednošću
+- `RB_GET_STATE` resync je single-flight, pa više paralelnih sumnjivih state poruka ne pokreće nepotrebne istodobne upite backgroundu
+- command token i revision zaštite testirane su i scenarijem dva brza `RB_TOGGLE` zahtjeva čiji se Promise odgovori vraćaju obrnutim redoslijedom; novija korisnička akcija ostaje autoritativna
+- Firefox `RB_STOP` sada stvarno završava playback session: briše `currentSessionId`, candidate listu i indeks, pa naknadni `RB_TOGGLE` ne može oživjeti prethodno zaustavljenu reprodukciju
+- Firefox zadržava zadnju stanicu u prikazanom UI stateu nakon STOP-a, ali bez aktivne playback sesije, što je usklađeno s očekivanim ponašanjem Chromium playera
+- dodan je izvršni `scripts/test_browser_state_contract.js` koji pokreće stvarni produkcijski `popup.js` u kontroliranom Node VM-u i provjerava revision rollback, worker restart/epoch resync, retired epoch i reversed-command race
+- dodan je izvršni `scripts/test_firefox_player_contract.js` koji pokreće stvarni Firefox background player s kontroliranim audio objektima i provjerava STOP cleanup te preklapajuće `PLAY` zahtjeve
+- browser CI obavezno izvršava oba regression testa prije pakiranja ekstenzija, a security verifier zahtijeva njihovu prisutnost i ključne regresijske scenarije
+- browser packaging guard dodatno zaključava epoch resync i Firefox STOP-session cleanup contract
+- commitovi koji mijenjaju samo generirane `assets/screenshots/**` datoteke više ne pokreću puni Windows/Android/browser CI, čime se uklanja nepotrebno ponovno trošenje runnera nakon uspješnog Product screenshots workflowa
+- nisu dodane nove browser dozvole, telemetry kod ni rebranding postavke; kanonski naziv i toolbar identitet ostaju zaključani na **Radio Balkan**
+
+Windows i Android runtime kod u ovom izdanju nije mijenjan bez potvrđenog razloga; oba klijenta i dalje prolaze puni produkcijski test/build pipeline prije promocije release commita.
+
 ## 0.0.9
 
 Izdanje 0.0.9 zatvara preostale race probleme između browser playera, background sloja i popup UI-ja te stabilizira automatizirano snimanje produkcijskog sučelja.

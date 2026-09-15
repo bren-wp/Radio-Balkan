@@ -5,7 +5,7 @@
 Kanonska verzija nalazi se u root `VERSION` datoteci. Za novo izdanje koristi jedan sinkronizirani bump, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.10
+python scripts/bump_version.py 0.0.11
 ```
 
 Skripta sinkronizira Windows build default, Android, browser metapodatke, README i version badge te zatim pokreće `scripts/check_versions.py`. Windows produkcijski Portable i Setup dobivaju `appVersion` kroz Go linker `-X main.appVersion=$Version`, pa release bump ne prepisuje velike Win32 source datoteke samo radi verzijskog fallback stringa.
@@ -43,4 +43,4 @@ Produkcijski Android build izvršava `testReleaseUnitTest`, `lintRelease` i `ass
 
 ## CI provjere
 
-Prije promocije na `main` GitHub CI provodi sinkronizaciju verzija, `scripts/verify_security_contracts.py`, browser build, Windows test/vet/build, PowerShell AST provjeru screenshot capture skripte i Android unit testove + release lint/build. Browser screenshot runtime nalazi se izvan `extensions/` i koristi se samo u privremenoj preview kopiji tijekom `Product screenshots` workflowa; produkcijski browser ZIP-ovi ga ne sadrže.
+Prije promocije na `main` GitHub CI provodi sinkronizaciju verzija, `scripts/verify_security_contracts.py`, izvršne browser popup i Firefox player regression testove, browser build, Windows test/vet/build, PowerShell AST provjeru screenshot capture skripte i Android unit testove + release lint/build. Commitovi koji mijenjaju samo generirane `assets/screenshots/**` PNG datoteke preskaču puni multi-platform CI jer su sami screenshot capture koraci već provjereni u zasebnom workflowu. Browser screenshot runtime nalazi se izvan `extensions/` i koristi se samo u privremenoj preview kopiji tijekom `Product screenshots` workflowa; produkcijski browser ZIP-ovi ga ne sadrže.
