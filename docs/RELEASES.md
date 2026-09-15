@@ -1,5 +1,20 @@
 # Izdavanja
 
+## 0.0.8
+
+Izdanje 0.0.8 učvršćuje browser playback lifecycle za Chrome, Edge, Opera i Firefox bez dodavanja novih širokih browser dozvola.
+
+- Chromium offscreen player i Firefox background player više ne recikliraju jedan globalni `HTMLAudioElement` kroz više playback sesija
+- svaki kandidat streama dobiva vlastiti audio objekt vezan uz trenutačni generation token i konkretnu player instancu
+- zakašnjeli `error`, `ended`, `playing` ili `pause` događaj stare stanice više ne može povećati indeks kandidata, promijeniti playing state ili pokrenuti fallback za noviju stanicu
+- pri promjeni streama stari audio objekt odvaja event handlere, zaustavlja reprodukciju, uklanja `src` i više nije aktivna player instanca
+- uklonjeni su statički `<audio id="audio">` elementi iz Chromium offscreen i Firefox background HTML-a jer više nisu potrebni
+- browser packaging guard sada zahtijeva session-bound audio ownership, dinamičko kreiranje audio objekta i instance-aware `error`/`ended` handlere
+- cross-platform security verifier odbija povratak na `document.getElementById('audio')` i statički globalni audio element
+- zaključani Radio Balkan naziv, toolbar identitet i zabrana user-facing rebrand postavki ostaju nepromijenjeni
+
+URL validator i dalje blokira izravne private/loopback/link-local/CGNAT/metadata i credentialed URL-ove. Redirect ponašanje samog media elementa ostaje pod kontrolom preglednika; izdanje 0.0.8 namjerno ne uvodi dodatne široke `webRequest`/browser permissione samo radi inspekcije media redirecta.
+
 ## 0.0.7
 
 Izdanje 0.0.7 dodatno učvršćuje Android mrežni i playback sloj te uvodi izvršne regresijske testove u svaki release build.

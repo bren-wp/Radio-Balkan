@@ -5,7 +5,7 @@
 Kanonska verzija nalazi se u root `VERSION` datoteci. Za novo izdanje koristi jedan sinkronizirani bump, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.8
+python scripts/bump_version.py 0.0.9
 ```
 
 Skripta sinkronizira Windows build default, Android, browser metapodatke, README i version badge te zatim pokreće `scripts/check_versions.py`. Windows produkcijski Portable i Setup dobivaju `appVersion` kroz Go linker `-X main.appVersion=$Version`, pa release bump ne prepisuje velike Win32 source datoteke samo radi verzijskog fallback stringa.
@@ -28,7 +28,7 @@ cd extensions
 python tools/build_extensions.py
 ```
 
-Rezultat su četiri ZIP-a u `extensions/dist/`. Build dodatno provjerava JavaScript sintaksu, zaključani Radio Balkan branding i player-state/offscreen sigurnosne kontrakte.
+Rezultat su četiri ZIP-a u `extensions/dist/`. Build dodatno provjerava JavaScript sintaksu, zaključani Radio Balkan branding, Chromium offscreen lifecycle i session-bound audio ownership za Chromium/Firefox playere.
 
 ## Android
 
