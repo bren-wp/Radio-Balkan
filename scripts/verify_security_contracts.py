@@ -73,14 +73,43 @@ def main() -> None:
     require(
         "extensions/platform/chromium/offscreen.js",
         "'use strict';",
+        "let audio = null;",
         "let generation = 0;",
-        "if (token !== generation) return false;",
+        "function disposeAudio(",
+        "function createAudio(token, candidate)",
+        "document.createElement('audio')",
+        "if (token !== generation || audio !== instance) return false;",
+        "instance.onerror = () => playbackFailed(token, instance);",
+        "instance.onended = () => playbackFailed(token, instance);",
     )
     require(
         "extensions/platform/firefox/background-firefox.js",
         "'use strict';",
+        "let audio = null;",
         "let generation = 0;",
-        "if (token !== generation) return false;",
+        "function disposeAudio(",
+        "function createAudio(token, candidate)",
+        "document.createElement('audio')",
+        "if (token !== generation || audio !== instance) return false;",
+        "instance.onerror = () => playbackFailed(token, instance);",
+        "instance.onended = () => playbackFailed(token, instance);",
+    )
+    forbid(
+        "extensions/platform/chromium/offscreen.js",
+        "window.generation",
+        "document.getElementById('audio')",
+    )
+    forbid(
+        "extensions/platform/firefox/background-firefox.js",
+        "document.getElementById('audio')",
+    )
+    forbid(
+        "extensions/platform/chromium/offscreen.html",
+        '<audio id="audio">',
+    )
+    forbid(
+        "extensions/platform/firefox/background.html",
+        '<audio id="audio">',
     )
 
     require(
@@ -95,10 +124,6 @@ def main() -> None:
         "http://192.168.1.10/live",
         "https://user:pass@example.com/live",
         "TestValidateStateDropsUnsafeReplacementURLs",
-    )
-    forbid(
-        "extensions/platform/chromium/offscreen.js",
-        "window.generation",
     )
 
     print("Security contracts OK")
