@@ -183,6 +183,33 @@ def main() -> None:
         "TestValidateStateDropsUnsafeReplacementURLs",
     )
 
+    require(
+        "scripts/check_clean_worktree.py",
+        '"git", "status", "--porcelain", "--untracked-files=all"',
+        "Repository workspace is not clean after build:",
+        "Repository workspace clean after build",
+    )
+    require(
+        ".github/workflows/ci.yml",
+        "Verify browser build leaves repository clean",
+        "Verify Windows build leaves repository clean",
+        "Verify Android build leaves repository clean",
+        "python scripts/check_clean_worktree.py",
+    )
+    require(
+        ".github/workflows/publish.yml",
+        "Verify Windows build leaves repository clean",
+        "Verify browser build leaves repository clean",
+        "Verify Android build leaves repository clean",
+        "Generate and verify checksums",
+        'sha256sum -c "RadioBalkan-v${VERSION}-SHA256.txt"',
+    )
+    require(
+        ".github/workflows/screenshots.yml",
+        "Verify screenshot build leaves repository clean",
+        "python scripts/check_clean_worktree.py",
+    )
+
     print("Security contracts OK")
 
 
