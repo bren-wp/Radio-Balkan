@@ -1,5 +1,22 @@
 # Izdavanja
 
+## 0.0.12
+
+Izdanje 0.0.12 proširuje reproducibilnost iz Windows builda na cijeli cross-platform CI/release lanac i dodaje eksplicitnu verifikaciju release checksum manifesta prije objave artefakata.
+
+- dodan je zajednički `scripts/check_clean_worktree.py` koji preko `git status --porcelain --untracked-files=all` odbija build ako promijeni tracked source ili ostavi neignorirani privremeni sadržaj
+- browser CI nakon pakiranja svih ekstenzija mora završiti s čistim repository workspaceom
+- Android CI nakon `testReleaseUnitTest`, `lintRelease` i `assembleRelease` također mora završiti s čistim repository workspaceom
+- postojeća Windows clean-worktree provjera prebačena je na isti zajednički checker, pa sva tri platform builda koriste identičan kriterij
+- Publish workflow primjenjuje isti clean-worktree invariant na Windows, browser i Android artefakt buildove prije uploada workflow artefakata
+- Product screenshots workflow provjerava čist workspace odmah nakon Windows builda i prije očekivanih izmjena screenshot PNG datoteka
+- Publish workflow nakon generiranja `RadioBalkan-v<verzija>-SHA256.txt` odmah izvršava `sha256sum -c`, pa se release ne objavljuje ako checksum manifest ne odgovara preuzetim artefaktima
+- security-contract verifier zahtijeva prisutnost clean-build provjera u CI, Publish i Product screenshots workflowima te checksum validation u Publish workflowu
+- putanje workflow triggera uključuju zajednički clean-worktree checker, pa izmjena tog security/reproducibility sloja pokreće odgovarajuću validaciju
+- nisu uvedene nove runtime ovisnosti, browser dozvole, telemetry komponente ni promjene playback ponašanja
+
+Izdanje je namjerno fokusirano na integritet distribucije: isti source mora proći build bez nuspojava, a objavljeni artefakti dobivaju verificirani SHA-256 manifest prije GitHub Release uploada.
+
 ## 0.0.11
 
 Izdanje 0.0.11 učvršćuje reproducibilnost Windows builda i uklanja nuspojave koje su tijekom CI/screenshot builda mijenjale working tree i ostavljale privremeni installer payload.
