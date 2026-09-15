@@ -3,7 +3,11 @@ name: CI
 on:
   push:
     branches: [main, "release/**", "chatgpt/**"]
+    paths-ignore:
+      - "assets/screenshots/**"
   pull_request:
+    paths-ignore:
+      - "assets/screenshots/**"
 
 permissions:
   contents: read
