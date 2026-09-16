@@ -1,0 +1,84 @@
+name: Prepare v0.0.14 release
+
+on:
+  push:
+    branches: ["chatgpt/v0.0.14-production"]
+    paths:
+      - ".github/workflows/v0014-release-bump.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.0.14-production
+          fetch-depth: 0
+      - name: Bump version and update release documentation
+        shell: bash
+        run: |
+          python scripts/bump_version.py 0.0.14
+          python - <<'PY'
+          from pathlib import Path
+
+          releases = Path('docs/RELEASES.md')
+          text = releases.read_text(encoding='utf-8')
+          section = '''## 0.0.14
+
+Izdanje 0.0.14 fokusirano je na produkcijski UI/UX, robusnije korisničke opcije i smanjenje nepotrebnog rada u sva tri klijenta, bez novih telemetry komponenti ili širih browser dozvola.
+
+- browser popup više ne gradi ponovno cijeli prikaz stanica pri svakoj playback-state poruci; aktivna stanica i play/pause kontrola osvježavaju se ciljano, čime se smanjuje DOM/CPU churn
+- odabrani country filter u browser ekstenziji ostaje sačuvan nakon osvježavanja kataloga, a neuspjeli mrežni refresh zadržava zadnji valjani prikaz umjesto praznog popisa
+- browser player/favorite/refresh kontrole dobile su jasna disabled, `aria-pressed`, `aria-busy` i live-status stanja, veće touch targete i čitljiviju tipografiju
+- izvršni browser regression test potvrđuje da playback-only state ne rerendera listu te da country filter preživljava refresh
+- Android više ne traži notification permission odmah pri hladnom pokretanju aplikacije; dozvola se traži kontekstualno tek kada korisnik pokrene reprodukciju
+- Android red stanice sada ima vidljiv gumb za dodatne opcije umjesto oslanjanja samo na skriveni long-press; artwork je kompaktniji, a kontrole imaju jasnije accessibility opise
+- Android korisnički izbornici preimenovani su u jasne pojmove poput `Rezervni izvori`, `Filtriraj stanice`, `Kopiraj poveznicu za reprodukciju`, `Odaberi drugi izvor` i `Vrati automatski odabir`
+- ručni Android izvor mora proći strožu `isSafeHttp` provjeru prije mrežnog testa; worker greške tijekom provjere stanice ili ručnog izvora vraćaju UI u upotrebljivo stanje i prikazuju korisničku poruku umjesto ostavljanja disabled kontrola
+- Windows sada sprječava smanjivanje prozora ispod 1100×720, iste donje granice koju koristi spremljeno window-state stanje, pa header/search/filter kontrole više ne mogu ući u neupotrebljivo preklapanje
+- Windows sidebar `MOJE LISTE` zamijenjen je točnim `BRZI ODABIR`, a lažni nazivi `Jutarnji vibe`/`Chill večer` zamijenjeni su stvarnim `Popularne`/`Jazz` filtrima
+- Windows ručna promjena izvora više ne traži skriveni magic-string `AUTO`; prazno polje vraća automatski odabir, a copy/source statusi koriste jasniji korisnički jezik
+- postojeći Windows HTTP redirect guard ostaje aktivan: svaki redirect prolazi `safeHTTPURL` provjeru prije praćenja i lanac je ograničen
+- dodan je `scripts/verify_production_ui.py` koji u CI-ju zaključava user-facing tekst, accessibility, contextual permission, vidljive opcije, Windows minimum-size i zabranu povratka dev/test placeholdera
+- Windows, Android i browser klijenti ponovno prolaze puni production build, security contracts, clean-worktree i release-integrity provjere prije objave
+
+Izdanje smanjuje rizik od UI blokada i regresija, ali ne tvrdi da je moguće apsolutno jamčiti da se aplikacija nikada neće srušiti na svakoj kombinaciji uređaja, drivera, mreže i radio streama.
+
+'''
+          if '## 0.0.14\n' not in text:
+              text = text.replace('# Izdavanja\n\n', '# Izdavanja\n\n' + section, 1)
+          releases.write_text(text, encoding='utf-8', newline='\n')
+
+          build = Path('docs/BUILD.md')
+          text = build.read_text(encoding='utf-8')
+          old = 'GitHub CI provodi sinkronizaciju verzija, `scripts/verify_security_contracts.py`, `scripts/test_release_checksums.py`,'
+          new = 'GitHub CI provodi sinkronizaciju verzija, `scripts/verify_security_contracts.py`, `scripts/verify_production_ui.py`, `scripts/test_release_checksums.py`,'
+          if old not in text:
+              raise SystemExit('docs/BUILD.md CI marker not found')
+          build.write_text(text.replace(old, new, 1), encoding='utf-8', newline='\n')
+
+          readme = Path('README.md')
+          text = readme.read_text(encoding='utf-8')
+          marker = 'python scripts/verify_security_contracts.py\n'
+          addition = marker + 'python scripts/verify_production_ui.py\n'
+          if 'python scripts/verify_production_ui.py\n' not in text:
+              if marker not in text:
+                  raise SystemExit('README verification marker not found')
+              text = text.replace(marker, addition, 1)
+          readme.write_text(text, encoding='utf-8', newline='\n')
+          PY
+          python scripts/check_versions.py
+          python scripts/verify_production_ui.py
+      - name: Commit atomic v0.0.14 release metadata
+        shell: bash
+        run: |
+          rm .github/workflows/v0014-release-bump.yml
+          git config user.name "Brendigo"
+          git config user.email "info@brendigo.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "release: prepare Radio Balkan v0.0.14"
+          git push origin HEAD:chatgpt/v0.0.14-production
