@@ -676,15 +676,21 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         statusText.setText("Provjeravam · " + s.name);
         try {
             ioWorker.execute(() -> {
-                s.health = "checking"; postIfActive(adapter::notifyDataSetChanged);
-                StreamResolver.Resolution result = StreamResolver.repair(StreamResolver.candidates(s, state), s.stationUuid, s.homepage, s.countryCode);
-                if (result != null) {
-                    s.health = "ok"; s.activeUrl = result.url; state.addBackup(s.key(), result.url);
-                    if (state.manualReplacement(s.key()).isEmpty() && !sameUrl(result.url, s.urlResolved) && !sameUrl(result.url, s.url)) { state.setAutoReplacement(s.key(), result.url); s.replaced = true; }
-                    postIfActive(() -> { statusText.setText("Dostupno · " + s.name); adapter.notifyDataSetChanged(); });
-                } else {
-                    s.health = "broken";
-                    postIfActive(() -> { statusText.setText("Nedostupno · " + s.name); adapter.notifyDataSetChanged(); });
+                try {
+                    s.health = "checking"; postIfActive(adapter::notifyDataSetChanged);
+                    StreamResolver.Resolution result = StreamResolver.repair(StreamResolver.candidates(s, state), s.stationUuid, s.homepage, s.countryCode);
+                    if (result != null) {
+                        s.health = "ok"; s.activeUrl = result.url; state.addBackup(s.key(), result.url);
+                        if (state.manualReplacement(s.key()).isEmpty() && !sameUrl(result.url, s.urlResolved) && !sameUrl(result.url, s.url)) { state.setAutoReplacement(s.key(), result.url); s.replaced = true; }
+                        postIfActive(() -> { statusText.setText("Dostupno · " + s.name); adapter.notifyDataSetChanged(); });
+                    } else {
+                        s.health = "broken";
+                        postIfActive(() -> { statusText.setText("Nedostupno · " + s.name); adapter.notifyDataSetChanged(); });
+                    }
+                } catch (Throwable error) {
+                    s.health = "unknown";
+                    AppLog.e(MainActivity.this, "health-one-" + s.key(), error);
+                    postIfActive(() -> { statusText.setText("Provjera nije uspjela · " + s.name); adapter.notifyDataSetChanged(); });
                 }
             });
         } catch (RejectedExecutionException ignored) { }
@@ -767,27 +773,40 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                     dialog.dismiss();
                     return;
                 }
-                if (!StreamResolver.isHttp(value)) { input.setError("Unesi valjani http/https URL"); return; }
+                if (!StreamResolver.isSafeHttp(value)) { input.setError("Unesi sigurnu javnu http/https poveznicu"); return; }
                 Button save = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
                 save.setEnabled(false);
                 save.setText("Provjeravam…");
                 input.setEnabled(false);
                 try {
                     ioWorker.execute(() -> {
-                        String resolved = StreamResolver.resolveFirst(java.util.Collections.singletonList(value));
+                        String resolved = null;
+                        Throwable failure = null;
+                        try {
+                            resolved = StreamResolver.resolveFirst(java.util.Collections.singletonList(value));
+                        } catch (Throwable error) {
+                            failure = error;
+                            AppLog.e(MainActivity.this, "source-check-" + s.key(), error);
+                        }
+                        final String checkedUrl = resolved;
+                        final boolean checkFailed = failure != null;
                         postIfActive(() -> {
                             if (!dialog.isShowing()) return;
                             input.setEnabled(true);
                             save.setEnabled(true);
                             save.setText("Spremi");
-                            if (resolved == null || resolved.isEmpty()) {
+                            if (checkFailed) {
+                                input.setError("Provjera trenutačno nije dostupna. Pokušaj ponovno.");
+                                return;
+                            }
+                            if (checkedUrl == null || checkedUrl.isEmpty()) {
                                 input.setError("Izvor nije dostupan. Provjeri URL i pokušaj ponovno.");
                                 return;
                             }
-                            state.setManualReplacement(s.key(), resolved);
-                            state.addBackup(s.key(), resolved);
+                            state.setManualReplacement(s.key(), checkedUrl);
+                            state.addBackup(s.key(), checkedUrl);
                             s.replaced = true;
-                            s.activeUrl = resolved;
+                            s.activeUrl = checkedUrl;
                             s.health = "ok";
                             adapter.notifyDataSetChanged();
                             statusText.setText("Izvor je provjeren i spremljen");

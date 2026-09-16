@@ -810,7 +810,7 @@ func main() {
 	defer func() {
 		if r := recover(); r != nil {
 			logError("main", fmt.Errorf("panic: %v\n%s", r, debug.Stack()))
-			messageBox(0, appName, "Dogodila se neočekivana greška. Lokalni dijagnostički zapis je spremljen. Aplikaciju možeš ponovno pokrenuti.", MB_ICONERROR)
+			messageBox(0, appName, "Dogodila se neočekivana greška. Zapis o pogrešci spremljen je lokalno. Aplikaciju možeš ponovno pokrenuti.", MB_ICONERROR)
 		}
 	}()
 	initDPI()
@@ -1324,8 +1324,8 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 	case WM_GETMINMAXINFO:
 		if lParam != 0 {
 			info := (*MINMAXINFO)(unsafe.Pointer(lParam))
-			info.PtMinTrackSize.X = 900
-			info.PtMinTrackSize.Y = 640
+			info.PtMinTrackSize.X = 1100
+			info.PtMinTrackSize.Y = 720
 		}
 		return 0
 	case WM_CREATE:
@@ -1579,9 +1579,9 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 	drawSidebarItem(hdc, y, "◷", "Nedavno slušano", tab == "recent", hitTab, "recent")
 
 	y += 56
-	drawSidebarLabel(hdc, "MOJE LISTE", y)
+	drawSidebarLabel(hdc, "BRZI ODABIR", y)
 	y += 30
-	drawSidebarItem(hdc, y, "♫", "Jutarnji vibe", tab == "popular", hitTab, "popular")
+	drawSidebarItem(hdc, y, "♫", "Popularne", tab == "popular", hitTab, "popular")
 	y += 42
 	drawSidebarItem(hdc, y, "♫", "Pop & Rock", genre == "pop", hitTab, "genre:pop")
 	y += 42
@@ -1589,7 +1589,7 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 	y += 42
 	drawSidebarItem(hdc, y, "♫", "Elektronička", genre == "electronic", hitTab, "genre:electronic")
 	y += 42
-	drawSidebarItem(hdc, y, "♫", "Chill večer", genre == "jazz", hitTab, "genre:jazz")
+	drawSidebarItem(hdc, y, "♫", "Jazz", genre == "jazz", hitTab, "genre:jazz")
 
 	toolsY := y + 60
 	if cr.Bottom-playerHeight > toolsY+110 {
