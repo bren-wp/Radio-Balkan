@@ -55,6 +55,14 @@ def main() -> None:
         "return isSafeHttp(next) ? probe(next, depth + 1) : null;",
     )
     require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/ImageLoader.java",
+        "MAX_REDIRECTS = 4",
+        "setInstanceFollowRedirects(false)",
+        "String next = new URL(requested, location.trim()).toString();",
+        "if (!StreamResolver.isSafeHttp(next)) return null;",
+        "redirects >= MAX_REDIRECTS",
+    )
+    require(
         "apps/android/app/src/test/java/net/radiobalkan/app/StreamResolverTest.java",
         "rejectsPrivateCredentialedAndMetadataTargets",
         "https://user:pass@example.com/live",
@@ -64,12 +72,29 @@ def main() -> None:
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
         "setInstanceFollowRedirects(true)",
     )
+    forbid(
+        "apps/android/app/src/main/java/net/radiobalkan/app/ImageLoader.java",
+        "setInstanceFollowRedirects(true)",
+    )
 
+    require(
+        "extensions/shared/network.js",
+        "h === '::'",
+        "h.startsWith('::ffff:')",
+        "!url.username && !url.password",
+    )
+    require(
+        "scripts/test_browser_network_contract.js",
+        "IPv6 unspecified target must be rejected",
+        "IPv4-mapped IPv6 loopback must be rejected",
+        "IPv4-mapped IPv6 private target must be rejected",
+    )
     require(
         "extensions/platform/chromium/service_worker.js",
         "'use strict';",
         "revision: 0, epoch",
         "let offscreenCreating = null;",
+        "let offscreenClosing = null;",
         "let commandGeneration = 0;",
         "let currentSessionId = null;",
         "let lastOffscreenGeneration = -1;",
@@ -77,6 +102,10 @@ def main() -> None:
         "function acceptOffscreenState(",
         "incomingGeneration < lastOffscreenGeneration",
         "requestToken !== commandGeneration",
+        "async function waitForOffscreenClose()",
+        "async function closeOffscreen()",
+        "await waitForOffscreenClose();",
+        "requestToken === commandGeneration && requestedSession === currentSessionId",
     )
     require(
         "extensions/platform/chromium/offscreen.js",
@@ -143,6 +172,12 @@ def main() -> None:
         "retired worker epoch cannot restore stale state",
         "stale command reply from a retired epoch cannot replace current station",
         "older promise reply cannot override a newer command even with a higher revision",
+    )
+    require(
+        "scripts/test_chromium_player_contract.js",
+        "stale stop must not close the offscreen document used by a newer play",
+        "new play must wait until the previous offscreen close completes",
+        "play issued during close must recover into active playback",
     )
     require(
         "scripts/test_firefox_player_contract.js",
@@ -229,6 +264,8 @@ def main() -> None:
         "Verify browser build leaves repository clean",
         "Verify Windows build leaves repository clean",
         "Verify Android build leaves repository clean",
+        "Test browser network safety contract",
+        "Test Chromium player close/session contract",
         "python scripts/check_clean_worktree.py",
         "Test release checksum manifest",
         "python scripts/test_release_checksums.py",
