@@ -23,6 +23,7 @@
   const country = $('country');
   const list = $('stations');
   const status = $('status');
+  const refresh = $('refresh');
 
   function stationMeta(station) {
     return [
@@ -34,6 +35,13 @@
 
   function initials(name) {
     return RB.fold(name).slice(0, 2).toUpperCase() || 'RB';
+  }
+
+  function setBusy(busy, message = '') {
+    refresh.disabled = !!busy;
+    refresh.setAttribute('aria-busy', String(!!busy));
+    list.setAttribute('aria-busy', String(!!busy));
+    if (message) status.textContent = message;
   }
 
   function rememberRetiredEpoch(epoch) {
@@ -97,7 +105,7 @@
         if (syncToken !== commandGeneration || activeCommandToken) return false;
         if (!applyStateEnvelope(result, true, true)) return false;
         updatePlayer();
-        render();
+        syncStationPlaybackUi();
         return true;
       })
       .catch(() => false)
@@ -106,6 +114,7 @@
   }
 
   function fillCountries() {
+    const previous = country.value;
     const counts = new Map();
     for (const station of all) counts.set(station.countrycode, (counts.get(station.countrycode) || 0) + 1);
     country.replaceChildren();
@@ -119,6 +128,7 @@
       option.textContent = `${name} · ${counts.get(code) || 0}`;
       country.append(option);
     }
+    country.value = RB.COUNTRIES.some(([code]) => code === previous) ? previous : '';
   }
 
   function apply() {
@@ -139,7 +149,7 @@
     const row = document.createElement('article');
     row.className = `station${active ? ' active' : ''}`;
     row.dataset.key = key;
-    row.setAttribute('role', 'group');
+    row.setAttribute('role', 'listitem');
     row.setAttribute('aria-label', `${station.name}, ${stationMeta(station)}`);
 
     const logoBox = document.createElement('div');
@@ -181,10 +191,26 @@
     play.type = 'button';
     play.dataset.play = key;
     play.title = active && playing ? 'Pauziraj' : 'Slušaj';
-    play.setAttribute('aria-label', play.title);
+    play.setAttribute('aria-label', `${play.title} ${station.name}`);
     play.textContent = active && playing ? 'Ⅱ' : '▶';
     row.append(logoBox, copy, play);
     return row;
+  }
+
+  function syncStationPlaybackUi() {
+    const nodes = typeof list.querySelectorAll === 'function' ? list.querySelectorAll('.station') : [];
+    const currentKey = current ? RB.key(current) : '';
+    for (const row of nodes) {
+      const active = !!currentKey && row.dataset.key === currentKey;
+      row.classList?.toggle('active', active);
+      const button = typeof row.querySelector === 'function' ? row.querySelector('.stationPlay') : null;
+      if (!button) continue;
+      const station = visible.find(item => RB.key(item) === row.dataset.key);
+      const action = active && playing ? 'Pauziraj' : 'Slušaj';
+      button.textContent = active && playing ? 'Ⅱ' : '▶';
+      button.title = action;
+      button.setAttribute('aria-label', station ? `${action} ${station.name}` : action);
+    }
   }
 
   function render() {
@@ -217,7 +243,7 @@
     playing = false;
     playerStatus = 'Povezujem…';
     updatePlayer();
-    render();
+    syncStationPlaybackUi();
     try {
       const result = await ext.runtime.sendMessage({ type: 'RB_PLAY', station });
       if (token !== commandGeneration) return;
@@ -232,7 +258,7 @@
       if (token === commandGeneration) {
         activeCommandToken = 0;
         updatePlayer();
-        render();
+        syncStationPlaybackUi();
       }
     }
   }
@@ -258,7 +284,7 @@
       if (token === commandGeneration) {
         activeCommandToken = 0;
         updatePlayer();
-        render();
+        syncStationPlaybackUi();
       }
     }
   }
@@ -266,7 +292,7 @@
   function updatePlayer() {
     const station = current;
     $('playerState').textContent = playerStatus;
-    $('playerName').textContent = station ? station.name : 'Ništa';
+    $('playerName').textContent = station ? station.name : 'Nije odabrano';
     $('playerMeta').textContent = station ? stationMeta(station) : 'Odaberi stanicu';
     $('heroName').textContent = station ? station.name : (all[0]?.name || 'Radio Balkan');
     $('heroMeta').textContent = station ? stationMeta(station) : `${all.length || '600+'} stanica iz Hrvatske i regije`;
@@ -275,10 +301,16 @@
     playerLogo.src = station?.logo && RB.safeHttp(station.logo) ? station.logo : 'icon48.png';
     playerLogo.onerror = () => { playerLogo.onerror = null; playerLogo.src = 'icon48.png'; };
     $('playerToggle').textContent = playing ? 'Ⅱ' : '▶';
+    $('playerToggle').disabled = !station;
     $('playerToggle').setAttribute('aria-label', playing ? 'Pauziraj' : 'Pokreni');
     $('heroPlay').textContent = playing && station ? 'Ⅱ Pauziraj' : '▶ Slušaj';
+    $('heroPlay').disabled = !station;
     const key = station ? RB.key(station) : '';
-    $('playerFav').textContent = key && favs[key] ? '♥' : '♡';
+    const favorite = !!(key && favs[key]);
+    $('playerFav').textContent = favorite ? '♥' : '♡';
+    $('playerFav').disabled = !station;
+    $('playerFav').setAttribute('aria-pressed', String(favorite));
+    $('playerFav').setAttribute('aria-label', favorite ? 'Ukloni iz omiljenih' : 'Dodaj u omiljene');
   }
 
   list.addEventListener('click', event => {
@@ -299,22 +331,27 @@
     searchTimer = setTimeout(apply, 130);
   });
   country.addEventListener('change', apply);
-  $('refresh').addEventListener('click', () => void load(true));
+  refresh.addEventListener('click', () => void load(true));
   $('heroPlay').addEventListener('click', () => void toggle());
   $('playerToggle').addEventListener('click', () => void toggle());
   $('favoritesOnly').addEventListener('click', () => {
     favoritesOnly = !favoritesOnly;
     const button = $('favoritesOnly');
-    button.textContent = favoritesOnly ? '♥ Sve stanice' : '♡ Omiljene';
+    button.textContent = favoritesOnly ? '♥ Prikaži sve' : '♡ Omiljene';
     button.setAttribute('aria-pressed', String(favoritesOnly));
     apply();
   });
   $('playerFav').addEventListener('click', async () => {
     if (!current) return;
     const key = RB.key(current);
-    favs = await RB.setFavorite(key, !favs[key]);
-    updatePlayer();
-    render();
+    try {
+      favs = await RB.setFavorite(key, !favs[key]);
+      updatePlayer();
+      render();
+    } catch {
+      playerStatus = 'Omiljene nisu spremljene';
+      updatePlayer();
+    }
   });
 
   ext.runtime.onMessage.addListener(message => {
@@ -326,14 +363,15 @@
     }
     if (!applyStateEnvelope(message, true, !stateEpoch)) return;
     updatePlayer();
-    render();
+    syncStationPlaybackUi();
   });
 
   async function load(force = false) {
-    status.textContent = force ? 'Osvježavam katalog…' : 'Učitavam provjerene radio postaje…';
-    $('refresh').disabled = true;
+    const hadCatalog = all.length > 0;
+    setBusy(true, force ? 'Osvježavam katalog…' : 'Učitavam provjerene radio postaje…');
     try {
-      all = await RB.load(force);
+      const loaded = await RB.load(force);
+      all = loaded;
       favs = await RB.favorites();
       fillCountries();
       if (!current && all.length) current = all[0];
@@ -342,20 +380,25 @@
       const playerState = await ext.runtime.sendMessage({ type: 'RB_GET_STATE' }).catch(() => null);
       if (readToken === commandGeneration && applyStateEnvelope(playerState, true, true)) {
         updatePlayer();
-        render();
+        syncStationPlaybackUi();
       } else {
         updatePlayer();
       }
     } catch {
-      status.textContent = 'Katalog trenutačno nije dostupan';
-      const empty = document.createElement('div');
-      empty.className = 'empty';
-      empty.textContent = 'Provjeri internetsku vezu i pokušaj ponovno.';
-      list.replaceChildren(empty);
+      if (hadCatalog) {
+        status.textContent = 'Nije moguće osvježiti · prikazan je postojeći popis';
+      } else {
+        status.textContent = 'Katalog trenutačno nije dostupan';
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = 'Provjeri internetsku vezu i pokušaj ponovno.';
+        list.replaceChildren(empty);
+      }
     } finally {
-      $('refresh').disabled = false;
+      setBusy(false);
     }
   }
 
+  updatePlayer();
   void load(false);
 })();
