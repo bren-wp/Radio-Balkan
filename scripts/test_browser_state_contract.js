@@ -20,6 +20,8 @@ class Element {
     this.src = '';
     this.onerror = null;
     this.replaceChildrenCalls = 0;
+    this.querySelectorAllResult = [];
+    this.focused = false;
   }
 
   addEventListener(type, listener) {
@@ -37,6 +39,14 @@ class Element {
   replaceChildren(...items) {
     this.replaceChildrenCalls += 1;
     this.children = [...items];
+  }
+
+  querySelectorAll() {
+    return this.querySelectorAllResult;
+  }
+
+  focus() {
+    this.focused = true;
   }
 
   remove() { }
@@ -87,6 +97,16 @@ const stationB = {
   codec: 'AAC',
   logo: ''
 };
+const extraStations = Array.from({ length: 58 }, (_, index) => ({
+  stationuuid: `station-extra-${index}`,
+  name: `Radio Extra ${index}`,
+  country: 'Hrvatska',
+  countrycode: 'HR',
+  tags: index % 2 ? 'pop' : 'rock',
+  bitrate: 128,
+  codec: 'MP3',
+  logo: ''
+}));
 
 let runtimeListener = null;
 let getState = { epoch: 'epoch-a', revision: 1, station: stationA, playing: true };
@@ -150,7 +170,7 @@ const context = {
       return false;
     },
     async load() {
-      return [copy(stationA), copy(stationB)];
+      return [copy(stationA), copy(stationB), ...copy(extraStations)];
     },
     async favorites() {
       return {};
@@ -181,6 +201,18 @@ async function main() {
   assert.equal(elements.playerToggle.disabled, false, 'player toggle must be enabled after a station is available');
   assert.equal(elements.playerFav.disabled, false, 'favorite control must be enabled after a station is available');
   assert.equal(elements.playerFav.attributes['aria-pressed'], 'false', 'favorite state must be announced accessibly');
+
+  const focusTargets = Array.from({ length: 60 }, () => new Element());
+  elements.stations.querySelectorAllResult = focusTargets;
+  elements.stations.dispatch('click', {
+    target: {
+      closest(selector) {
+        return selector === '[data-more]' ? { dataset: { more: '1' } } : null;
+      }
+    }
+  });
+  assert.equal(focusTargets[48].focused, true, 'expanding the station list must focus the first newly revealed play control');
+  elements.stations.querySelectorAllResult = [];
 
   elements.country.value = 'RS';
   elements.refresh.dispatch('click');
