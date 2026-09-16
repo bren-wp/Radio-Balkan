@@ -1321,6 +1321,13 @@ func wndProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) (ret uintp
 
 func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintptr {
 	switch msg {
+	case WM_GETMINMAXINFO:
+		if lParam != 0 {
+			info := (*MINMAXINFO)(unsafe.Pointer(lParam))
+			info.PtMinTrackSize.X = 900
+			info.PtMinTrackSize.Y = 640
+		}
+		return 0
 	case WM_CREATE:
 		app.hwnd = hwnd
 		hInst, _, _ := kernel32.NewProc("GetModuleHandleW").Call(0)
@@ -2245,7 +2252,7 @@ func drawStationCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStati
 		x += w + 6
 	}
 	action("Web", 40, hitWeb)
-	action("Link", 38, hitLink)
+	action("Kopiraj", 54, hitLink)
 	action("✓", 26, hitCheckStation)
 	action("Izvor", 46, hitReplace)
 	app.stateMu.RLock()
@@ -3320,7 +3327,7 @@ func copyStationLink(idx int) {
 		return
 	}
 	if copyClipboard(u) == nil {
-		setStatus("Link za reprodukciju je kopiran")
+		setStatus("Poveznica za reprodukciju je kopirana")
 	} else {
 		setStatus("Nije moguće kopirati link")
 	}
@@ -3366,11 +3373,12 @@ func replaceStation(idx int) {
 	app.mu.RUnlock()
 	key := stationKey(s)
 	def := effectiveURL(s)
-	value, ok := inputDialog(app.hwnd, "Promijeni izvor", "Unesi novi link za reprodukciju za:\n"+s.Name+"\n\nZa povratak na automatski odabir upiši AUTO", def)
-	if !ok || strings.TrimSpace(value) == "" {
+	value, ok := inputDialog(app.hwnd, "Promijeni izvor", "Unesi novu http/https poveznicu za reprodukciju za:\n"+s.Name+"\n\nPrazno polje vraća automatski odabir.", def)
+	if !ok {
 		return
 	}
-	if strings.EqualFold(strings.TrimSpace(value), "AUTO") {
+	value = strings.TrimSpace(value)
+	if value == "" {
 		clearReplacement(idx, key)
 		setStatus("Vraćen automatski odabir · " + s.Name)
 		postUI()

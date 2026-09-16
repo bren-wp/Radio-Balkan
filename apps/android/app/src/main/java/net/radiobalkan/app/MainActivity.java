@@ -135,7 +135,6 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         repository = new RadioRepository(this);
         buildUi();
         registerPlayerReceiver();
-        requestNotificationPermission();
         queryPlayerState();
         loadStations();
     }
@@ -429,7 +428,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     }
 
     private void showAppMenu() {
-        String[] items = {"Pretraži", "Odaberi državu i žanr", "Osvježi stanice", "Provjeri dostupnost", "Alternativni izvori", "Nedostupne stanice", "O aplikaciji"};
+        String[] items = {"Pretraži", "Filtriraj stanice", "Osvježi popis", "Provjeri prikazane stanice", "Rezervni izvori", "Nedostupne stanice", "O aplikaciji"};
         new AlertDialog.Builder(this).setTitle("Radio Balkan").setItems(items, (d, which) -> {
             if (which == 0 && searchBox != null) { searchBox.setVisibility(View.VISIBLE); search.requestFocus(); }
             else if (which == 1) showBrowseDialog();
@@ -611,7 +610,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
     private void checkVisibleStreams() {
         List<RadioStation> targets = new ArrayList<>(visibleStations);
-        if (targets.isEmpty()) return;
+        if (targets.isEmpty()) { Toast.makeText(this, "Nema stanica za provjeru", Toast.LENGTH_SHORT).show(); return; }
         startHealthScan(targets, true);
     }
 
@@ -694,6 +693,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     @Override public void onPlay(RadioStation s) {
         if (s == null) return;
         hideKeyboard();
+        requestNotificationPermission();
         String key = s.key();
         if (key.equals(currentKey)) {
             sendPlayerAction(playing ? RadioPlayerService.ACTION_PAUSE : RadioPlayerService.ACTION_RESUME);
@@ -724,20 +724,20 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         options.add("▶ Slušaj");
         options.add(state.favorites().contains(s.key()) ? "Ukloni iz omiljenih" : "Dodaj u omiljene");
         if (StreamResolver.isHttp(s.homepage)) options.add("Web stranica");
-        options.add("Kopiraj aktivni izvor");
-        options.add("Promijeni izvor");
+        options.add("Kopiraj poveznicu za reprodukciju");
+        options.add("Odaberi drugi izvor");
         options.add("Provjeri dostupnost");
-        if (!state.autoReplacement(s.key()).isEmpty() || !state.backups(s.key()).isEmpty()) options.add("Očisti automatske izvore");
+        if (!state.autoReplacement(s.key()).isEmpty() || !state.backups(s.key()).isEmpty()) options.add("Vrati automatski odabir");
         String[] array = options.toArray(new String[0]);
         new AlertDialog.Builder(this).setTitle(s.name).setItems(array, (d, which) -> {
             String chosen = array[which];
             if (chosen.startsWith("▶")) onPlay(s);
             else if (chosen.equals("Dodaj u omiljene") || chosen.equals("Ukloni iz omiljenih")) onFavorite(s);
             else if (chosen.equals("Web stranica")) openWeb(s);
-            else if (chosen.equals("Kopiraj aktivni izvor")) copyText(s.activeUrl);
-            else if (chosen.equals("Promijeni izvor")) showSourceDialog(s);
+            else if (chosen.equals("Kopiraj poveznicu za reprodukciju")) copyText(s.activeUrl);
+            else if (chosen.equals("Odaberi drugi izvor")) showSourceDialog(s);
             else if (chosen.equals("Provjeri dostupnost")) checkOne(s);
-            else if (chosen.equals("Očisti automatske izvore")) { state.clearAutomaticSources(s.key()); s.replaced = !state.manualReplacement(s.key()).isEmpty(); s.activeUrl = !s.urlResolved.isEmpty() ? s.urlResolved : s.url; adapter.notifyDataSetChanged(); }
+            else if (chosen.equals("Vrati automatski odabir")) { state.clearAutomaticSources(s.key()); s.replaced = !state.manualReplacement(s.key()).isEmpty(); s.activeUrl = !s.urlResolved.isEmpty() ? s.urlResolved : s.url; adapter.notifyDataSetChanged(); statusText.setText("Vraćen automatski odabir izvora"); }
         }).setNegativeButton("Zatvori", null).show();
     }
 
@@ -753,9 +753,9 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         input.setTextColor(Color.WHITE); input.setHintTextColor(0xFF85756D); input.setHint("https://stream…"); input.setBackground(rounded(0xFF2A211D, 0xFF4B3A31, 10)); input.setPadding(dp(12), 0, dp(12), 0);
         LinearLayout wrap = new LinearLayout(this); wrap.setPadding(dp(20), dp(8), dp(20), 0); wrap.addView(input, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Izvor · " + s.name)
-                .setMessage("Unesi vlastiti stream URL. Prazno polje vraća automatski odabir.")
-                .setView(wrap).setPositiveButton("Spremi", null).setNeutralButton("Kopiraj", null).setNegativeButton("Odustani", null).create();
+                .setTitle("Izvor reprodukcije · " + s.name)
+                .setMessage("Unesi izravnu http/https poveznicu za reprodukciju. Prazno polje vraća automatski odabir.")
+                .setView(wrap).setPositiveButton("Spremi", null).setNeutralButton("Kopiraj trenutačnu", null).setNegativeButton("Odustani", null).create();
         dialog.setOnShowListener(x -> {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
                 String value = input.getText().toString().trim();
@@ -806,7 +806,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
     private void sendPlayerAction(String action) {
         Intent i = new Intent(this, RadioPlayerService.class).setAction(action);
-        try { startService(i); } catch (Throwable t) { AppLog.e(this, "player-action", t); }
+        try { startService(i); } catch (Throwable t) { AppLog.e(this, "player-action", t); Toast.makeText(this, "Radnja trenutačno nije dostupna", Toast.LENGTH_SHORT).show(); }
     }
 
     private void queryPlayerState() {
@@ -885,7 +885,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 r.run();
             } catch (Throwable error) {
                 AppLog.e(MainActivity.this, "ui-update", error);
-                if (statusText != null) statusText.setText("Prikaz je osvježen nakon poteškoće");
+                if (statusText != null) statusText.setText("Prikaz je osvježen");
             }
         });
     }
