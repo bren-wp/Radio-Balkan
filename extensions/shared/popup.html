@@ -26,11 +26,11 @@
         <h1 id="heroName">Odaberi stanicu</h1>
         <p id="heroMeta">Radio iz Hrvatske i regije</p>
       </div>
-      <button id="heroPlay" class="primaryButton" type="button">▶ Slušaj</button>
+      <button id="heroPlay" class="primaryButton" type="button" disabled>▶ Slušaj</button>
     </section>
 
     <section class="tools" aria-label="Pretraživanje i filtriranje">
-      <label class="searchField">
+      <label class="searchField" aria-label="Pretraži radio stanice">
         <span aria-hidden="true">⌕</span>
         <input id="search" type="search" placeholder="Pretraži stanice, gradove, žanrove…" autocomplete="off" spellcheck="false">
       </label>
@@ -44,17 +44,17 @@
       <button id="favoritesOnly" class="textButton" type="button" aria-pressed="false">♡ Omiljene</button>
     </div>
 
-    <section id="stations" class="stations" aria-label="Radio stanice"></section>
+    <section id="stations" class="stations" role="list" aria-label="Radio stanice"></section>
 
-    <footer class="player" aria-label="Player">
+    <footer class="player" aria-label="Reprodukcija">
       <img id="playerLogo" src="icon48.png" alt="" width="52" height="52">
       <div class="playerCopy">
         <small id="playerState" role="status" aria-live="polite">Spremno</small>
-        <strong id="playerName">Ništa</strong>
+        <strong id="playerName">Nije odabrano</strong>
         <span id="playerMeta">Odaberi stanicu</span>
       </div>
-      <button id="playerFav" class="playerIcon" type="button" aria-label="Dodaj ili ukloni iz omiljenih">♡</button>
-      <button id="playerToggle" class="roundPlay" type="button" aria-label="Pokreni ili pauziraj">▶</button>
+      <button id="playerFav" class="playerIcon" type="button" aria-label="Dodaj u omiljene" aria-pressed="false" disabled>♡</button>
+      <button id="playerToggle" class="roundPlay" type="button" aria-label="Pokreni" disabled>▶</button>
     </footer>
   </main>
   <script src="network.js"></script>
