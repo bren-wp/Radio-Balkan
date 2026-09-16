@@ -280,7 +280,7 @@ public final class StreamResolver {
         if (!isHttp(s) || s.length() > 4096) return false;
         try {
             URL u = new URL(s.trim());
-            String host = safe(u.getHost()).toLowerCase(Locale.ROOT);
+            String host = canonicalHost(u.getHost());
             if (host.isEmpty() || host.equals("localhost") || host.endsWith(".localhost") || host.endsWith(".local")
                     || host.equals("metadata.google.internal") || host.equals("instance-data.ec2.internal") || host.equals("metadata.azure.internal")) return false;
             if (u.getUserInfo() != null) return false;
@@ -292,6 +292,12 @@ public final class StreamResolver {
             }
             return true;
         } catch (Throwable ignored) { return false; }
+    }
+
+    private static String canonicalHost(String raw) {
+        String host = safe(raw).toLowerCase(Locale.ROOT);
+        while (host.endsWith(".")) host = host.substring(0, host.length() - 1);
+        return host;
     }
 
     private static boolean isUnsafeAddress(InetAddress ip) {

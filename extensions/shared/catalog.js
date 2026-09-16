@@ -20,6 +20,7 @@ const RB = (() => {
     .replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^\p{L}\p{N}]+/gu, '');
 
   const safeHttp = RBNet.safeHttp;
+  const safeApiBase = RBNet.safeRadioBrowserBase;
   async function fetchWithTimeout(url, options = {}, timeoutMs = 9000) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -111,10 +112,10 @@ const RB = (() => {
 
   async function bases() {
     try {
-      const response = await fetchWithTimeout('https://all.api.radio-browser.info/json/servers', { cache: 'no-store' }, 6500);
+      const response = await fetchWithTimeout('https://all.api.radio-browser.info/json/servers', { cache: 'no-store', redirect: 'error' }, 6500);
       if (response.ok) {
         const body = await response.json();
-        const dynamic = body.map(x => x?.name ? `https://${x.name}` : '').filter(Boolean);
+        const dynamic = body.map(x => safeApiBase(x?.name)).filter(Boolean);
         if (dynamic.length) return [...new Set([...dynamic, ...API_FALLBACKS])];
       }
     } catch { }
@@ -125,7 +126,7 @@ const RB = (() => {
     const rows = [];
     for (let offset = 0; offset < MAX_PER_COUNTRY; offset += PAGE) {
       const url = `${base}/json/stations/search?countrycode=${encodeURIComponent(code)}&hidebroken=true&order=votes&reverse=true&limit=${PAGE}&offset=${offset}`;
-      const response = await fetchWithTimeout(url, { cache: 'no-store' }, 10000);
+      const response = await fetchWithTimeout(url, { cache: 'no-store', redirect: 'error' }, 10000);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const page = await response.json();
       if (!Array.isArray(page) || !page.length) break;
