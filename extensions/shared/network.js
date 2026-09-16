@@ -15,7 +15,8 @@ const RBNet = (() => {
     const h = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
     if (!h || h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') ||
         h === 'metadata.google.internal' || h === 'instance-data.ec2.internal' || h === 'metadata.azure.internal') return true;
-    if (h === '::1' || h === '0:0:0:0:0:0:0:1' || h.startsWith('fe80:') || /^f[cd][0-9a-f]:/.test(h)) return true;
+    if (h === '::' || h === '::1' || h === '0:0:0:0:0:0:0:1' || h.startsWith('::ffff:') ||
+        h.startsWith('fe80:') || /^f[cd][0-9a-f]:/.test(h)) return true;
     const match = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
     if (!match) return false;
     const octets = match.slice(1).map(Number);
