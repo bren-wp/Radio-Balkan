@@ -1,5 +1,26 @@
 # Izdavanja
 
+## 0.0.14
+
+Izdanje 0.0.14 fokusirano je na produkcijski UI/UX, robusnije korisničke opcije i smanjenje nepotrebnog rada u sva tri klijenta, bez novih telemetry komponenti ili širih browser dozvola.
+
+- browser popup više ne gradi ponovno cijeli prikaz stanica pri svakoj playback-state poruci; aktivna stanica i play/pause kontrola osvježavaju se ciljano, čime se smanjuje DOM/CPU churn
+- odabrani country filter u browser ekstenziji ostaje sačuvan nakon osvježavanja kataloga, a neuspjeli mrežni refresh zadržava zadnji valjani prikaz umjesto praznog popisa
+- browser player/favorite/refresh kontrole dobile su jasna disabled, `aria-pressed`, `aria-busy` i live-status stanja, veće touch targete i čitljiviju tipografiju
+- izvršni browser regression test potvrđuje da playback-only state ne rerendera listu te da country filter preživljava refresh
+- Android više ne traži notification permission odmah pri hladnom pokretanju aplikacije; dozvola se traži kontekstualno tek kada korisnik pokrene reprodukciju
+- Android red stanice sada ima vidljiv gumb za dodatne opcije umjesto oslanjanja samo na skriveni long-press; artwork je kompaktniji, a kontrole imaju jasnije accessibility opise
+- Android korisnički izbornici preimenovani su u jasne pojmove poput `Rezervni izvori`, `Filtriraj stanice`, `Kopiraj poveznicu za reprodukciju`, `Odaberi drugi izvor` i `Vrati automatski odabir`
+- ručni Android izvor mora proći strožu `isSafeHttp` provjeru prije mrežnog testa; worker greške tijekom provjere stanice ili ručnog izvora vraćaju UI u upotrebljivo stanje i prikazuju korisničku poruku umjesto ostavljanja disabled kontrola
+- Windows sada sprječava smanjivanje prozora ispod 1100×720, iste donje granice koju koristi spremljeno window-state stanje, pa header/search/filter kontrole više ne mogu ući u neupotrebljivo preklapanje
+- Windows sidebar `MOJE LISTE` zamijenjen je točnim `BRZI ODABIR`, a lažni nazivi `Jutarnji vibe`/`Chill večer` zamijenjeni su stvarnim `Popularne`/`Jazz` filtrima
+- Windows ručna promjena izvora više ne traži skriveni magic-string `AUTO`; prazno polje vraća automatski odabir, a copy/source statusi koriste jasniji korisnički jezik
+- postojeći Windows HTTP redirect guard ostaje aktivan: svaki redirect prolazi `safeHTTPURL` provjeru prije praćenja i lanac je ograničen
+- dodan je `scripts/verify_production_ui.py` koji u CI-ju zaključava user-facing tekst, accessibility, contextual permission, vidljive opcije, Windows minimum-size i zabranu povratka dev/test placeholdera
+- Windows, Android i browser klijenti ponovno prolaze puni production build, security contracts, clean-worktree i release-integrity provjere prije objave
+
+Izdanje smanjuje rizik od UI blokada i regresija, ali ne tvrdi da je moguće apsolutno jamčiti da se aplikacija nikada neće srušiti na svakoj kombinaciji uređaja, drivera, mreže i radio streama.
+
 ## 0.0.13
 
 Izdanje 0.0.13 završava hardening release/version automatizacije bez nepotrebnih promjena runtime ponašanja Windows, Android ili browser klijenata.

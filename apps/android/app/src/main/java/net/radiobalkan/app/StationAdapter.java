@@ -87,8 +87,12 @@ public final class StationAdapter extends BaseAdapter {
 
         row.logo.setImageResource(R.drawable.ic_radio_balkan);
         images.load(s.favicon, row.logo, null);
-        row.play.setContentDescription((active && playing ? "Pauziraj " : "Slušaj ") + s.name);
+        String action = active && playing ? "Pauziraj " : "Slušaj ";
+        row.play.setContentDescription(action + s.name);
+        row.more.setContentDescription("Više opcija za " + s.name);
+        row.root.setContentDescription(s.name + ", " + countryAndGenre(s));
         row.play.setOnClickListener(v -> actions.onPlay(s));
+        row.more.setOnClickListener(v -> actions.onMore(s));
         row.root.setOnClickListener(v -> actions.onPlay(s));
         row.root.setOnLongClickListener(v -> { actions.onMore(s); return true; });
         return convertView;
@@ -99,7 +103,9 @@ public final class StationAdapter extends BaseAdapter {
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.HORIZONTAL);
         root.setGravity(Gravity.CENTER_VERTICAL);
-        root.setPadding(0, 0, dp(12), 0);
+        root.setPadding(0, 0, dp(8), 0);
+        root.setFocusable(true);
+        root.setClickable(true);
         LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(112));
         rp.setMargins(dp(1), dp(5), dp(1), dp(5));
         root.setLayoutParams(rp);
@@ -112,35 +118,32 @@ public final class StationAdapter extends BaseAdapter {
         ImageView logo = new ImageView(context);
         logo.setScaleType(ImageView.ScaleType.CENTER_CROP);
         artBox.addView(logo, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        root.addView(artBox, new LinearLayout.LayoutParams(dp(122), ViewGroup.LayoutParams.MATCH_PARENT));
+        root.addView(artBox, new LinearLayout.LayoutParams(dp(104), ViewGroup.LayoutParams.MATCH_PARENT));
         r.logo = logo;
 
         LinearLayout info = new LinearLayout(context);
         info.setOrientation(LinearLayout.VERTICAL);
         info.setGravity(Gravity.CENTER_VERTICAL);
-        info.setPadding(dp(13), 0, dp(5), 0);
+        info.setPadding(dp(13), 0, dp(6), 0);
         r.name = text(17, Color.WHITE, true);
         r.meta = text(12, 0xFFBEC4CD, false);
-        info.addView(r.name, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)));
-        info.addView(r.meta, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(28)));
-        root.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
-
-        LinearLayout side = new LinearLayout(context);
-        side.setOrientation(LinearLayout.VERTICAL);
-        side.setGravity(Gravity.CENTER);
-        r.listeners = text(11, 0xFFB7BEC8, false);
-        r.listeners.setGravity(Gravity.CENTER);
+        r.listeners = text(11, 0xFF98A2AF, false);
         android.graphics.drawable.Drawable people = context.getDrawable(R.drawable.ic_people);
         if (people != null) {
-            people.setBounds(0, 0, dp(16), dp(16));
-            r.listeners.setCompoundDrawablePadding(dp(4));
+            people.setBounds(0, 0, dp(15), dp(15));
+            r.listeners.setCompoundDrawablePadding(dp(5));
             r.listeners.setCompoundDrawables(people, null, null, null);
         }
-        side.addView(r.listeners, new LinearLayout.LayoutParams(dp(62), dp(34)));
-        root.addView(side, new LinearLayout.LayoutParams(dp(66), ViewGroup.LayoutParams.MATCH_PARENT));
+        info.addView(r.name, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(31)));
+        info.addView(r.meta, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(26)));
+        info.addView(r.listeners, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(23)));
+        root.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+
+        r.more = smallButton("⋮", false, 24);
+        root.addView(r.more, new LinearLayout.LayoutParams(dp(46), dp(48)));
 
         r.play = smallButton("▶", true, 18);
-        root.addView(r.play, new LinearLayout.LayoutParams(dp(60), dp(60)));
+        root.addView(r.play, new LinearLayout.LayoutParams(dp(56), dp(56)));
         r.root = root;
         return r;
     }
@@ -164,7 +167,6 @@ public final class StationAdapter extends BaseAdapter {
         return "";
     }
 
-
     private static String formatListeners(int votes) {
         int n = Math.max(0, votes);
         if (n >= 1000) {
@@ -182,7 +184,7 @@ public final class StationAdapter extends BaseAdapter {
         b.setTextColor(accent ? 0xFFF8F8FA : 0xFFCAD0D8);
         b.setPadding(0, 0, 0, 0);
         b.setMinWidth(0); b.setMinimumWidth(0); b.setMinHeight(0); b.setMinimumHeight(0);
-        b.setBackground(rounded(accent ? 0xFF25242A : 0x00000000, accent ? 0xFF81592C : 0x00000000, accent ? 30 : 10));
+        b.setBackground(rounded(accent ? 0xFF25242A : 0x00000000, accent ? 0xFF81592C : 0x00000000, accent ? 28 : 12));
         return b;
     }
 
@@ -207,6 +209,6 @@ public final class StationAdapter extends BaseAdapter {
         LinearLayout root;
         ImageView logo;
         TextView name, meta, listeners;
-        Button play;
+        Button play, more;
     }
 }

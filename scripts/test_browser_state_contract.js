@@ -19,6 +19,7 @@ class Element {
     this.listeners = {};
     this.src = '';
     this.onerror = null;
+    this.replaceChildrenCalls = 0;
   }
 
   addEventListener(type, listener) {
@@ -34,6 +35,7 @@ class Element {
   }
 
   replaceChildren(...items) {
+    this.replaceChildrenCalls += 1;
     this.children = [...items];
   }
 
@@ -176,11 +178,29 @@ async function main() {
   assert.equal(typeof runtimeListener, 'function', 'popup must register the runtime state listener');
   assert.equal(elements.playerName.textContent, 'Radio A', 'initial GET_STATE must select the active station');
   assert.equal(elements.playerState.textContent, 'Sada svira', 'initial playing state must be rendered');
+  assert.equal(elements.playerToggle.disabled, false, 'player toggle must be enabled after a station is available');
+  assert.equal(elements.playerFav.disabled, false, 'favorite control must be enabled after a station is available');
+  assert.equal(elements.playerFav.attributes['aria-pressed'], 'false', 'favorite state must be announced accessibly');
+
+  elements.country.value = 'RS';
+  elements.refresh.dispatch('click');
+  await flush();
+  assert.equal(elements.country.value, 'RS', 'selected country filter must survive a catalog refresh');
+
+  const listRepaintsBeforeState = elements.stations.replaceChildrenCalls;
+  runtimeListener({ type: 'RB_STATE', epoch: 'epoch-a', revision: 2, station: stationA, playing: false });
+  await flush();
+  assert.equal(elements.playerState.textContent, 'Pauzirano');
+  assert.equal(
+    elements.stations.replaceChildrenCalls,
+    listRepaintsBeforeState,
+    'playback-only state updates must not rebuild the full station list'
+  );
 
   runtimeListener({ type: 'RB_STATE', epoch: 'epoch-a', revision: 0, station: stationB, playing: false });
   await flush();
   assert.equal(elements.playerName.textContent, 'Radio A', 'lower revision from the current epoch must be ignored');
-  assert.equal(elements.playerState.textContent, 'Sada svira');
+  assert.equal(elements.playerState.textContent, 'Pauzirano');
 
   getState = { epoch: 'epoch-b', revision: 1, station: stationB, playing: true };
   const beforeEpochSync = getStateCalls;
@@ -223,7 +243,7 @@ async function main() {
   assert.equal(elements.playerState.textContent, 'Pauzirano', 'older promise reply cannot override a newer command even with a higher revision');
   assert.equal(elements.playerName.textContent, 'Radio B');
 
-  console.log('Browser popup state regression tests OK');
+  console.log('Browser popup state and UI regression tests OK');
 }
 
 main().catch(error => {
