@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.13" src="assets/badges/version.svg">
+  <img alt="version 0.0.14" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -52,7 +52,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.13 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.13):
+Gotovi v0.0.14 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.14):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -83,6 +83,7 @@ scripts/        version, security i repository provjere
 ```bash
 python scripts/check_versions.py
 python scripts/verify_security_contracts.py
+python scripts/verify_production_ui.py
 python scripts/check_clean_worktree.py
 python scripts/test_release_checksums.py
 python scripts/test_version_tools.py
@@ -91,12 +92,12 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.14
+python scripts/bump_version.py 0.0.15
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.
 
-Detaljni build postupci: [`docs/BUILD.md`](docs/BUILD.md). GitHub Actions dodatno provjerava JavaScript, browser pakiranje, izvršne popup/Firefox player regression testove, session/epoch/revision player-state ugovore, Go test/vet/build, Android unit testove, lint/release build, PowerShell screenshot tooling, sigurnosne kontrakte, checksum manifest, transactional version tooling i usklađenost verzija. Windows, Android i browser buildovi moraju ostaviti čist repository workspace u CI-ju, Publish workflowu i screenshot build fazi, a release SHA-256 manifest verificira se prije objave asseta.
+Detaljni build postupci: [`docs/BUILD.md`](docs/BUILD.md). GitHub Actions dodatno provjerava JavaScript, browser pakiranje, izvršne popup/Firefox player regression testove, session/epoch/revision player-state ugovore, production UI/UX ugovore, Go test/vet/build, Android unit testove, lint/release build, PowerShell screenshot tooling, sigurnosne kontrakte, checksum manifest, transactional version tooling i usklađenost verzija. Windows, Android i browser buildovi moraju ostaviti čist repository workspace u CI-ju, Publish workflowu i screenshot build fazi, a release SHA-256 manifest verificira se prije objave asseta.
 
 ## Dokumentacija
 
