@@ -1,0 +1,128 @@
+name: Apply v0.0.14 native polish
+
+on:
+  push:
+    branches: ["chatgpt/v0.0.14-production"]
+    paths:
+      - ".github/workflows/v0014-native-polish.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.0.14-production
+          fetch-depth: 0
+      - name: Apply native production polish
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected exactly one match, found {count}")
+              return text.replace(old, new, 1)
+
+          android_path = Path('apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java')
+          android = android_path.read_text(encoding='utf-8')
+          android = replace_once(
+              android,
+              '        requestNotificationPermission();\n        queryPlayerState();',
+              '        queryPlayerState();',
+              'defer notification permission prompt',
+          )
+          android = replace_once(
+              android,
+              '        hideKeyboard();\n        String key = s.key();',
+              '        hideKeyboard();\n        requestNotificationPermission();\n        String key = s.key();',
+              'request notification permission on first playback intent',
+          )
+          android = replace_once(
+              android,
+              '        String[] items = {"Pretraži", "Odaberi državu i žanr", "Osvježi stanice", "Provjeri dostupnost", "Alternativni izvori", "Nedostupne stanice", "O aplikaciji"};',
+              '        String[] items = {"Pretraži", "Filtriraj stanice", "Osvježi popis", "Provjeri prikazane stanice", "Rezervni izvori", "Nedostupne stanice", "O aplikaciji"};',
+              'polish Android app menu',
+          )
+          android = replace_once(
+              android,
+              '        if (targets.isEmpty()) return;',
+              '        if (targets.isEmpty()) { Toast.makeText(this, "Nema stanica za provjeru", Toast.LENGTH_SHORT).show(); return; }',
+              'empty health-check feedback',
+          )
+          android = replace_once(
+              android,
+              '        options.add("Kopiraj aktivni izvor");\n        options.add("Promijeni izvor");\n        options.add("Provjeri dostupnost");\n        if (!state.autoReplacement(s.key()).isEmpty() || !state.backups(s.key()).isEmpty()) options.add("Očisti automatske izvore");',
+              '        options.add("Kopiraj poveznicu za reprodukciju");\n        options.add("Odaberi drugi izvor");\n        options.add("Provjeri dostupnost");\n        if (!state.autoReplacement(s.key()).isEmpty() || !state.backups(s.key()).isEmpty()) options.add("Vrati automatski odabir");',
+              'polish station options labels',
+          )
+          android = replace_once(
+              android,
+              '            else if (chosen.equals("Kopiraj aktivni izvor")) copyText(s.activeUrl);\n            else if (chosen.equals("Promijeni izvor")) showSourceDialog(s);\n            else if (chosen.equals("Provjeri dostupnost")) checkOne(s);\n            else if (chosen.equals("Očisti automatske izvore")) { state.clearAutomaticSources(s.key()); s.replaced = !state.manualReplacement(s.key()).isEmpty(); s.activeUrl = !s.urlResolved.isEmpty() ? s.urlResolved : s.url; adapter.notifyDataSetChanged(); }',
+              '            else if (chosen.equals("Kopiraj poveznicu za reprodukciju")) copyText(s.activeUrl);\n            else if (chosen.equals("Odaberi drugi izvor")) showSourceDialog(s);\n            else if (chosen.equals("Provjeri dostupnost")) checkOne(s);\n            else if (chosen.equals("Vrati automatski odabir")) { state.clearAutomaticSources(s.key()); s.replaced = !state.manualReplacement(s.key()).isEmpty(); s.activeUrl = !s.urlResolved.isEmpty() ? s.urlResolved : s.url; adapter.notifyDataSetChanged(); statusText.setText("Vraćen automatski odabir izvora"); }',
+              'polish station options behavior',
+          )
+          android = replace_once(
+              android,
+              '                .setTitle("Izvor · " + s.name)\n                .setMessage("Unesi vlastiti stream URL. Prazno polje vraća automatski odabir.")\n                .setView(wrap).setPositiveButton("Spremi", null).setNeutralButton("Kopiraj", null).setNegativeButton("Odustani", null).create();',
+              '                .setTitle("Izvor reprodukcije · " + s.name)\n                .setMessage("Unesi izravnu http/https poveznicu za reprodukciju. Prazno polje vraća automatski odabir.")\n                .setView(wrap).setPositiveButton("Spremi", null).setNeutralButton("Kopiraj trenutačnu", null).setNegativeButton("Odustani", null).create();',
+              'polish source dialog copy',
+          )
+          android = replace_once(
+              android,
+              '        try { startService(i); } catch (Throwable t) { AppLog.e(this, "player-action", t); }',
+              '        try { startService(i); } catch (Throwable t) { AppLog.e(this, "player-action", t); Toast.makeText(this, "Radnja trenutačno nije dostupna", Toast.LENGTH_SHORT).show(); }',
+              'player action feedback',
+          )
+          android = android.replace('statusText.setText("Prikaz je osvježen nakon poteškoće");', 'statusText.setText("Prikaz je osvježen");')
+          if 'Alternativni izvori' in android:
+              raise SystemExit('Android still exposes deprecated Alternativni izvori wording')
+          android_path.write_text(android, encoding='utf-8', newline='\n')
+
+          windows_path = Path('apps/windows/portable/main.go')
+          windows = windows_path.read_text(encoding='utf-8')
+          if 'case WM_GETMINMAXINFO:' not in windows:
+              start = windows.find('func wndProcCore')
+              if start < 0:
+                  raise SystemExit('wndProcCore not found')
+              switch = windows.find('\tswitch msg {\n', start)
+              if switch < 0:
+                  raise SystemExit('wndProcCore switch msg not found')
+              insert = switch + len('\tswitch msg {\n')
+              windows = windows[:insert] + (
+                  '\tcase WM_GETMINMAXINFO:\n'
+                  '\t\tif lParam != 0 {\n'
+                  '\t\t\tinfo := (*MINMAXINFO)(unsafe.Pointer(lParam))\n'
+                  '\t\t\tinfo.PtMinTrackSize.X = 900\n'
+                  '\t\t\tinfo.PtMinTrackSize.Y = 640\n'
+                  '\t\t}\n'
+                  '\t\treturn 0\n'
+              ) + windows[insert:]
+          windows = replace_once(
+              windows,
+              'action("Link", 38, hitLink)\n\taction("✓", 26, hitCheckStation)\n\taction("Izvor", 46, hitReplace)',
+              'action("Kopiraj", 54, hitLink)\n\taction("✓", 26, hitCheckStation)\n\taction("Izvor", 46, hitReplace)',
+              'polish Windows station actions',
+          )
+          windows = windows.replace('setStatus("Link za reprodukciju je kopiran")', 'setStatus("Poveznica za reprodukciju je kopirana")')
+          old = '''\tvalue, ok := inputDialog(app.hwnd, "Promijeni izvor", "Unesi novi link za reprodukciju za:\\n"+s.Name+"\\n\\nZa povratak na automatski odabir upiši AUTO", def)\n\tif !ok || strings.TrimSpace(value) == "" {\n\t\treturn\n\t}\n\tif strings.EqualFold(strings.TrimSpace(value), "AUTO") {\n\t\tclearReplacement(idx, key)\n\t\tsetStatus("Vraćen automatski odabir · " + s.Name)\n\t\tpostUI()\n\t\treturn\n\t}\n'''
+          new = '''\tvalue, ok := inputDialog(app.hwnd, "Promijeni izvor", "Unesi novu http/https poveznicu za reprodukciju za:\\n"+s.Name+"\\n\\nPrazno polje vraća automatski odabir.", def)\n\tif !ok {\n\t\treturn\n\t}\n\tvalue = strings.TrimSpace(value)\n\tif value == "" {\n\t\tclearReplacement(idx, key)\n\t\tsetStatus("Vraćen automatski odabir · " + s.Name)\n\t\tpostUI()\n\t\treturn\n\t}\n'''
+          windows = replace_once(windows, old, new, 'remove Windows AUTO magic value')
+          windows = windows.replace('lokalni dijagnostički zapis', 'lokalni zapis o pogrešci')
+          windows_path.write_text(windows, encoding='utf-8', newline='\n')
+          PY
+      - name: Remove one-time workflow and commit patch
+        shell: bash
+        run: |
+          rm .github/workflows/v0014-native-polish.yml
+          git config user.name "Brendigo"
+          git config user.email "info@brendigo.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "ui: polish native options and window behavior"
+          git push origin HEAD:chatgpt/v0.0.14-production
