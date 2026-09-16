@@ -1,0 +1,62 @@
+name: Apply v0.0.14 stability polish
+
+on:
+  push:
+    branches: ["chatgpt/v0.0.14-production"]
+    paths:
+      - ".github/workflows/v0014-stability-polish.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/v0.0.14-production
+          fetch-depth: 0
+      - name: Apply stability and wording patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def one(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected one match, found {count}")
+              return text.replace(old, new, 1)
+
+          p = Path('apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java')
+          text = p.read_text(encoding='utf-8')
+          old = '''            ioWorker.execute(() -> {\n                s.health = "checking"; postIfActive(adapter::notifyDataSetChanged);\n                StreamResolver.Resolution result = StreamResolver.repair(StreamResolver.candidates(s, state), s.stationUuid, s.homepage, s.countryCode);\n                if (result != null) {\n                    s.health = "ok"; s.activeUrl = result.url; state.addBackup(s.key(), result.url);\n                    if (state.manualReplacement(s.key()).isEmpty() && !sameUrl(result.url, s.urlResolved) && !sameUrl(result.url, s.url)) { state.setAutoReplacement(s.key(), result.url); s.replaced = true; }\n                    postIfActive(() -> { statusText.setText("Dostupno · " + s.name); adapter.notifyDataSetChanged(); });\n                } else {\n                    s.health = "broken";\n                    postIfActive(() -> { statusText.setText("Nedostupno · " + s.name); adapter.notifyDataSetChanged(); });\n                }\n            });'''
+          new = '''            ioWorker.execute(() -> {\n                try {\n                    s.health = "checking"; postIfActive(adapter::notifyDataSetChanged);\n                    StreamResolver.Resolution result = StreamResolver.repair(StreamResolver.candidates(s, state), s.stationUuid, s.homepage, s.countryCode);\n                    if (result != null) {\n                        s.health = "ok"; s.activeUrl = result.url; state.addBackup(s.key(), result.url);\n                        if (state.manualReplacement(s.key()).isEmpty() && !sameUrl(result.url, s.urlResolved) && !sameUrl(result.url, s.url)) { state.setAutoReplacement(s.key(), result.url); s.replaced = true; }\n                        postIfActive(() -> { statusText.setText("Dostupno · " + s.name); adapter.notifyDataSetChanged(); });\n                    } else {\n                        s.health = "broken";\n                        postIfActive(() -> { statusText.setText("Nedostupno · " + s.name); adapter.notifyDataSetChanged(); });\n                    }\n                } catch (Throwable error) {\n                    s.health = "unknown";\n                    AppLog.e(MainActivity.this, "health-one-" + s.key(), error);\n                    postIfActive(() -> { statusText.setText("Provjera nije uspjela · " + s.name); adapter.notifyDataSetChanged(); });\n                }\n            });'''
+          text = one(text, old, new, 'Android single-station health recovery')
+
+          old = '''                    ioWorker.execute(() -> {\n                        String resolved = StreamResolver.resolveFirst(java.util.Collections.singletonList(value));\n                        postIfActive(() -> {\n                            if (!dialog.isShowing()) return;\n                            input.setEnabled(true);\n                            save.setEnabled(true);\n                            save.setText("Spremi");\n                            if (resolved == null || resolved.isEmpty()) {\n                                input.setError("Izvor nije dostupan. Provjeri URL i pokušaj ponovno.");\n                                return;\n                            }\n                            state.setManualReplacement(s.key(), resolved);\n                            state.addBackup(s.key(), resolved);\n                            s.replaced = true;\n                            s.activeUrl = resolved;\n                            s.health = "ok";\n                            adapter.notifyDataSetChanged();\n                            statusText.setText("Izvor je provjeren i spremljen");\n                            dialog.dismiss();\n                        });\n                    });'''
+          new = '''                    ioWorker.execute(() -> {\n                        String resolved = null;\n                        Throwable failure = null;\n                        try {\n                            resolved = StreamResolver.resolveFirst(java.util.Collections.singletonList(value));\n                        } catch (Throwable error) {\n                            failure = error;\n                            AppLog.e(MainActivity.this, "source-check-" + s.key(), error);\n                        }\n                        final String checkedUrl = resolved;\n                        final boolean checkFailed = failure != null;\n                        postIfActive(() -> {\n                            if (!dialog.isShowing()) return;\n                            input.setEnabled(true);\n                            save.setEnabled(true);\n                            save.setText("Spremi");\n                            if (checkFailed) {\n                                input.setError("Provjera trenutačno nije dostupna. Pokušaj ponovno.");\n                                return;\n                            }\n                            if (checkedUrl == null || checkedUrl.isEmpty()) {\n                                input.setError("Izvor nije dostupan. Provjeri URL i pokušaj ponovno.");\n                                return;\n                            }\n                            state.setManualReplacement(s.key(), checkedUrl);\n                            state.addBackup(s.key(), checkedUrl);\n                            s.replaced = true;\n                            s.activeUrl = checkedUrl;\n                            s.health = "ok";\n                            adapter.notifyDataSetChanged();\n                            statusText.setText("Izvor je provjeren i spremljen");\n                            dialog.dismiss();\n                        });\n                    });'''
+          text = one(text, old, new, 'Android source check recovery')
+          text = text.replace('if (!StreamResolver.isHttp(value)) { input.setError("Unesi valjani http/https URL"); return; }', 'if (!StreamResolver.isSafeHttp(value)) { input.setError("Unesi sigurnu javnu http/https poveznicu"); return; }')
+          p.write_text(text, encoding='utf-8', newline='\n')
+
+          p = Path('apps/windows/portable/main.go')
+          text = p.read_text(encoding='utf-8')
+          text = one(text, 'info.PtMinTrackSize.X = 900\n\t\t\tinfo.PtMinTrackSize.Y = 640', 'info.PtMinTrackSize.X = 1100\n\t\t\tinfo.PtMinTrackSize.Y = 720', 'Windows usable minimum size')
+          text = text.replace('drawSidebarLabel(hdc, "MOJE LISTE", y)', 'drawSidebarLabel(hdc, "BRZI ODABIR", y)')
+          text = text.replace('"Jutarnji vibe", tab == "popular"', '"Popularne", tab == "popular"')
+          text = text.replace('"Chill večer", genre == "jazz"', '"Jazz", genre == "jazz"')
+          text = text.replace('Dogodila se neočekivana greška. Lokalni dijagnostički zapis je spremljen. Aplikaciju možeš ponovno pokrenuti.', 'Dogodila se neočekivana greška. Zapis o pogrešci spremljen je lokalno. Aplikaciju možeš ponovno pokrenuti.')
+          p.write_text(text, encoding='utf-8', newline='\n')
+          PY
+      - name: Remove workflow and commit patch
+        shell: bash
+        run: |
+          rm .github/workflows/v0014-stability-polish.yml
+          git config user.name "Brendigo"
+          git config user.email "info@brendigo.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix: harden UI recovery and source options"
+          git push origin HEAD:chatgpt/v0.0.14-production
