@@ -28,6 +28,7 @@ import java.util.concurrent.RejectedExecutionException;
 /** Lightweight image loader tuned for station logos and ListView recycling. */
 public final class ImageLoader {
     private static final int MAX_IMAGE_BYTES = 512 * 1024;
+    private static final int MAX_REDIRECTS = 4;
     private static final int MAX_CACHE_BYTES = 4 * 1024 * 1024;
     private static final int MIN_CACHE_BYTES = 1536 * 1024;
     private static final int TRIMMED_CACHE_BYTES = 768 * 1024;
@@ -137,38 +138,61 @@ public final class ImageLoader {
     }
 
     private Bitmap download(String raw) {
-        HttpURLConnection c = null;
-        try {
-            if (!StreamResolver.isSafeHttp(raw)) return null;
-            c = (HttpURLConnection) new URL(raw).openConnection();
-            c.setConnectTimeout(4500);
-            c.setReadTimeout(5500);
-            c.setInstanceFollowRedirects(true);
-            c.setUseCaches(true);
-            c.setRequestProperty("User-Agent", AppInfo.USER_AGENT);
-            c.setRequestProperty("Accept", "image/*,*/*;q=0.2");
-            int code = c.getResponseCode();
-            if (code < 200 || code >= 400) return null;
-            if (!StreamResolver.isSafeHttp(c.getURL().toString())) return null;
-            String type = c.getContentType();
-            if (type != null && !type.toLowerCase(Locale.ROOT).startsWith("image/")) return null;
-            int length = c.getContentLength();
-            if (length > MAX_IMAGE_BYTES) return null;
-            try (BufferedInputStream in = new BufferedInputStream(c.getInputStream()); ByteArrayOutputStream out = new ByteArrayOutputStream(Math.max(16 * 1024, Math.min(MAX_IMAGE_BYTES, Math.max(0, length))))) {
-                byte[] buffer = new byte[8192];
-                int n;
-                while ((n = in.read(buffer)) > 0) {
-                    if (out.size() + n > MAX_IMAGE_BYTES) return null;
-                    out.write(buffer, 0, n);
+        String current = raw == null ? "" : raw.trim();
+        for (int redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
+            if (!StreamResolver.isSafeHttp(current)) return null;
+            HttpURLConnection c = null;
+            try {
+                URL requested = new URL(current);
+                c = (HttpURLConnection) requested.openConnection();
+                c.setConnectTimeout(4500);
+                c.setReadTimeout(5500);
+                c.setInstanceFollowRedirects(false);
+                c.setUseCaches(true);
+                c.setRequestProperty("User-Agent", AppInfo.USER_AGENT);
+                c.setRequestProperty("Accept", "image/*,*/*;q=0.2");
+                int code = c.getResponseCode();
+                if (isRedirect(code)) {
+                    String location = c.getHeaderField("Location");
+                    if (location == null || location.trim().isEmpty() || redirects >= MAX_REDIRECTS) return null;
+                    String next = new URL(requested, location.trim()).toString();
+                    if (!StreamResolver.isSafeHttp(next)) return null;
+                    current = next;
+                    continue;
                 }
-                byte[] bytes = out.toByteArray();
-                return bytes.length == 0 ? null : decodeLogo(bytes);
+                if (code < 200 || code >= 300) return null;
+                String finalUrl = c.getURL().toString();
+                if (!StreamResolver.isSafeHttp(finalUrl)) return null;
+                String type = c.getContentType();
+                if (type != null && !type.toLowerCase(Locale.ROOT).startsWith("image/")) return null;
+                int length = c.getContentLength();
+                if (length > MAX_IMAGE_BYTES) return null;
+                try (BufferedInputStream in = new BufferedInputStream(c.getInputStream()); ByteArrayOutputStream out = new ByteArrayOutputStream(Math.max(16 * 1024, Math.min(MAX_IMAGE_BYTES, Math.max(0, length))))) {
+                    byte[] buffer = new byte[8192];
+                    int n;
+                    while ((n = in.read(buffer)) > 0) {
+                        if (out.size() + n > MAX_IMAGE_BYTES) return null;
+                        out.write(buffer, 0, n);
+                    }
+                    byte[] bytes = out.toByteArray();
+                    return bytes.length == 0 ? null : decodeLogo(bytes);
+                }
+            } catch (Throwable ignored) {
+                return null;
+            } finally {
+                if (c != null) c.disconnect();
             }
-        } catch (Throwable ignored) {
-            return null;
-        } finally {
-            if (c != null) c.disconnect();
         }
+        return null;
+    }
+
+    private static boolean isRedirect(int status) {
+        return status == HttpURLConnection.HTTP_MULT_CHOICE
+                || status == HttpURLConnection.HTTP_MOVED_PERM
+                || status == HttpURLConnection.HTTP_MOVED_TEMP
+                || status == HttpURLConnection.HTTP_SEE_OTHER
+                || status == 307
+                || status == 308;
     }
 
     private static Bitmap decodeLogo(byte[] bytes) {
