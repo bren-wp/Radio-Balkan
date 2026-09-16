@@ -5,6 +5,7 @@ importScripts('network.js');
 const epoch = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 let state = { station: null, playing: false, revision: 0, epoch };
 let offscreenCreating = null;
+let offscreenClosing = null;
 let commandGeneration = 0;
 let sessionCounter = 0;
 let currentSessionId = null;
@@ -62,8 +63,13 @@ async function hasOffscreen() {
   return !!(chrome.offscreen?.hasDocument && await chrome.offscreen.hasDocument());
 }
 
+async function waitForOffscreenClose() {
+  if (offscreenClosing) await offscreenClosing;
+}
+
 async function ensureOffscreen() {
   if (!chrome.offscreen) throw new Error('Reprodukcija u pozadini nije podržana u ovom pregledniku');
+  await waitForOffscreenClose();
   if (await hasOffscreen()) return;
   if (!offscreenCreating) {
     offscreenCreating = chrome.offscreen.createDocument({
@@ -73,6 +79,19 @@ async function ensureOffscreen() {
     }).finally(() => { offscreenCreating = null; });
   }
   await offscreenCreating;
+}
+
+async function closeOffscreen() {
+  if (!offscreenClosing) {
+    let closing;
+    closing = Promise.resolve(chrome.offscreen.closeDocument())
+      .catch(() => {})
+      .finally(() => {
+        if (offscreenClosing === closing) offscreenClosing = null;
+      });
+    offscreenClosing = closing;
+  }
+  await offscreenClosing;
 }
 
 async function offscreen(message) {
@@ -123,10 +142,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const actual = await offscreen({ type: 'STOP', sessionId: requestedSession });
           if (requestToken === commandGeneration && requestedSession === currentSessionId) {
             acceptOffscreenState(actual, { notify: true });
+            await closeOffscreen();
           }
-          try { await chrome.offscreen.closeDocument(); } catch { }
         }
-        if (requestToken === commandGeneration) {
+        if (requestToken === commandGeneration && requestedSession === currentSessionId) {
           currentSessionId = null;
           lastOffscreenGeneration = -1;
           commitState({ playing: false }, true);
@@ -136,6 +155,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
       if (msg.type === 'RB_GET_STATE') {
         requestToken = commandGeneration;
+        await waitForOffscreenClose();
         if (await hasOffscreen()) {
           try {
             const actual = await offscreen({ type: 'GET_STATE' });
