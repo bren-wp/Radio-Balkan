@@ -32,4 +32,13 @@ assert.equal(RBNet.safeRadioBrowserBase('example.com'), '', 'catalog discovery m
 assert.equal(RBNet.safeRadioBrowserBase('de1.api.radio-browser.info.evil.example'), '', 'catalog discovery must reject suffix-confusion hosts');
 assert.equal(RBNet.safeRadioBrowserBase('user@de1.api.radio-browser.info'), '', 'catalog discovery must reject credential-like input');
 
+const catalogPath = path.join(__dirname, '..', 'extensions', 'shared', 'catalog.js');
+const catalogSource = fs.readFileSync(catalogPath, 'utf8');
+assert.match(catalogSource, /RBNet\.safeRadioBrowserBase/, 'catalog discovery must use the trusted Radio Browser origin validator');
+assert.match(catalogSource, /redirect:\s*'error'/, 'catalog API fetches must reject redirects instead of following a server-controlled hop');
+
+const popupPath = path.join(__dirname, '..', 'extensions', 'shared', 'popup.html');
+const popupSource = fs.readFileSync(popupPath, 'utf8');
+assert.match(popupSource, /id="playerLogo"[^>]*referrerpolicy="no-referrer"/, 'remote player artwork must not send a referrer');
+
 console.log('Browser network safety regression tests OK');
