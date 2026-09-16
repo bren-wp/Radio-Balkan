@@ -14,107 +14,151 @@ public final class StateStore {
     private static final String PREFS = "radio_balkan_state";
     private static final int MAX_RECENT = 50;
     private static final int MAX_BACKUPS = 8;
+    /**
+     * SharedPreferences itself is thread-safe, but several operations below are
+     * read-modify-write transactions. MainActivity and RadioPlayerService each
+     * own a StateStore instance, so an instance monitor alone cannot prevent a
+     * concurrent update from losing a favorite, recent item, or backup source.
+     */
+    private static final Object PREF_LOCK = new Object();
     private final SharedPreferences prefs;
 
     public StateStore(Context context) {
         prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    public synchronized boolean isFavorite(String key) {
-        return favorites().contains(cleanKey(key));
+    public boolean isFavorite(String key) {
+        synchronized (PREF_LOCK) {
+            return favoritesLocked().contains(cleanKey(key));
+        }
     }
 
-    public synchronized boolean toggleFavorite(String key) {
+    public boolean toggleFavorite(String key) {
         key = cleanKey(key);
         if (key.isEmpty()) return false;
-        Set<String> f = favorites();
-        boolean on;
-        if (f.remove(key)) on = false;
-        else { f.add(key); on = true; }
-        prefs.edit().putStringSet("favorites", f).apply();
-        return on;
+        synchronized (PREF_LOCK) {
+            Set<String> f = favoritesLocked();
+            boolean on;
+            if (f.remove(key)) on = false;
+            else { f.add(key); on = true; }
+            prefs.edit().putStringSet("favorites", f).apply();
+            return on;
+        }
     }
 
-    public synchronized Set<String> favorites() {
+    public Set<String> favorites() {
+        synchronized (PREF_LOCK) {
+            return favoritesLocked();
+        }
+    }
+
+    private Set<String> favoritesLocked() {
         Set<String> raw = prefs.getStringSet("favorites", Collections.emptySet());
         return new HashSet<>(raw == null ? Collections.emptySet() : raw);
     }
 
-    public synchronized void addRecent(String key) {
+    public void addRecent(String key) {
         key = cleanKey(key);
         if (key.isEmpty()) return;
-        List<String> list = recent();
-        list.remove(key);
-        list.add(0, key);
-        while (list.size() > MAX_RECENT) list.remove(list.size() - 1);
-        prefs.edit().putString("recent", toJson(list)).apply();
+        synchronized (PREF_LOCK) {
+            List<String> list = recentLocked();
+            list.remove(key);
+            list.add(0, key);
+            while (list.size() > MAX_RECENT) list.remove(list.size() - 1);
+            prefs.edit().putString("recent", toJson(list)).apply();
+        }
     }
 
-    public synchronized List<String> recent() {
+    public List<String> recent() {
+        synchronized (PREF_LOCK) {
+            return recentLocked();
+        }
+    }
+
+    private List<String> recentLocked() {
         return readJsonList(prefs.getString("recent", "[]"), MAX_RECENT);
     }
 
-    public synchronized String manualReplacement(String key) {
+    public String manualReplacement(String key) {
         key = cleanKey(key);
         if (key.isEmpty()) return "";
-        String current = safe(prefs.getString("manual:" + key, ""));
-        if (!current.isEmpty()) return current;
-        // Migracija iz 2.4 i starijih verzija.
-        String legacy = safe(prefs.getString("replacement:" + key, ""));
-        if (!legacy.isEmpty()) {
-            prefs.edit().putString("manual:" + key, legacy).remove("replacement:" + key).apply();
-            return legacy;
+        synchronized (PREF_LOCK) {
+            String current = safe(prefs.getString("manual:" + key, ""));
+            if (!current.isEmpty()) return current;
+            // Migracija iz 2.4 i starijih verzija.
+            String legacy = safe(prefs.getString("replacement:" + key, ""));
+            if (!legacy.isEmpty()) {
+                prefs.edit().putString("manual:" + key, legacy).remove("replacement:" + key).apply();
+                return legacy;
+            }
+            return "";
         }
-        return "";
     }
 
-    public synchronized void setManualReplacement(String key, String url) {
+    public void setManualReplacement(String key, String url) {
         key = cleanKey(key);
         if (key.isEmpty()) return;
-        SharedPreferences.Editor e = prefs.edit().remove("replacement:" + key);
-        url = safe(url);
-        if (url.isEmpty()) e.remove("manual:" + key);
-        else if (StreamResolver.isSafeHttp(url)) e.putString("manual:" + key, url);
-        e.apply();
+        synchronized (PREF_LOCK) {
+            SharedPreferences.Editor e = prefs.edit().remove("replacement:" + key);
+            url = safe(url);
+            if (url.isEmpty()) e.remove("manual:" + key);
+            else if (StreamResolver.isSafeHttp(url)) e.putString("manual:" + key, url);
+            e.apply();
+        }
     }
 
-    public synchronized String autoReplacement(String key) {
+    public String autoReplacement(String key) {
         key = cleanKey(key);
-        return key.isEmpty() ? "" : safe(prefs.getString("auto:" + key, ""));
+        if (key.isEmpty()) return "";
+        synchronized (PREF_LOCK) {
+            return safe(prefs.getString("auto:" + key, ""));
+        }
     }
 
-    public synchronized void setAutoReplacement(String key, String url) {
-        key = cleanKey(key);
-        if (key.isEmpty()) return;
-        url = safe(url);
-        SharedPreferences.Editor e = prefs.edit();
-        if (url.isEmpty()) e.remove("auto:" + key);
-        else if (StreamResolver.isSafeHttp(url)) e.putString("auto:" + key, url);
-        e.apply();
-    }
-
-    public synchronized void clearAutomaticSources(String key) {
+    public void setAutoReplacement(String key, String url) {
         key = cleanKey(key);
         if (key.isEmpty()) return;
-        prefs.edit().remove("auto:" + key).remove("backups:" + key).apply();
+        synchronized (PREF_LOCK) {
+            url = safe(url);
+            SharedPreferences.Editor e = prefs.edit();
+            if (url.isEmpty()) e.remove("auto:" + key);
+            else if (StreamResolver.isSafeHttp(url)) e.putString("auto:" + key, url);
+            e.apply();
+        }
     }
 
-    public synchronized List<String> backups(String key) {
+    public void clearAutomaticSources(String key) {
+        key = cleanKey(key);
+        if (key.isEmpty()) return;
+        synchronized (PREF_LOCK) {
+            prefs.edit().remove("auto:" + key).remove("backups:" + key).apply();
+        }
+    }
+
+    public List<String> backups(String key) {
         key = cleanKey(key);
         if (key.isEmpty()) return Collections.emptyList();
+        synchronized (PREF_LOCK) {
+            return backupsLocked(key);
+        }
+    }
+
+    private List<String> backupsLocked(String key) {
         return readJsonList(prefs.getString("backups:" + key, "[]"), MAX_BACKUPS);
     }
 
-    public synchronized void addBackup(String key, String url) {
+    public void addBackup(String key, String url) {
         key = cleanKey(key);
         url = safe(url);
         if (key.isEmpty() || url.isEmpty() || !StreamResolver.isSafeHttp(url)) return;
-        LinkedHashSet<String> unique = new LinkedHashSet<>();
-        unique.add(url);
-        unique.addAll(backups(key));
-        List<String> list = new ArrayList<>(unique);
-        while (list.size() > MAX_BACKUPS) list.remove(list.size() - 1);
-        prefs.edit().putString("backups:" + key, toJson(list)).apply();
+        synchronized (PREF_LOCK) {
+            LinkedHashSet<String> unique = new LinkedHashSet<>();
+            unique.add(url);
+            unique.addAll(backupsLocked(key));
+            List<String> list = new ArrayList<>(unique);
+            while (list.size() > MAX_BACKUPS) list.remove(list.size() - 1);
+            prefs.edit().putString("backups:" + key, toJson(list)).apply();
+        }
     }
 
     public int volume() { return clamp(prefs.getInt("volume", 80), 0, 100); }
