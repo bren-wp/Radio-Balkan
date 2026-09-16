@@ -123,10 +123,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           const actual = await offscreen({ type: 'STOP', sessionId: requestedSession });
           if (requestToken === commandGeneration && requestedSession === currentSessionId) {
             acceptOffscreenState(actual, { notify: true });
+            try { await chrome.offscreen.closeDocument(); } catch { }
           }
-          try { await chrome.offscreen.closeDocument(); } catch { }
         }
-        if (requestToken === commandGeneration) {
+        if (requestToken === commandGeneration && requestedSession === currentSessionId) {
           currentSessionId = null;
           lastOffscreenGeneration = -1;
           commitState({ playing: false }, true);
