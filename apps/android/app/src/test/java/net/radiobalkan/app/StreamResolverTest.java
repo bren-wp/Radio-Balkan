@@ -12,6 +12,8 @@ public final class StreamResolverTest {
                 "",
                 "file:///tmp/radio",
                 "http://localhost/live",
+                "http://localhost./live",
+                "http://radio.local./live",
                 "http://127.0.0.1/live",
                 "http://10.0.0.4/live",
                 "http://172.16.1.2/live",
@@ -22,6 +24,7 @@ public final class StreamResolverTest {
                 "http://[fc00::1]/live",
                 "http://[fe80::1]/live",
                 "https://metadata.google.internal/computeMetadata/v1/",
+                "https://metadata.google.internal./computeMetadata/v1/",
                 "https://user:pass@example.com/live"
         };
         for (String raw : rejected) {
