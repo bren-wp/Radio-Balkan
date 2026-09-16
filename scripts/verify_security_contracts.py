@@ -202,6 +202,29 @@ def main() -> None:
         "Release checksum manifest regression test OK",
     )
     require(
+        "scripts/bump_version.py",
+        "new_semver <= previous_semver",
+        "def apply_updates_transactionally(",
+        "def write_atomic(",
+        "Post-bump validation failed with exit code",
+        "README.md next bump example",
+        "docs/BUILD.md next bump example",
+        'parser.add_argument("--dry-run"',
+    )
+    require(
+        "scripts/test_version_tools.py",
+        "prepare must be read-only",
+        "non-increasing version must be rejected",
+        "failed validation must restore every original file",
+        "Version tooling regression tests OK",
+    )
+    require(
+        "scripts/check_versions.py",
+        "current GitHub release link mismatch",
+        "next bump example must be exactly",
+        "USER_AGENT must derive from VERSION",
+    )
+    require(
         ".github/workflows/ci.yml",
         "Verify browser build leaves repository clean",
         "Verify Windows build leaves repository clean",
@@ -209,6 +232,10 @@ def main() -> None:
         "python scripts/check_clean_worktree.py",
         "Test release checksum manifest",
         "python scripts/test_release_checksums.py",
+        "Test version tooling transactions",
+        "python scripts/test_version_tools.py",
+        "Validate next version bump dry-run",
+        '--dry-run',
     )
     require(
         ".github/workflows/publish.yml",
