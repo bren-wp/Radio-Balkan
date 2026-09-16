@@ -24,4 +24,12 @@ assert.equal(RBNet.safeHttp('http://[::1]/live'), false, 'IPv6 loopback must be 
 assert.equal(RBNet.safeHttp('http://[::ffff:127.0.0.1]/live'), false, 'IPv4-mapped IPv6 loopback must be rejected');
 assert.equal(RBNet.safeHttp('http://[::ffff:10.0.0.4]/live'), false, 'IPv4-mapped IPv6 private target must be rejected');
 
+assert.equal(RBNet.safeRadioBrowserBase('de1.api.radio-browser.info'), 'https://de1.api.radio-browser.info', 'trusted Radio Browser host must be accepted');
+assert.equal(RBNet.safeRadioBrowserBase('DE2.API.RADIO-BROWSER.INFO.'), 'https://de2.api.radio-browser.info', 'trusted host normalization must be deterministic');
+assert.equal(RBNet.safeRadioBrowserBase('localhost'), '', 'catalog discovery must reject localhost');
+assert.equal(RBNet.safeRadioBrowserBase('127.0.0.1'), '', 'catalog discovery must reject loopback literals');
+assert.equal(RBNet.safeRadioBrowserBase('example.com'), '', 'catalog discovery must reject unrelated public origins');
+assert.equal(RBNet.safeRadioBrowserBase('de1.api.radio-browser.info.evil.example'), '', 'catalog discovery must reject suffix-confusion hosts');
+assert.equal(RBNet.safeRadioBrowserBase('user@de1.api.radio-browser.info'), '', 'catalog discovery must reject credential-like input');
+
 console.log('Browser network safety regression tests OK');
