@@ -27,6 +27,13 @@ jobs:
         run: python scripts/verify_security_contracts.py
       - name: Test release checksum manifest
         run: python scripts/test_release_checksums.py
+      - name: Test version tooling transactions
+        run: python scripts/test_version_tools.py
+      - name: Validate next version bump dry-run
+        shell: bash
+        run: |
+          NEXT_VERSION=$(python -c "parts=list(map(int, open('VERSION', encoding='utf-8').read().strip().split('.'))); parts[2]+=1; print('.'.join(map(str, parts)))")
+          python scripts/bump_version.py "$NEXT_VERSION" --dry-run
 
   browser:
     runs-on: ubuntu-latest
