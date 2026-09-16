@@ -5,10 +5,12 @@
 Kanonska verzija nalazi se u root `VERSION` datoteci. Za novo izdanje koristi jedan sinkronizirani bump, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.13
+python scripts/bump_version.py 0.0.14
 ```
 
-Skripta sinkronizira Windows build default, Android, browser metapodatke, README i version badge te zatim pokreće `scripts/check_versions.py`. Windows produkcijski Portable i Setup dobivaju `appVersion` kroz Go linker `-X main.appVersion=$Version`, pa release bump ne prepisuje velike Win32 source datoteke samo radi verzijskog fallback stringa.
+`bump_version.py` prvo radi preflight svih verzijskih markera bez pisanja u source. Nova SemVer vrijednost mora biti strogo veća od trenutačne, Android `versionCode` mora rasti, a README i ovaj BUILD vodič automatski dobivaju sljedeći patch primjer. Stvarni write koristi atomske replace operacije; ako završni `scripts/check_versions.py` validator padne, alat vraća sve originalne datoteke. Za provjeru bez promjena koristi `--dry-run`.
+
+Skripta sinkronizira Windows build default, Android, browser metapodatke, README, BUILD primjer i version badge. Windows produkcijski Portable i Setup dobivaju `appVersion` kroz Go linker `-X main.appVersion=$Version`, pa release bump ne prepisuje velike Win32 source datoteke samo radi verzijskog fallback stringa.
 
 ## Windows
 
@@ -53,6 +55,6 @@ Provjera ruši pipeline ako build promijeni tracked source ili ostavi neignorira
 
 ## CI i release provjere
 
-Prije promocije na `main` GitHub CI provodi sinkronizaciju verzija, `scripts/verify_security_contracts.py`, izvršne browser popup i Firefox player regression testove, browser build, Windows test/vet/build, PowerShell AST provjeru screenshot capture skripte i Android unit testove + release lint/build. Svaki platform build mora završiti s čistim repository workspaceom. Commitovi koji mijenjaju samo generirane `assets/screenshots/**` PNG datoteke preskaču puni multi-platform CI jer su sami screenshot capture koraci već provjereni u zasebnom workflowu.
+Prije promocije na `main` GitHub CI provodi sinkronizaciju verzija, `scripts/verify_security_contracts.py`, `scripts/test_release_checksums.py`, transactional/rollback test version alata, real-repository next-version `--dry-run`, izvršne browser popup i Firefox player regression testove, browser build, Windows test/vet/build, PowerShell AST provjeru screenshot capture skripte i Android unit testove + release lint/build. Svaki platform build mora završiti s čistim repository workspaceom. Commitovi koji mijenjaju samo generirane `assets/screenshots/**` PNG datoteke preskaču puni multi-platform CI jer su sami screenshot capture koraci već provjereni u zasebnom workflowu.
 
-Publish workflow ponovno gradi Windows, browser i Android artefakte, provjerava clean-worktree invariant, generira SHA-256 manifest i odmah ga validira s `sha256sum -c` prije GitHub Release uploada. Browser screenshot runtime nalazi se izvan `extensions/` i koristi se samo u privremenoj preview kopiji tijekom `Product screenshots` workflowa; produkcijski browser ZIP-ovi ga ne sadrže.
+Publish workflow ponovno gradi Windows, browser i Android artefakte, provjerava clean-worktree invariant, generira deterministički SHA-256 manifest koji ne može uključiti samoga sebe i odmah ga validira s `sha256sum -c` prije GitHub Release uploada. Browser screenshot runtime nalazi se izvan `extensions/` i koristi se samo u privremenoj preview kopiji tijekom `Product screenshots` workflowa; produkcijski browser ZIP-ovi ga ne sadrže.

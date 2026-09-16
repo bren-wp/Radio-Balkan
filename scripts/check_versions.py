@@ -32,7 +32,6 @@ def main() -> int:
         return 1
     following = next_patch(version)
     escaped = re.escape(version)
-    escaped_following = re.escape(following)
 
     checks = {
         "apps/windows/build-release.ps1": (rf'\$Version\s*=\s*"{escaped}"', "version mismatch"),

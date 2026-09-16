@@ -1,5 +1,26 @@
 # Izdavanja
 
+## 0.0.13
+
+Izdanje 0.0.13 završava hardening release/version automatizacije bez nepotrebnih promjena runtime ponašanja Windows, Android ili browser klijenata.
+
+- `scripts/bump_version.py` sada zahtijeva strogo rastući numerički SemVer i odbija ponavljanje iste verzije ili downgrade prije bilo kakvog writea
+- Android `versionCode` i dalje mora strogo rasti; zadana vrijednost automatski je prethodna + 1
+- version bump radi preflight svih target datoteka i markera u memoriji prije izmjene sourcea, pa nedostajući ili duplicirani marker ne može ostaviti polovično ažuriran repository
+- writeovi se izvode atomskim privremenim datotekama i `os.replace`, bez djelomično zapisanih verzijskih datoteka
+- ako završni `scripts/check_versions.py` validator ne prođe, transactional rollback vraća sve prethodne sadržaje i uklanja `.version-tmp` ostatke
+- dodan je `--dry-run` koji nad stvarnim repozitorijem provjerava cijeli budući bump bez pisanja datoteka
+- README i `docs/BUILD.md` automatski dobivaju sljedeći patch primjer, pa dokumentacija više ne ostaje na upravo izdanoj verziji
+- `scripts/check_versions.py` sada provjerava točan GitHub Release link, release heading, jedinstveni next-patch primjer u README/BUILD dokumentaciji, Android metadata/User-Agent vezu, browser verziju i version badge sadržaj
+- dodan je izvršni `scripts/test_version_tools.py` koji provjerava normalan bump, Android versionCode, downgrade rejection, `--dry-run` logiku, rollback nakon simuliranog validator failurea i uklanjanje privremenih datoteka
+- CI uz fixture regression test izvršava i real-repository next-version `--dry-run`, tako da promjena stvarnog README/BUILD/metadata formata odmah otkriva neusklađen version tooling
+- security-contract verifier zaključava transactional version-tooling, dry-run i pripadajuće CI korake
+- checksum generator iz 0.0.12 ostaje determinističan, ne uključuje vlastiti manifest i i dalje se prije objave neovisno verificira s `sha256sum -c`
+- Windows, Android i browser buildovi i dalje moraju završiti s čistim repository workspaceom prije promocije i objave
+- nisu uvedene nove browser dozvole, telemetry komponente, runtime ovisnosti ni user-facing rebranding postavke
+
+Izdanje je fokusirano na predvidljiv i obnovljiv release proces: verzijski bump mora ili završiti potpuno i proći validaciju ili vratiti repository u početno stanje.
+
 ## 0.0.12
 
 Izdanje 0.0.12 proširuje reproducibilnost iz Windows builda na cijeli cross-platform CI/release lanac i dodaje eksplicitnu verifikaciju release checksum manifesta prije objave artefakata.
