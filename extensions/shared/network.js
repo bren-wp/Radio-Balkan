@@ -12,8 +12,12 @@ const RBNet = (() => {
     return ALLOWED.has(countryCode(value));
   }
 
+  function canonicalHost(hostname) {
+    return String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '').replace(/\.+$/, '');
+  }
+
   function privateHost(hostname) {
-    const h = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+    const h = canonicalHost(hostname);
     if (!h || h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') ||
         h === 'metadata.google.internal' || h === 'instance-data.ec2.internal' || h === 'metadata.azure.internal') return true;
     if (h === '::' || h === '::1' || h === '0:0:0:0:0:0:0:1' || h.startsWith('::ffff:') ||
@@ -45,7 +49,7 @@ const RBNet = (() => {
   function safeRadioBrowserBase(raw) {
     const value = String(raw || '').trim();
     if (!value || value.length > 253 || /[\s/@?#]/.test(value)) return '';
-    const host = value.toLowerCase().replace(/\.$/, '');
+    const host = canonicalHost(value);
     if (!host.endsWith(RADIO_BROWSER_SUFFIX) || host === RADIO_BROWSER_SUFFIX.slice(1)) return '';
     const candidate = `https://${host}`;
     return safeHttp(`${candidate}/`) ? candidate : '';
