@@ -235,6 +235,13 @@
     status.textContent = `${count} od ${visible.length} prikazano · ${all.length} ukupno`;
   }
 
+  function focusStationAt(index) {
+    if (!Number.isInteger(index) || index < 0 || typeof list.querySelectorAll !== 'function') return;
+    const buttons = list.querySelectorAll('.stationPlay');
+    const target = buttons?.[index];
+    if (target && typeof target.focus === 'function') target.focus();
+  }
+
   async function play(station) {
     if (!station) return;
     const token = ++commandGeneration;
@@ -316,8 +323,10 @@
   list.addEventListener('click', event => {
     const more = event.target.closest('[data-more]');
     if (more) {
+      const previousLimit = renderLimit;
       renderLimit = Math.min(visible.length, renderLimit + PAGE);
       render();
+      if (renderLimit > previousLimit) focusStationAt(previousLimit);
       return;
     }
     const row = event.target.closest('.station');
