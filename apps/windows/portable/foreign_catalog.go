@@ -11,14 +11,15 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unsafe"
 )
 
 const (
-	foreignCatalogCode       = "INT"
-	foreignCatalogLimit      = 50
-	foreignCatalogScanLimit  = 500
-	foreignCatalogRefresh    = 30 * time.Minute
-	foreignCatalogReadyPoll  = 120 * time.Millisecond
+	foreignCatalogCode      = "INT"
+	foreignCatalogLimit     = 50
+	foreignCatalogScanLimit = 500
+	foreignCatalogRefresh   = 30 * time.Minute
+	foreignCatalogReadyPoll = 120 * time.Millisecond
 )
 
 var regionalCatalogCodes = map[string]struct{}{
@@ -63,7 +64,7 @@ func foreignCatalogSupervisor() {
 	// main assigns the App value before creating the native window. Waiting for the
 	// window therefore avoids touching App while that one-time assignment happens.
 	for {
-		if existing, _, _ := procFindWindow.Call(uintptr(unsafeUTF16(className)), 0); existing != 0 {
+		if existing, _, _ := procFindWindow.Call(uintptr(unsafe.Pointer(u16(className))), 0); existing != 0 {
 			break
 		}
 		timer := time.NewTimer(foreignCatalogReadyPoll)
@@ -91,11 +92,6 @@ func foreignCatalogSupervisor() {
 		}
 	}
 }
-
-// unsafeUTF16 is intentionally tiny and local: package main already sanitizes embedded
-// NULs in u16(), and className is a compile-time constant. Keeping this helper here
-// avoids exporting any new Win32 surface from main.go.
-func unsafeUTF16(value string) *uint16 { return u16(value) }
 
 func waitForPrimaryCatalog() {
 	for {
