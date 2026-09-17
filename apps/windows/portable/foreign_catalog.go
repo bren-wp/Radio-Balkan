@@ -18,6 +18,7 @@ const (
 	foreignCatalogCode      = "INT"
 	foreignCatalogLimit     = 50
 	foreignCatalogScanLimit = 500
+	regionalCatalogLimit    = 7000 - foreignCatalogLimit
 	foreignCatalogRefresh   = 30 * time.Minute
 	foreignCatalogReadyPoll = 120 * time.Millisecond
 )
@@ -219,6 +220,21 @@ func syncForeignCatalog() error {
 	for _, station := range old {
 		if !isForeignCatalogCode(station.CountryCode) {
 			regional = append(regional, station)
+		}
+	}
+	if len(regional) > regionalCatalogLimit {
+		regional = append([]RadioStation(nil), regional[:regionalCatalogLimit]...)
+		if playing && !isForeignCatalogCode(current.CountryCode) && currentKey != "" {
+			found := false
+			for _, station := range regional {
+				if stationKey(station) == currentKey {
+					found = true
+					break
+				}
+			}
+			if !found {
+				regional[len(regional)-1] = current
+			}
 		}
 	}
 
