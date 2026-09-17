@@ -45,4 +45,15 @@ public final class StreamResolverTest {
         assertFalse(StreamResolver.isHttp("httpsx://example.com/live"));
         assertFalse(StreamResolver.isHttp("ftp://example.com/live"));
     }
+
+    @Test
+    public void foreignRepairAcceptsOnlyNonBalkanCatalogCountry() {
+        assertTrue(StreamResolver.matchesRefreshCountry(RadioRepository.FOREIGN_CODE, "US"));
+        assertTrue(StreamResolver.matchesRefreshCountry(RadioRepository.FOREIGN_CODE, "GB"));
+        assertFalse(StreamResolver.matchesRefreshCountry(RadioRepository.FOREIGN_CODE, "HR"));
+        assertFalse(StreamResolver.matchesRefreshCountry(RadioRepository.FOREIGN_CODE, "RS"));
+        assertFalse(StreamResolver.matchesRefreshCountry(RadioRepository.FOREIGN_CODE, ""));
+        assertTrue(StreamResolver.matchesRefreshCountry("HR", "HR"));
+        assertFalse(StreamResolver.matchesRefreshCountry("HR", "US"));
+    }
 }
