@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.16" src="assets/badges/version.svg">
+  <img alt="version 0.0.17" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -19,6 +19,7 @@ Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrva
 
 - **Brz start i mali resursni otisak** — ograničeni cachevi, workeri i response limiti štite RAM i CPU.
 - **Jednostavno slušanje** — pretraga, države, žanrovi, omiljene stanice i stalni player.
+- **Strano bez zatrpavanja kataloga** — zasebna kurirana kategorija donosi do 50 popularnih stranih postaja uz regionalni katalog, uz provjeru dostupnosti, sigurnih URL-ova i deduplikaciju.
 - **Stabilniji streamovi** — timeouti, recovery i fallback putanje smanjuju zaglavljivanje na neispravnim izvorima.
 - **Privatnost po dizajnu** — nema računa, behavioral trackinga ni telemetry SDK-a.
 - **Zaključan identitet ekstenzija** — browser build namjerno odbija promjenu kanonskog brenda **Radio Balkan** i ne nudi rebranding postavke.
@@ -52,7 +53,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.16 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.16):
+Gotovi v0.0.17 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.17):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -92,7 +93,7 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.17
+python scripts/bump_version.py 0.0.18
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.
