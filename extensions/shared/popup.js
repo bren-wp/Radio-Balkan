@@ -3,6 +3,11 @@
   const $ = id => document.getElementById(id);
   const ext = RB.ext;
   const PAGE = 48;
+  const GENRE_LABELS = new Map([
+    ['domaca', 'Domaća / regionalna'], ['pop', 'Pop & Rock'], ['folk', 'Narodna / Folk'],
+    ['electronic', 'Elektronička'], ['jazz', 'Jazz'], ['classical', 'Klasična'],
+    ['news', 'Vijesti & Talk'], ['hits', 'Hits / Top 40'], ['oldies', 'Oldies']
+  ]);
   let all = [];
   let visible = [];
   let current = null;
@@ -21,16 +26,52 @@
 
   const search = $('search');
   const country = $('country');
+  const genre = $('genre');
   const list = $('stations');
   const status = $('status');
   const refresh = $('refresh');
 
+  function stationCountry(station) {
+    if (station?.countrycode === RB.FOREIGN_CODE) return station.country ? `Strano · ${station.country}` : 'Strano';
+    return station?.country || station?.countrycode || '';
+  }
+
   function stationMeta(station) {
     return [
-      station.country || station.countrycode,
+      stationCountry(station),
       String(station.tags || '').split(',').map(x => x.trim()).find(x => x.length > 1 && x.length < 20),
       station.bitrate ? `${station.bitrate} kbps` : station.codec
     ].filter(Boolean).join(' · ');
+  }
+
+  function foldedStation(station) {
+    return RB.fold(`${station.name} ${station.country} ${station.state} ${station.tags} ${station.language} ${station.codec}`);
+  }
+
+  function containsAny(value, words) {
+    return words.some(word => value.includes(RB.fold(word)));
+  }
+
+  function matchesGenre(station, selected) {
+    if (!selected) return true;
+    const value = foldedStation(station);
+    switch (selected) {
+      case 'domaca': return station.countrycode !== RB.FOREIGN_CODE && containsAny(value, ['domaca','domaća','balkan','ex yu','ex-yu','regional','croatian','hrvatska']);
+      case 'pop': return containsAny(value, ['pop','rock','indie','alternative']);
+      case 'folk': return containsAny(value, ['folk','narodna','narodno','turbo folk','sevdah','sevdalinka','etno','krajiska','krajiska']);
+      case 'electronic': return containsAny(value, ['electronic','dance','house','techno','edm','trance','club']);
+      case 'jazz': return containsAny(value, ['jazz','blues','soul']);
+      case 'classical': return containsAny(value, ['classical','klasicna','klasična','opera','symphony']);
+      case 'news': return containsAny(value, ['news','talk','informativni','vijesti','speech','spoken']);
+      case 'hits': return containsAny(value, ['hits','top 40','top40','charts','chart','current hits']);
+      case 'oldies': return containsAny(value, ['oldies','retro','60s','70s','80s','90s','classic hits']);
+      default: return value.includes(RB.fold(selected));
+    }
+  }
+
+  function primaryCategory(station) {
+    for (const [value, label] of GENRE_LABELS) if (matchesGenre(station, value)) return label;
+    return station.countrycode === RB.FOREIGN_CODE ? 'Strana postaja' : 'Radio uživo';
   }
 
   function initials(name) {
@@ -47,9 +88,7 @@
   function rememberRetiredEpoch(epoch) {
     if (!epoch) return;
     retiredEpochs.add(epoch);
-    while (retiredEpochs.size > 8) {
-      retiredEpochs.delete(retiredEpochs.values().next().value);
-    }
+    while (retiredEpochs.size > 8) retiredEpochs.delete(retiredEpochs.values().next().value);
   }
 
   function acceptStateEnvelope(value, allowEpochChange = false) {
@@ -57,7 +96,6 @@
     const epoch = String(value.epoch || '');
     const revision = Number(value.revision);
     if (!epoch || !Number.isInteger(revision) || revision < 0 || retiredEpochs.has(epoch)) return false;
-
     if (!stateEpoch) {
       stateEpoch = epoch;
       lastRevision = -1;
@@ -67,7 +105,6 @@
       stateEpoch = epoch;
       lastRevision = -1;
     }
-
     if (revision < lastRevision) return false;
     lastRevision = revision;
     return true;
@@ -120,12 +157,14 @@
     country.replaceChildren();
     const allOption = document.createElement('option');
     allOption.value = '';
-    allOption.textContent = `Sve zemlje · ${all.length}`;
+    allOption.textContent = `Sve postaje · ${all.length}`;
     country.append(allOption);
     for (const [code, name] of RB.COUNTRIES) {
+      const count = counts.get(code) || 0;
+      if (code === RB.FOREIGN_CODE && !count) continue;
       const option = document.createElement('option');
       option.value = code;
-      option.textContent = `${name} · ${counts.get(code) || 0}`;
+      option.textContent = `${name} · ${count}`;
       country.append(option);
     }
     country.value = RB.COUNTRIES.some(([code]) => code === previous) ? previous : '';
@@ -134,10 +173,12 @@
   function apply() {
     const q = RB.fold(search.value);
     const selectedCountry = country.value;
+    const selectedGenre = genre?.value || '';
     visible = all.filter(station =>
       (!selectedCountry || station.countrycode === selectedCountry) &&
+      matchesGenre(station, selectedGenre) &&
       (!favoritesOnly || favs[RB.key(station)]) &&
-      (!q || RB.fold(`${station.name} ${station.country} ${station.countrycode} ${station.state} ${station.tags} ${station.language}`).includes(q))
+      (!q || foldedStation(station).includes(q))
     );
     renderLimit = PAGE;
     render();
@@ -161,8 +202,8 @@
       image.referrerPolicy = 'no-referrer';
       image.loading = 'lazy';
       image.decoding = 'async';
-      image.width = 58;
-      image.height = 58;
+      image.width = 56;
+      image.height = 56;
       const fallback = document.createElement('span');
       fallback.className = 'fallback';
       fallback.textContent = initials(station.name);
@@ -183,7 +224,7 @@
     const meta = document.createElement('span');
     meta.textContent = stationMeta(station);
     const hint = document.createElement('em');
-    hint.textContent = favs[key] ? '♥ Omiljena' : 'Radio uživo';
+    hint.textContent = favs[key] ? '♥ Omiljena' : primaryCategory(station);
     copy.append(name, meta, hint);
 
     const play = document.createElement('button');
@@ -220,7 +261,7 @@
     if (!shown.length) {
       const empty = document.createElement('div');
       empty.className = 'empty';
-      empty.textContent = favoritesOnly ? 'Još nema omiljenih stanica.' : 'Nema stanica za ovaj prikaz.';
+      empty.textContent = favoritesOnly ? 'Još nema omiljenih stanica za ovaj prikaz.' : 'Nema stanica za odabranu kombinaciju filtera.';
       fragment.append(empty);
     } else if (visible.length > renderLimit) {
       const more = document.createElement('button');
@@ -232,7 +273,10 @@
     }
     list.replaceChildren(fragment);
     const count = Math.min(renderLimit, visible.length);
-    status.textContent = `${count} od ${visible.length} prikazano · ${all.length} ukupno`;
+    const activeArea = country.value ? country.options?.[country.selectedIndex]?.textContent?.split(' · ')[0] : '';
+    const activeGenre = genre?.value ? GENRE_LABELS.get(genre.value) : '';
+    const context = [activeArea, activeGenre].filter(Boolean).join(' · ');
+    status.textContent = `${count} od ${visible.length} prikazano${context ? ` · ${context}` : ''}`;
   }
 
   function focusStationAt(index) {
@@ -301,8 +345,14 @@
     $('playerState').textContent = playerStatus;
     $('playerName').textContent = station ? station.name : 'Nije odabrano';
     $('playerMeta').textContent = station ? stationMeta(station) : 'Odaberi stanicu';
-    $('heroName').textContent = station ? station.name : (all[0]?.name || 'Radio Balkan');
-    $('heroMeta').textContent = station ? stationMeta(station) : `${all.length || '600+'} stanica iz Hrvatske i regije`;
+    $('heroName').textContent = station ? station.name : (visible[0]?.name || all[0]?.name || 'Radio Balkan');
+    if (station) {
+      $('heroMeta').textContent = stationMeta(station);
+    } else {
+      const foreign = all.filter(item => item.countrycode === RB.FOREIGN_CODE).length;
+      const regional = all.length - foreign;
+      $('heroMeta').textContent = `${regional} regionalnih · ${foreign} stranih postaja`;
+    }
     const playerLogo = $('playerLogo');
     playerLogo.onerror = null;
     playerLogo.src = station?.logo && RB.safeHttp(station.logo) ? station.logo : 'icon48.png';
@@ -311,7 +361,7 @@
     $('playerToggle').disabled = !station;
     $('playerToggle').setAttribute('aria-label', playing ? 'Pauziraj' : 'Pokreni');
     $('heroPlay').textContent = playing && station ? 'Ⅱ Pauziraj' : '▶ Slušaj';
-    $('heroPlay').disabled = !station;
+    $('heroPlay').disabled = !station && !visible.length;
     const key = station ? RB.key(station) : '';
     const favorite = !!(key && favs[key]);
     $('playerFav').textContent = favorite ? '♥' : '♡';
@@ -340,6 +390,7 @@
     searchTimer = setTimeout(apply, 130);
   });
   country.addEventListener('change', apply);
+  genre?.addEventListener('change', apply);
   refresh.addEventListener('click', () => void load(true));
   $('heroPlay').addEventListener('click', () => void toggle());
   $('playerToggle').addEventListener('click', () => void toggle());

@@ -27,6 +27,13 @@ assert.equal(RBNet.safeHttp('http://localhost./live'), false, 'trailing-dot loca
 assert.equal(RBNet.safeHttp('https://metadata.google.internal./computeMetadata/v1/'), false, 'trailing-dot metadata host must be rejected');
 assert.equal(RBNet.safeHttp('http://radio.local./live'), false, 'trailing-dot local-domain target must be rejected');
 
+assert.equal(RBNet.allowedCountry('HR'), true, 'supported Balkan station must remain playable');
+assert.equal(RBNet.allowedCountry('INT'), true, 'curated foreign group must be playable');
+assert.equal(RBNet.allowedCountry('US'), false, 'arbitrary external country code must not bypass curated foreign selection');
+assert.equal(RBNet.validStation({ countrycode: 'INT', url: 'https://example.com/live' }), true, 'curated foreign station with a safe stream must be accepted');
+assert.equal(RBNet.validStation({ countrycode: 'US', url: 'https://example.com/live' }), false, 'unmapped foreign station must still be rejected');
+assert.equal(RBNet.validStation({ countrycode: 'INT', url: 'http://localhost./live' }), false, 'foreign grouping must never weaken URL safety');
+
 assert.equal(RBNet.safeRadioBrowserBase('de1.api.radio-browser.info'), 'https://de1.api.radio-browser.info', 'trusted Radio Browser host must be accepted');
 assert.equal(RBNet.safeRadioBrowserBase('DE2.API.RADIO-BROWSER.INFO.'), 'https://de2.api.radio-browser.info', 'trusted host normalization must be deterministic');
 assert.equal(RBNet.safeRadioBrowserBase('de2.api.radio-browser.info..'), 'https://de2.api.radio-browser.info', 'multiple trailing dots must canonicalize deterministically');

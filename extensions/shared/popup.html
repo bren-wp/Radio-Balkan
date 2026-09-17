@@ -14,7 +14,7 @@
         <img src="icon48.png" alt="" width="40" height="40">
         <div class="brandCopy">
           <strong>Radio Balkan</strong>
-          <span>7 zemalja · radio uživo</span>
+          <span>Balkan + 50 stranih · radio uživo</span>
         </div>
       </div>
       <button id="refresh" class="iconButton" type="button" aria-label="Osvježi katalog" title="Osvježi katalog">↻</button>
@@ -24,7 +24,7 @@
       <div class="heroCopy">
         <span class="liveBadge"><i></i> UŽIVO</span>
         <h1 id="heroName">Odaberi stanicu</h1>
-        <p id="heroMeta">Radio iz Hrvatske i regije</p>
+        <p id="heroMeta">Radio iz regije i odabrane svjetske postaje</p>
       </div>
       <button id="heroPlay" class="primaryButton" type="button" disabled>▶ Slušaj</button>
     </section>
@@ -32,15 +32,33 @@
     <section class="tools" aria-label="Pretraživanje i filtriranje">
       <label class="searchField" aria-label="Pretraži radio stanice">
         <span aria-hidden="true">⌕</span>
-        <input id="search" type="search" placeholder="Pretraži stanice, gradove, žanrove…" autocomplete="off" spellcheck="false">
+        <input id="search" type="search" placeholder="Pretraži naziv, grad, žanr ili zemlju…" autocomplete="off" spellcheck="false">
       </label>
-      <select id="country" aria-label="Filtriraj po državi">
-        <option value="">Sve zemlje</option>
-      </select>
+      <label class="selectField">
+        <span>Područje</span>
+        <select id="country" aria-label="Filtriraj po području">
+          <option value="">Sve postaje</option>
+        </select>
+      </label>
+      <label class="selectField">
+        <span>Kategorija</span>
+        <select id="genre" aria-label="Filtriraj po kategoriji">
+          <option value="">Sve kategorije</option>
+          <option value="domaca">Domaća / regionalna</option>
+          <option value="pop">Pop &amp; Rock</option>
+          <option value="folk">Narodna / Folk</option>
+          <option value="electronic">Elektronička</option>
+          <option value="jazz">Jazz</option>
+          <option value="classical">Klasična</option>
+          <option value="news">Vijesti &amp; Talk</option>
+          <option value="hits">Hits / Top 40</option>
+          <option value="oldies">Oldies</option>
+        </select>
+      </label>
     </section>
 
     <div class="summary">
-      <span id="status" role="status" aria-live="polite">Učitavam stanice…</span>
+      <span id="status" role="status" aria-live="polite">Učitavam provjerene postaje…</span>
       <button id="favoritesOnly" class="textButton" type="button" aria-pressed="false">♡ Omiljene</button>
     </div>
 

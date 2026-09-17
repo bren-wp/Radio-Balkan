@@ -1,7 +1,8 @@
 'use strict';
 
 const RBNet = (() => {
-  const ALLOWED = new Set(['HR', 'BA', 'RS', 'SI', 'MK', 'AL', 'ME']);
+  const FOREIGN_CODE = 'INT';
+  const ALLOWED = new Set(['HR', 'BA', 'RS', 'SI', 'MK', 'AL', 'ME', FOREIGN_CODE]);
   const RADIO_BROWSER_SUFFIX = '.api.radio-browser.info';
 
   function countryCode(value) {
@@ -66,5 +67,5 @@ const RBNet = (() => {
     return !!station && allowedCountry(station.countrycode) && candidateUrls(station).length > 0;
   }
 
-  return Object.freeze({ allowedCountry, safeHttp, safeRadioBrowserBase, candidateUrls, validStation });
+  return Object.freeze({ FOREIGN_CODE, allowedCountry, safeHttp, safeRadioBrowserBase, candidateUrls, validStation });
 })();

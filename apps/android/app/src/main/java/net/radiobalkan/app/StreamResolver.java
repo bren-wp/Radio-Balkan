@@ -172,6 +172,16 @@ public final class StreamResolver {
         return unique(out, 16);
     }
 
+    static boolean matchesRefreshCountry(String requestedCountry, String actualCountry) {
+        String requested = safe(requestedCountry).toUpperCase(Locale.ROOT);
+        String actual = safe(actualCountry).toUpperCase(Locale.ROOT);
+        if (requested.isEmpty() || actual.isEmpty()) return false;
+        if (RadioRepository.FOREIGN_CODE.equals(requested)) {
+            return !RadioRepository.isSupportedCountry(actual);
+        }
+        return requested.equals(actual) && RadioRepository.isSupportedCountry(actual);
+    }
+
     public static List<String> refreshByUuid(String stationUuid, String countryCode) {
         List<String> out = new ArrayList<>();
         stationUuid = safe(stationUuid);
@@ -182,8 +192,12 @@ public final class StreamResolver {
             try {
                 URL u = new URL(base + "/json/stations/byuuid/" + stationUuid);
                 c = (HttpURLConnection) u.openConnection();
-                c.setConnectTimeout(5000); c.setReadTimeout(7000); c.setUseCaches(false); c.setInstanceFollowRedirects(false);
-                c.setRequestProperty("User-Agent", USER_AGENT); c.setRequestProperty("Accept", "application/json");
+                c.setConnectTimeout(5000);
+                c.setReadTimeout(7000);
+                c.setUseCaches(false);
+                c.setInstanceFollowRedirects(false);
+                c.setRequestProperty("User-Agent", USER_AGENT);
+                c.setRequestProperty("Accept", "application/json");
                 int status = c.getResponseCode();
                 if (status < 200 || status >= 300) continue;
                 String json = readLimited(c, 512 * 1024);
@@ -192,7 +206,7 @@ public final class StreamResolver {
                     JSONObject o = a.optJSONObject(i);
                     if (o == null) continue;
                     String actualCountry = safe(o.optString("countrycode", "")).toUpperCase(Locale.ROOT);
-                    if (!countryCode.equals(actualCountry)) continue;
+                    if (!matchesRefreshCountry(countryCode, actualCountry)) continue;
                     String r = safe(o.optString("url_resolved", ""));
                     String raw = safe(o.optString("url", ""));
                     if (isSafeHttp(r)) out.add(r);
@@ -216,8 +230,12 @@ public final class StreamResolver {
         try {
             URL requested = new URL(homepage);
             c = (HttpURLConnection) requested.openConnection();
-            c.setConnectTimeout(6000); c.setReadTimeout(8000); c.setUseCaches(false); c.setInstanceFollowRedirects(false);
-            c.setRequestProperty("User-Agent", USER_AGENT); c.setRequestProperty("Accept", "text/html,*/*;q=0.5");
+            c.setConnectTimeout(6000);
+            c.setReadTimeout(8000);
+            c.setUseCaches(false);
+            c.setInstanceFollowRedirects(false);
+            c.setRequestProperty("User-Agent", USER_AGENT);
+            c.setRequestProperty("Accept", "text/html,*/*;q=0.5");
             int status = c.getResponseCode();
             if (isRedirect(status)) {
                 String location = safe(c.getHeaderField("Location"));
@@ -256,8 +274,8 @@ public final class StreamResolver {
             int n;
             while ((n = in.read(buf)) > 0) {
                 int remaining = limit - out.size();
-                if (remaining <= 0) break;
-                out.write(buf, 0, Math.min(n, remaining));
+                if (remaining <= 0 || n > remaining) throw new IllegalStateException("Odgovor je prevelik");
+                out.write(buf, 0, n);
             }
             return out.toString(StandardCharsets.UTF_8.name());
         }
@@ -284,7 +302,6 @@ public final class StreamResolver {
             if (host.isEmpty() || host.equals("localhost") || host.endsWith(".localhost") || host.endsWith(".local")
                     || host.equals("metadata.google.internal") || host.equals("instance-data.ec2.internal") || host.equals("metadata.azure.internal")) return false;
             if (u.getUserInfo() != null) return false;
-            // Avoid DNS lookups in the hot path. Check literal IP hosts only.
             boolean numeric = host.matches("^[0-9.]+$") || host.contains(":");
             if (numeric) {
                 InetAddress ip = InetAddress.getByName(host);

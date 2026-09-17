@@ -7,16 +7,16 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
 import java.io.InputStreamReader;
-import java.io.BufferedWriter;
+import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
-import java.net.URL;
 import java.net.URI;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -24,6 +24,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionService;
@@ -38,11 +39,16 @@ public final class RadioRepository {
         void onError(Throwable error, boolean hasCache);
     }
 
+    public static final String FOREIGN_CODE = "INT";
     public static final String[][] COUNTRIES = {
-            {"", "Sve podržane zemlje"}, {"HR", "Hrvatska"}, {"BA", "Bosna i Hercegovina"},
+            {"", "Sve postaje"}, {"HR", "Hrvatska"}, {"BA", "Bosna i Hercegovina"},
             {"RS", "Srbija"}, {"SI", "Slovenija"}, {"MK", "Sjeverna Makedonija"},
-            {"AL", "Albanija"}, {"ME", "Crna Gora"}
+            {"AL", "Albanija"}, {"ME", "Crna Gora"}, {FOREIGN_CODE, "Strano"}
     };
+
+    private static final String[] REGION_CODES = {"HR", "BA", "RS", "SI", "MK", "AL", "ME"};
+    private static final Set<String> REGION_SET = new LinkedHashSet<>();
+    static { Collections.addAll(REGION_SET, REGION_CODES); }
 
     private static final String[] FALLBACK_BASES = {
             "https://de1.api.radio-browser.info", "https://de2.api.radio-browser.info",
@@ -50,11 +56,23 @@ public final class RadioRepository {
     };
     private static final int PAGE = 250;
     private static final int MAX_PER_COUNTRY = 1800;
-    private static final int MAX_CATALOG = 7000;
-    private static final int PRODUCTION_MIN_STATIONS = 600;
+    private static final int MAX_FOREIGN = 50;
+    private static final int FOREIGN_SCAN_LIMIT = 500;
+    private static final int MAX_CATALOG = 7050;
+    private static final int PRODUCTION_MIN_REGIONAL = 600;
+    private static final int MAX_REDIRECTS = 4;
+
     private final Context context;
-    private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> { Thread t = new Thread(r, "radio-catalog"); t.setPriority(Thread.NORM_PRIORITY - 1); return t; });
-    private final ExecutorService countryPool = Executors.newFixedThreadPool(2, r -> { Thread t = new Thread(r, "radio-country"); t.setPriority(Thread.MIN_PRIORITY); return t; });
+    private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "radio-catalog");
+        t.setPriority(Thread.NORM_PRIORITY - 1);
+        return t;
+    });
+    private final ExecutorService countryPool = Executors.newFixedThreadPool(3, r -> {
+        Thread t = new Thread(r, "radio-country");
+        t.setPriority(Thread.MIN_PRIORITY);
+        return t;
+    });
     private volatile boolean closed;
     private volatile List<String> bases;
 
@@ -68,11 +86,11 @@ public final class RadioRepository {
             if (closed) return;
             if (!cached.isEmpty()) safeCached(listener, cached);
             try {
-                List<RadioStation> online = mergeMissingCountries(fetchAll(), cached);
-                if (online.size() < PRODUCTION_MIN_STATIONS && !cached.isEmpty()) {
+                List<RadioStation> online = mergeMissingGroups(fetchAll(), cached);
+                if (countRegional(online) < PRODUCTION_MIN_REGIONAL && !cached.isEmpty()) {
                     List<RadioStation> combined = new ArrayList<>(online);
                     combined.addAll(cached);
-                    online = trimCatalog(dedupe(combined));
+                    online = mergeMissingGroups(combined, cached);
                 }
                 if (closed) return;
                 if (!online.isEmpty()) {
@@ -96,23 +114,21 @@ public final class RadioRepository {
     }
 
     private List<RadioStation> fetchAll() throws Exception {
-        // CompletionService consumes each country as soon as it finishes, avoiding a
-        // large pile of completed Future results when thousands of stations are loaded.
         CompletionService<List<RadioStation>> completion = new ExecutorCompletionService<>(countryPool);
         int tasks = 0;
-        for (String[] c : COUNTRIES) {
-            if (c[0].isEmpty()) continue;
-            String code = c[0];
+        for (String code : REGION_CODES) {
             completion.submit(() -> fetchCountry(code));
             tasks++;
         }
+        completion.submit(this::fetchForeign);
+        tasks++;
+
         CatalogAccumulator unique = new CatalogAccumulator();
         Throwable first = null;
         for (int n = 0; n < tasks; n++) {
             if (closed || Thread.currentThread().isInterrupted()) break;
             try {
-                List<RadioStation> batch = completion.take().get();
-                for (RadioStation st : batch) unique.add(st);
+                for (RadioStation station : completion.take().get()) unique.add(station);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw e;
@@ -122,12 +138,7 @@ public final class RadioRepository {
             }
         }
         if (unique.size() == 0 && first != null) throw new Exception(first);
-        List<RadioStation> out = unique.values();
-        out.sort(Comparator.comparingInt((RadioStation st) -> countryPriority(st.countryCode))
-                .thenComparing(Comparator.comparingInt((RadioStation st) -> st.votes).reversed())
-                .thenComparing(st -> RadioStation.fold(st.name)));
-        if (out.size() > MAX_CATALOG) out = new ArrayList<>(out.subList(0, MAX_CATALOG));
-        return out;
+        return sortCatalog(unique.values());
     }
 
     private static final class CatalogAccumulator {
@@ -138,14 +149,14 @@ public final class RadioRepository {
         int size() { return items.size(); }
         List<RadioStation> values() { return new ArrayList<>(items); }
 
-        void add(RadioStation st) {
-            if (!isUsable(st)) return;
-            String uuid = safe(st.stationUuid);
-            String identity = identity(st);
+        void add(RadioStation station) {
+            if (!isUsable(station)) return;
+            String uuid = safe(station.stationUuid);
+            String identity = identity(station);
             Integer pos = uuid.isEmpty() ? null : byUuid.get(uuid);
             if (pos == null && !identity.isEmpty()) pos = byIdentity.get(identity);
             if (pos != null) {
-                RadioStation merged = merge(items.get(pos), st);
+                RadioStation merged = merge(items.get(pos), station);
                 items.set(pos, merged);
                 if (!safe(merged.stationUuid).isEmpty()) byUuid.put(merged.stationUuid, pos);
                 String mergedIdentity = identity(merged);
@@ -153,73 +164,72 @@ public final class RadioRepository {
                 return;
             }
             int next = items.size();
-            items.add(st);
+            items.add(station);
             if (!uuid.isEmpty()) byUuid.put(uuid, next);
             if (!identity.isEmpty()) byIdentity.put(identity, next);
         }
     }
 
-    private static boolean isUsable(RadioStation st) {
-        return st != null && !safe(st.name).isEmpty()
-                && isSupportedCountry(st.countryCode)
-                && (StreamResolver.isSafeHttp(st.url) || StreamResolver.isSafeHttp(st.urlResolved));
+    private static boolean isUsable(RadioStation station) {
+        return station != null && !safe(station.name).isEmpty()
+                && isSupportedCountry(station.countryCode)
+                && (StreamResolver.isSafeHttp(station.url) || StreamResolver.isSafeHttp(station.urlResolved));
     }
 
     public static boolean isSupportedCountry(String code) {
-        if (code == null) return false;
-        String normalized = code.trim().toUpperCase(java.util.Locale.ROOT);
-        if (normalized.isEmpty()) return false;
-        for (int i = 1; i < COUNTRIES.length; i++) {
-            if (COUNTRIES[i][0].equals(normalized)) return true;
-        }
-        return false;
+        String normalized = safe(code).toUpperCase(Locale.ROOT);
+        return FOREIGN_CODE.equals(normalized) || REGION_SET.contains(normalized);
     }
 
-    private static String safe(String v) { return v == null ? "" : v.trim(); }
+    private static boolean isRegionalCountry(String code) {
+        return REGION_SET.contains(safe(code).toUpperCase(Locale.ROOT));
+    }
 
-    private static int quality(RadioStation s) {
-        int q = Math.max(0, s.votes);
-        if (s.lastCheckOk == 1) q += 1_000_000;
-        if (StreamResolver.isSafeHttp(s.favicon)) q += 20_000;
-        if (StreamResolver.isSafeHttp(s.homepage)) q += 10_000;
-        if (StreamResolver.isSafeHttp(s.urlResolved)) q += 5_000;
-        q += Math.min(512, Math.max(0, s.bitrate));
+    private static String safe(String value) { return value == null ? "" : value.trim(); }
+
+    private static int quality(RadioStation station) {
+        int q = Math.max(0, station.votes);
+        if (station.lastCheckOk == 1) q += 1_000_000;
+        if (StreamResolver.isSafeHttp(station.favicon)) q += 20_000;
+        if (StreamResolver.isSafeHttp(station.homepage)) q += 10_000;
+        if (StreamResolver.isSafeHttp(station.urlResolved)) q += 5_000;
+        q += Math.min(512, Math.max(0, station.bitrate));
         return q;
     }
 
     private static RadioStation merge(RadioStation a, RadioStation b) {
-        RadioStation p = quality(b) > quality(a) ? b : a;
-        RadioStation o = p == a ? b : a;
-        if (safe(p.stationUuid).isEmpty()) p.stationUuid = o.stationUuid;
-        if (safe(p.name).isEmpty()) p.name = o.name;
-        if (safe(p.url).isEmpty()) p.url = o.url;
-        if (safe(p.urlResolved).isEmpty()) p.urlResolved = o.urlResolved;
-        if (safe(p.homepage).isEmpty()) p.homepage = o.homepage;
-        if (safe(p.favicon).isEmpty()) p.favicon = !safe(o.favicon).isEmpty() ? o.favicon : RadioStation.websiteIcon(p.homepage);
-        if (safe(p.tags).isEmpty()) p.tags = o.tags;
-        if (safe(p.country).isEmpty()) p.country = o.country;
-        if (safe(p.countryCode).isEmpty()) p.countryCode = o.countryCode;
-        if (safe(p.state).isEmpty()) p.state = o.state;
-        if (safe(p.language).isEmpty()) p.language = o.language;
-        if (safe(p.codec).isEmpty()) p.codec = o.codec;
-        if (p.bitrate <= 0) p.bitrate = o.bitrate;
-        p.votes = Math.max(p.votes, o.votes);
-        p.lastCheckOk = Math.max(p.lastCheckOk, o.lastCheckOk);
-        p.refreshIndexes();
-        return p;
+        RadioStation primary = quality(b) > quality(a) ? b : a;
+        RadioStation other = primary == a ? b : a;
+        if (safe(primary.stationUuid).isEmpty()) primary.stationUuid = other.stationUuid;
+        if (safe(primary.name).isEmpty()) primary.name = other.name;
+        if (safe(primary.url).isEmpty()) primary.url = other.url;
+        if (safe(primary.urlResolved).isEmpty()) primary.urlResolved = other.urlResolved;
+        if (safe(primary.homepage).isEmpty()) primary.homepage = other.homepage;
+        if (safe(primary.favicon).isEmpty()) primary.favicon = !safe(other.favicon).isEmpty() ? other.favicon : RadioStation.websiteIcon(primary.homepage);
+        if (safe(primary.tags).isEmpty()) primary.tags = other.tags;
+        if (safe(primary.country).isEmpty()) primary.country = other.country;
+        if (safe(primary.countryCode).isEmpty()) primary.countryCode = other.countryCode;
+        if (safe(primary.state).isEmpty()) primary.state = other.state;
+        if (safe(primary.language).isEmpty()) primary.language = other.language;
+        if (safe(primary.codec).isEmpty()) primary.codec = other.codec;
+        if (primary.bitrate <= 0) primary.bitrate = other.bitrate;
+        primary.votes = Math.max(primary.votes, other.votes);
+        primary.lastCheckOk = Math.max(primary.lastCheckOk, other.lastCheckOk);
+        primary.refreshIndexes();
+        return primary;
     }
 
-    private static String identity(RadioStation s) {
-        String name = RadioStation.fold(safe(s.name)).replaceAll("[^\\p{L}\\p{Nd}]", "");
-        String country = safe(s.countryCode).toUpperCase();
+    private static String identity(RadioStation station) {
+        String name = RadioStation.fold(safe(station.name)).replaceAll("[^\\p{L}\\p{Nd}]", "");
+        String country = safe(station.countryCode).toUpperCase(Locale.ROOT);
         if (name.isEmpty()) return "";
-        String home = host(s.homepage);
+        String home = host(station.homepage);
         if (!home.isEmpty()) return country + "|" + name + "|home:" + home;
-        String stream = !safe(s.urlResolved).isEmpty() ? s.urlResolved : s.url;
+        String stream = !safe(station.urlResolved).isEmpty() ? station.urlResolved : station.url;
         try {
-            URI u = URI.create(stream);
-            String h = u.getHost() == null ? "" : u.getHost().toLowerCase();
-            String path = u.getPath() == null ? "" : u.getPath().toLowerCase();
+            URI uri = URI.create(stream);
+            String h = uri.getHost() == null ? "" : uri.getHost().toLowerCase(Locale.ROOT).replaceAll("\\.+$", "");
+            String path = uri.getPath() == null ? "" : uri.getPath().toLowerCase(Locale.ROOT);
             if (!h.isEmpty()) return country + "|" + name + "|stream:" + h + path;
         } catch (Throwable ignored) { }
         return country + "|" + name;
@@ -227,17 +237,17 @@ public final class RadioRepository {
 
     private static String host(String raw) {
         try {
-            URI u = URI.create(safe(raw));
-            String h = u.getHost();
+            URI uri = URI.create(safe(raw));
+            String h = uri.getHost();
             if (h == null) return "";
-            h = h.toLowerCase();
+            h = h.toLowerCase(Locale.ROOT).replaceAll("\\.+$", "");
             return h.startsWith("www.") ? h.substring(4) : h;
         } catch (Throwable ignored) { return ""; }
     }
 
     private List<RadioStation> fetchCountry(String rawCode) throws Exception {
-        String code = rawCode == null ? "" : rawCode.trim().toUpperCase(java.util.Locale.ROOT);
-        if (!isSupportedCountry(code)) throw new IllegalArgumentException("Nepodržana država");
+        String code = safe(rawCode).toUpperCase(Locale.ROOT);
+        if (!isRegionalCountry(code)) throw new IllegalArgumentException("Nepodržana država");
         Exception last = null;
         for (String base : apiBases()) {
             if (closed) throw new InterruptedException("zatvaranje");
@@ -245,41 +255,43 @@ public final class RadioRepository {
                 List<RadioStation> out = new ArrayList<>();
                 for (int offset = 0; offset < MAX_PER_COUNTRY; offset += PAGE) {
                     if (closed || Thread.currentThread().isInterrupted()) throw new InterruptedException("zatvaranje");
-                    String u = base + "/json/stations/search?countrycode=" + code
+                    String endpoint = base + "/json/stations/search?countrycode=" + code
                             + "&hidebroken=true&order=votes&reverse=true&limit=" + PAGE + "&offset=" + offset;
-                    JSONArray arr = new JSONArray(get(u, 6 * 1024 * 1024));
-                    if (arr.length() == 0) break;
+                    JSONArray rows = new JSONArray(get(endpoint, 6 * 1024 * 1024));
+                    if (rows.length() == 0) break;
                     int accepted = 0;
-                    for (int i = 0; i < arr.length(); i++) {
-                        JSONObject o = arr.optJSONObject(i);
-                        if (o == null) continue;
-                        RadioStation station = RadioStation.fromJson(o);
-                        String actual = safe(station.countryCode).toUpperCase(java.util.Locale.ROOT);
+                    for (int i = 0; i < rows.length(); i++) {
+                        JSONObject object = rows.optJSONObject(i);
+                        if (object == null) continue;
+                        RadioStation station = RadioStation.fromJson(object);
+                        String actual = safe(station.countryCode).toUpperCase(Locale.ROOT);
                         if (actual.isEmpty()) actual = code;
                         if (!code.equals(actual)) continue;
                         station.countryCode = code;
                         if (safe(station.country).isEmpty()) station.country = countryName(code);
                         station.refreshIndexes();
-                        out.add(station);
-                        accepted++;
+                        if (isUsable(station)) {
+                            out.add(station);
+                            accepted++;
+                        }
                     }
-                    if (arr.length() < PAGE || accepted == 0) break;
+                    if (rows.length() < PAGE || accepted == 0) break;
                 }
                 if (out.isEmpty()) {
-                    String u = base + "/json/stations/bycountrycodeexact/" + code
+                    String endpoint = base + "/json/stations/bycountrycodeexact/" + code
                             + "?hidebroken=true&order=votes&reverse=true&limit=" + MAX_PER_COUNTRY;
-                    JSONArray arr = new JSONArray(get(u, 10 * 1024 * 1024));
-                    for (int i = 0; i < arr.length(); i++) {
-                        JSONObject o = arr.optJSONObject(i);
-                        if (o == null) continue;
-                        RadioStation station = RadioStation.fromJson(o);
-                        String actual = safe(station.countryCode).toUpperCase(java.util.Locale.ROOT);
+                    JSONArray rows = new JSONArray(get(endpoint, 10 * 1024 * 1024));
+                    for (int i = 0; i < rows.length(); i++) {
+                        JSONObject object = rows.optJSONObject(i);
+                        if (object == null) continue;
+                        RadioStation station = RadioStation.fromJson(object);
+                        String actual = safe(station.countryCode).toUpperCase(Locale.ROOT);
                         if (actual.isEmpty()) actual = code;
                         if (!code.equals(actual)) continue;
                         station.countryCode = code;
                         if (safe(station.country).isEmpty()) station.country = countryName(code);
                         station.refreshIndexes();
-                        out.add(station);
+                        if (isUsable(station)) out.add(station);
                     }
                 }
                 if (!out.isEmpty()) return dedupe(out);
@@ -293,28 +305,85 @@ public final class RadioRepository {
         throw last == null ? new IllegalStateException("API nije dostupan") : last;
     }
 
-    private List<RadioStation> mergeMissingCountries(List<RadioStation> online, List<RadioStation> cached) {
-        LinkedHashSet<String> present = new LinkedHashSet<>();
+    private List<RadioStation> fetchForeign() throws Exception {
+        Exception last = null;
+        for (String base : apiBases()) {
+            if (closed) throw new InterruptedException("zatvaranje");
+            try {
+                String endpoint = base + "/json/stations/search?hidebroken=true&order=votes&reverse=true&limit=" + FOREIGN_SCAN_LIMIT;
+                JSONArray rows = new JSONArray(get(endpoint, 10 * 1024 * 1024));
+                List<RadioStation> out = new ArrayList<>();
+                for (int i = 0; i < rows.length(); i++) {
+                    JSONObject object = rows.optJSONObject(i);
+                    if (object == null) continue;
+                    RadioStation station = RadioStation.fromJson(object);
+                    String originalCode = safe(station.countryCode).toUpperCase(Locale.ROOT);
+                    if (originalCode.isEmpty() || isRegionalCountry(originalCode) || station.lastCheckOk != 1) continue;
+                    if (!StreamResolver.isSafeHttp(station.url) && !StreamResolver.isSafeHttp(station.urlResolved)) continue;
+                    station.countryCode = FOREIGN_CODE;
+                    if (safe(station.country).isEmpty()) station.country = "Strana postaja";
+                    station.refreshIndexes();
+                    out.add(station);
+                }
+                out = dedupe(out);
+                out.sort(Comparator.comparingInt((RadioStation station) -> station.votes).reversed()
+                        .thenComparing(station -> RadioStation.fold(station.name)));
+                if (out.size() > MAX_FOREIGN) out = new ArrayList<>(out.subList(0, MAX_FOREIGN));
+                if (!out.isEmpty()) return out;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw e;
+            } catch (Exception e) {
+                last = e;
+            }
+        }
+        if (last != null) throw last;
+        return Collections.emptyList();
+    }
+
+    private List<RadioStation> mergeMissingGroups(List<RadioStation> online, List<RadioStation> cached) {
+        Set<String> present = new LinkedHashSet<>();
         CatalogAccumulator merged = new CatalogAccumulator();
         if (online != null) {
             for (RadioStation station : online) {
                 if (!isUsable(station)) continue;
-                present.add(station.countryCode.toUpperCase(java.util.Locale.ROOT));
+                present.add(safe(station.countryCode).toUpperCase(Locale.ROOT));
                 merged.add(station);
             }
         }
         if (cached != null) {
             for (RadioStation station : cached) {
                 if (!isUsable(station)) continue;
-                String code = station.countryCode.toUpperCase(java.util.Locale.ROOT);
+                String code = safe(station.countryCode).toUpperCase(Locale.ROOT);
                 if (!present.contains(code)) merged.add(station);
             }
         }
-        List<RadioStation> out = merged.values();
-        out.sort(Comparator.comparingInt((RadioStation station) -> countryPriority(station.countryCode))
+        return sortCatalog(merged.values());
+    }
+
+    private static List<RadioStation> sortCatalog(List<RadioStation> input) {
+        List<RadioStation> regional = new ArrayList<>();
+        List<RadioStation> foreign = new ArrayList<>();
+        for (RadioStation station : input) {
+            if (!isUsable(station)) continue;
+            if (FOREIGN_CODE.equalsIgnoreCase(station.countryCode)) foreign.add(station);
+            else regional.add(station);
+        }
+        regional.sort(Comparator.comparingInt((RadioStation station) -> countryPriority(station.countryCode))
                 .thenComparing(Comparator.comparingInt((RadioStation station) -> station.votes).reversed())
                 .thenComparing(station -> RadioStation.fold(station.name)));
-        return trimCatalog(out);
+        foreign.sort(Comparator.comparingInt((RadioStation station) -> station.votes).reversed()
+                .thenComparing(station -> RadioStation.fold(station.name)));
+        if (regional.size() > MAX_CATALOG - MAX_FOREIGN) regional = new ArrayList<>(regional.subList(0, MAX_CATALOG - MAX_FOREIGN));
+        if (foreign.size() > MAX_FOREIGN) foreign = new ArrayList<>(foreign.subList(0, MAX_FOREIGN));
+        regional.addAll(foreign);
+        return regional;
+    }
+
+    private static int countRegional(List<RadioStation> stations) {
+        int count = 0;
+        for (RadioStation station : stations) if (station != null && isRegionalCountry(station.countryCode)) count++;
+        return count;
     }
 
     private List<String> apiBases() {
@@ -324,11 +393,14 @@ public final class RadioRepository {
             if (bases != null && !bases.isEmpty()) return bases;
             LinkedHashSet<String> found = new LinkedHashSet<>();
             try {
-                JSONArray a = new JSONArray(get("https://all.api.radio-browser.info/json/servers", 512 * 1024));
-                for (int i = 0; i < a.length() && found.size() < 8; i++) {
-                    JSONObject o = a.optJSONObject(i);
-                    String name = o == null ? "" : o.optString("name", "").trim();
-                    if (!name.isEmpty()) found.add("https://" + name);
+                JSONArray rows = new JSONArray(get("https://all.api.radio-browser.info/json/servers", 512 * 1024));
+                for (int i = 0; i < rows.length() && found.size() < 8; i++) {
+                    JSONObject object = rows.optJSONObject(i);
+                    String name = object == null ? "" : object.optString("name", "").trim();
+                    if (!name.isEmpty()) {
+                        String candidate = "https://" + name;
+                        if (isTrustedApiUrl(candidate)) found.add(candidate);
+                    }
                 }
             } catch (Throwable ignored) { }
             Collections.addAll(found, FALLBACK_BASES);
@@ -338,39 +410,50 @@ public final class RadioRepository {
     }
 
     private String get(String raw, int maxBytes) throws Exception {
-        if (!isTrustedApiUrl(raw)) throw new IllegalArgumentException("Nedopušten API URL");
-        HttpURLConnection c = (HttpURLConnection) new URL(raw).openConnection();
-        c.setConnectTimeout(7000);
-        c.setReadTimeout(14000);
-        c.setRequestProperty("User-Agent", AppInfo.USER_AGENT);
-        c.setRequestProperty("Accept", "application/json");
-        c.setInstanceFollowRedirects(true);
-        c.setUseCaches(false);
-        try {
-            int code = c.getResponseCode();
-            if (code < 200 || code >= 310) throw new IllegalStateException("HTTP " + code);
-            if (!isTrustedApiUrl(c.getURL().toString())) throw new IllegalStateException("Nedopušteno API preusmjeravanje");
-            try (BufferedInputStream in = new BufferedInputStream(c.getInputStream()); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-                byte[] buf = new byte[16384];
-                int n;
-                while ((n = in.read(buf)) > 0) {
-                    int remaining = maxBytes - out.size();
-                    if (remaining <= 0) throw new IllegalStateException("Odgovor je prevelik");
-                    out.write(buf, 0, Math.min(n, remaining));
-                    if (n > remaining) throw new IllegalStateException("Odgovor je prevelik");
+        String current = raw;
+        for (int hop = 0; hop <= MAX_REDIRECTS; hop++) {
+            if (!isTrustedApiUrl(current)) throw new IllegalArgumentException("Nedopušten API URL");
+            HttpURLConnection connection = (HttpURLConnection) new URL(current).openConnection();
+            connection.setConnectTimeout(7000);
+            connection.setReadTimeout(14000);
+            connection.setRequestProperty("User-Agent", AppInfo.USER_AGENT);
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setInstanceFollowRedirects(false);
+            connection.setUseCaches(false);
+            try {
+                int code = connection.getResponseCode();
+                if (code >= 300 && code < 400) {
+                    String location = connection.getHeaderField("Location");
+                    if (location == null || location.trim().isEmpty()) throw new IllegalStateException("API preusmjeravanje bez lokacije");
+                    current = new URL(connection.getURL(), location).toString();
+                    if (!isTrustedApiUrl(current)) throw new IllegalStateException("Nedopušteno API preusmjeravanje");
+                    continue;
                 }
-                return out.toString(StandardCharsets.UTF_8.name());
+                if (code < 200 || code >= 300) throw new IllegalStateException("HTTP " + code);
+                try (BufferedInputStream in = new BufferedInputStream(connection.getInputStream());
+                     ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                    byte[] buffer = new byte[16384];
+                    int n;
+                    while ((n = in.read(buffer)) > 0) {
+                        int remaining = maxBytes - out.size();
+                        if (remaining <= 0 || n > remaining) throw new IllegalStateException("Odgovor je prevelik");
+                        out.write(buffer, 0, n);
+                    }
+                    return out.toString(StandardCharsets.UTF_8.name());
+                }
+            } finally {
+                connection.disconnect();
             }
-        } finally {
-            c.disconnect();
         }
+        throw new IllegalStateException("Previše API preusmjeravanja");
     }
 
     private static boolean isTrustedApiUrl(String raw) {
         try {
-            URL u = new URL(raw);
-            if (!"https".equalsIgnoreCase(u.getProtocol())) return false;
-            String host = u.getHost() == null ? "" : u.getHost().toLowerCase();
+            URL url = new URL(raw);
+            if (!"https".equalsIgnoreCase(url.getProtocol())) return false;
+            if (url.getUserInfo() != null) return false;
+            String host = url.getHost() == null ? "" : url.getHost().toLowerCase(Locale.ROOT).replaceAll("\\.+$", "");
             return host.equals("api.radio-browser.info") || host.endsWith(".api.radio-browser.info");
         } catch (Throwable ignored) { return false; }
     }
@@ -379,7 +462,7 @@ public final class RadioRepository {
     private File backupFile() { return new File(context.getFilesDir(), "stations-cache.json.bak"); }
 
     private void saveCache(List<RadioStation> list) {
-        list = trimCatalog(list);
+        list = sortCatalog(dedupe(list));
         try {
             File target = cacheFile();
             File backup = backupFile();
@@ -416,14 +499,13 @@ public final class RadioRepository {
 
     private List<RadioStation> loadCache() {
         List<RadioStation> primary = readCache(cacheFile());
-        if (!primary.isEmpty()) return primary;
-        return readCache(backupFile());
+        return !primary.isEmpty() ? primary : readCache(backupFile());
     }
 
-    private List<RadioStation> readCache(File f) {
-        if (!f.exists() || f.length() > 16L * 1024L * 1024L) return Collections.emptyList();
+    private List<RadioStation> readCache(File file) {
+        if (!file.exists() || file.length() > 16L * 1024L * 1024L) return Collections.emptyList();
         List<RadioStation> list = new ArrayList<>(Math.min(2048, MAX_CATALOG));
-        try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(f), 64 * 1024);
+        try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(file), 64 * 1024);
              JsonReader reader = new JsonReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
             reader.beginArray();
             while (reader.hasNext() && list.size() < MAX_CATALOG) {
@@ -432,7 +514,7 @@ public final class RadioRepository {
             }
             while (reader.hasNext()) reader.skipValue();
             reader.endArray();
-            return trimCatalog(dedupe(list));
+            return sortCatalog(dedupe(list));
         } catch (Throwable t) {
             AppLog.e(context, "cache-load", t);
             return Collections.emptyList();
@@ -447,8 +529,7 @@ public final class RadioRepository {
             String name = reader.nextName();
             switch (name) {
                 case "stationuuid": case "name": case "url": case "url_resolved": case "homepage":
-                case "favicon": case "tags": case "country": case "countrycode": case "state":
-                case "language": case "codec":
+                case "favicon": case "tags": case "country": case "countrycode": case "state": case "language": case "codec":
                     if (reader.peek() == JsonToken.NULL) reader.nextNull();
                     else object.put(name, reader.nextString());
                     break;
@@ -468,17 +549,6 @@ public final class RadioRepository {
         return RadioStation.fromJson(object);
     }
 
-    private static List<RadioStation> trimCatalog(List<RadioStation> list) {
-        if (list == null || list.isEmpty()) return new ArrayList<>();
-        List<RadioStation> filtered = new ArrayList<>(Math.min(list.size(), MAX_CATALOG));
-        for (RadioStation station : list) {
-            if (!isUsable(station)) continue;
-            filtered.add(station);
-            if (filtered.size() >= MAX_CATALOG) break;
-        }
-        return filtered;
-    }
-
     private static List<RadioStation> dedupe(List<RadioStation> list) {
         CatalogAccumulator unique = new CatalogAccumulator();
         if (list != null) for (RadioStation station : list) unique.add(station);
@@ -491,11 +561,17 @@ public final class RadioRepository {
     }
 
     public static String countryName(String code) {
-        for (String[] c : COUNTRIES) if (c[0].equalsIgnoreCase(code)) return c[1];
+        for (String[] country : COUNTRIES) if (country[0].equalsIgnoreCase(code)) return country[1];
         return code;
     }
 
-    private void safeCached(Listener l, List<RadioStation> v) { try { l.onCached(v); } catch (Throwable t) { AppLog.e(context, "listener-cache", t); } }
-    private void safeLoaded(Listener l, List<RadioStation> v) { try { l.onLoaded(v); } catch (Throwable t) { AppLog.e(context, "listener-load", t); } }
-    private void safeError(Listener l, Throwable t, boolean hasCache) { try { l.onError(t, hasCache); } catch (Throwable e) { AppLog.e(context, "listener-error", e); } }
+    private void safeCached(Listener listener, List<RadioStation> value) {
+        try { listener.onCached(value); } catch (Throwable t) { AppLog.e(context, "listener-cache", t); }
+    }
+    private void safeLoaded(Listener listener, List<RadioStation> value) {
+        try { listener.onLoaded(value); } catch (Throwable t) { AppLog.e(context, "listener-load", t); }
+    }
+    private void safeError(Listener listener, Throwable error, boolean hasCache) {
+        try { listener.onError(error, hasCache); } catch (Throwable t) { AppLog.e(context, "listener-error", t); }
+    }
 }

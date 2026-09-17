@@ -51,11 +51,14 @@ jobs:
           node --check extensions/platform/firefox/background-firefox.js
           node --check scripts/browser-screenshot-runtime.js
           node --check scripts/test_browser_network_contract.js
+          node --check scripts/test_browser_catalog_contract.js
           node --check scripts/test_browser_state_contract.js
           node --check scripts/test_chromium_player_contract.js
           node --check scripts/test_firefox_player_contract.js
       - name: Test browser network safety contract
         run: node scripts/test_browser_network_contract.js
+      - name: Test browser catalog discovery contract
+        run: node scripts/test_browser_catalog_contract.js
       - name: Test browser player state contract
         run: node scripts/test_browser_state_contract.js
       - name: Test Chromium player close/session contract

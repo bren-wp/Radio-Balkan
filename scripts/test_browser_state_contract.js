@@ -22,6 +22,8 @@ class Element {
     this.replaceChildrenCalls = 0;
     this.querySelectorAllResult = [];
     this.focused = false;
+    this.selectedIndex = 0;
+    this.options = [];
   }
 
   addEventListener(type, listener) {
@@ -34,11 +36,13 @@ class Element {
 
   append(...items) {
     this.children.push(...items);
+    if (this.id === 'country') this.options.push(...items);
   }
 
   replaceChildren(...items) {
     this.replaceChildrenCalls += 1;
     this.children = [...items];
+    if (this.id === 'country') this.options = [...items];
   }
 
   querySelectorAll() {
@@ -71,7 +75,7 @@ function deferred() {
 }
 
 const ids = [
-  'search', 'country', 'stations', 'status', 'refresh', 'heroPlay',
+  'search', 'country', 'genre', 'stations', 'status', 'refresh', 'heroPlay',
   'playerToggle', 'favoritesOnly', 'playerFav', 'playerState',
   'playerName', 'playerMeta', 'heroName', 'heroMeta', 'playerLogo'
 ];
@@ -133,9 +137,7 @@ const runtime = {
       if (toggleQueue.length) return await toggleQueue.shift().promise;
       return copy(toggleResult || getState);
     }
-    if (message?.type === 'RB_PLAY') {
-      return copy(getState);
-    }
+    if (message?.type === 'RB_PLAY') return copy(getState);
     throw new Error(`Unexpected runtime message: ${message?.type}`);
   }
 };
@@ -159,9 +161,10 @@ const context = {
   },
   RB: {
     ext: { runtime },
-    COUNTRIES: [['HR', 'Hrvatska'], ['RS', 'Srbija']],
+    COUNTRIES: [['HR', 'Hrvatska'], ['RS', 'Srbija'], ['INT', 'Strano']],
+    FOREIGN_CODE: 'INT',
     fold(value) {
-      return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+      return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
     },
     key(station) {
       return station?.stationuuid || station?.name || '';
@@ -184,9 +187,7 @@ context.globalThis = context;
 vm.createContext(context);
 
 async function flush() {
-  for (let i = 0; i < 8; i += 1) {
-    await new Promise(resolve => setImmediate(resolve));
-  }
+  for (let i = 0; i < 8; i += 1) await new Promise(resolve => setImmediate(resolve));
 }
 
 async function main() {
@@ -201,6 +202,12 @@ async function main() {
   assert.equal(elements.playerToggle.disabled, false, 'player toggle must be enabled after a station is available');
   assert.equal(elements.playerFav.disabled, false, 'favorite control must be enabled after a station is available');
   assert.equal(elements.playerFav.attributes['aria-pressed'], 'false', 'favorite state must be announced accessibly');
+
+  elements.genre.value = 'jazz';
+  elements.genre.dispatch('change');
+  assert.ok(elements.stations.replaceChildrenCalls > 0, 'genre change must re-render the station result set');
+  elements.genre.value = '';
+  elements.genre.dispatch('change');
 
   const focusTargets = Array.from({ length: 60 }, () => new Element());
   elements.stations.querySelectorAllResult = focusTargets;
@@ -223,11 +230,7 @@ async function main() {
   runtimeListener({ type: 'RB_STATE', epoch: 'epoch-a', revision: 2, station: stationA, playing: false });
   await flush();
   assert.equal(elements.playerState.textContent, 'Pauzirano');
-  assert.equal(
-    elements.stations.replaceChildrenCalls,
-    listRepaintsBeforeState,
-    'playback-only state updates must not rebuild the full station list'
-  );
+  assert.equal(elements.stations.replaceChildrenCalls, listRepaintsBeforeState, 'playback-only state updates must not rebuild the full station list');
 
   runtimeListener({ type: 'RB_STATE', epoch: 'epoch-a', revision: 0, station: stationB, playing: false });
   await flush();
