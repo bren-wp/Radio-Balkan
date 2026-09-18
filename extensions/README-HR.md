@@ -1,14 +1,18 @@
-# Radio Balkan browser ekstenzije 0.0.23
+# Radio Balkan browser ekstenzije 0.0.24
 
 Produkcijski source za Chrome, Edge, Opera i Firefox.
 
-## Produkcijski fokus u 0.0.23
+## Produkcijski fokus u 0.0.24
 
-- Chromium i Firefox regression testovi pokrivaju `Play → Pause → Resume → Stop → Play`
-- Pause/Resume zadržava istu audio instancu; Stop umirovljuje sesiju i Toggle je ne smije ponovno oživjeti
-- novi Play nakon Stop-a mora dobiti svježu session identifikaciju i ponovno pokrenuti playback
+- popup player dobiva zaseban **Stop** control s disabled, busy i accessibility stanjima
+- UI razlikuje aktivno `Pauzirano` stanje od terminalnog `Zaustavljeno`
+- glavni Play nakon Stop-a šalje svježi `RB_PLAY`, pa ne pokušava Toggle umirovljene sesije
+- Chromium worker izlaže aktualni `sessionId`; Firefox već vraća isti session signal kroz snapshot
+- Chromium i Firefox nakon iscrpljenja postojećih kandidata jednom po sesiji mogu obnoviti stream URL po station UUID-u
+- UUID refresh koristi fiksne Radio Browser API hostove, 512 KiB response limit, 4 s per-request timeout i 9 s ukupni recovery budžet
+- regionalna/INT country pravila ostaju fail-closed, a privatni/lokalni literal URL-ovi i credentialed URL-ovi ostaju blokirani
+- STOP ili nova session/generation vrijednost poništavaju zakašnjeli refresh tako da stari async rezultat ne može ponovno pokrenuti audio
 - postojeći 12-sekundni `audio.play()` timeout i 15-sekundni `waiting/stalled` recovery ostaju session/generation-bound
-- stale async rezultat, close/play race i popup epoch/revision/command-ordering zaštite ostaju pod izvršnim testovima
 - nema novih browser dozvola, remote codea ni telemetry koda
 
 ## Build
@@ -18,4 +22,4 @@ cd extensions
 python tools/build_extensions.py
 ```
 
-Build generira Chrome, Edge, Opera i Firefox ZIP pakete i odbija version drift, branding/permission regresije i ključne playback/security regresije.
+Build generira Chrome, Edge, Opera i Firefox ZIP pakete i odbija version drift, branding/permission regresije te ključne playback, network-safety i lifecycle regresije.

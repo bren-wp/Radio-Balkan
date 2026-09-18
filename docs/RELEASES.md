@@ -1,5 +1,26 @@
 # Izdavanja
 
+## 0.0.24
+
+Izdanje 0.0.24 fokusirano je na konkretan UI/UX polish i playback recovery probleme pronađene nakon v0.0.23, bez novih dozvola, analyticsa, telemetryja, korisničkog računa ili novog backenda.
+
+- Windows donji player izlaže stvarni Stop gumb umjesto prethodno nedostupnog `hitPlayerStop` handlera
+- Windows `Prikaži sve →` uz Žanrove dobiva stvarni hit target i otvara postojeći genre selector
+- Android stalni player dobiva Prev / Play-Pause / Stop / Next, uz testiranu wrap-around adjacent navigaciju
+- Android `Radio` donja navigacija više nije no-op, a reprodukcija iz Favorita ne prebacuje lažno selected stanje na Radio tab
+- browser popup dobiva zaseban Stop control s disabled, busy i accessibility stanjem
+- browser UI razlikuje `Pauzirano` od terminalnog `Zaustavljeno`; glavni Play nakon Stop-a šalje novi `RB_PLAY`
+- Chromium worker izlaže aktualni `sessionId`, pa popup može pouzdano razlikovati aktivnu pauziranu sesiju od zaustavljene
+- Chromium i Firefox nakon iscrpljenja lokalnih stream kandidata jednom po sesiji pokušavaju obnoviti URL po station UUID-u
+- UUID recovery koristi samo fiksne Radio Browser API hostove, response limit od 512 KiB, 4 s per-request timeout i ukupni 9 s budžet
+- regionalni refresh mora zadržati istu državu; `Strano / INT` refresh ne smije mapirati balkansku postaju u INT i poštuje izvorni country code kada postoji
+- STOP ili nova session/generation vrijednost poništavaju zakašnjeli catalog refresh; regression test potvrđuje da stari refresh ne može ponovno pokrenuti audio
+- uspješno obnovljeni stream ostaje aktivni URL trenutne browser player sesije
+- postojeći Windows runtime soak, Go fail-fast gateovi, Android unit/lint/release build, browser stall/race testovi, security contracts, clean-worktree i checksum provjere ostaju aktivni
+- verzija je sinkronizirana na `0.0.24`, uz Android `versionCode 24`
+
+Ovi popravci povećavaju dostupnost i predvidljivost playera, ali Radio Balkan i dalje ne tvrdi da svaki third-party radio stream mora uvijek biti online ili da je moguće jamčiti apsolutno crash-free ponašanje na svakoj kombinaciji OS-a, uređaja, drivera, mreže i vanjske infrastrukture.
+
 ## 0.0.23
 
 Izdanje 0.0.23 završava player-lifecycle i Win32 thread-affinity hardening nakon 0.0.22. Nisu dodane nove dozvole, analytics, telemetry, korisnički račun ni novi backend.

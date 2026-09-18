@@ -17,13 +17,14 @@ Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrva
 
 ## Što donosi v0.0.24
 
-- **Stvarni Windows player lifecycle gate** — CI nad lokalnim WAV zapisom izvršava `Play → Pause → Volume → Resume → Stop → Play → Stop`, bez ovisnosti o vanjskom radio streamu.
-- **Sigurniji audio ACK protokol** — `PLAY` ima 5-sekundni, a kontrolne naredbe 2-sekundni bounded ACK budžet; timeout ili write failure odbacuju helper proces i kanal prije fallbacka, pa zakašnjeli `OK` ne može potvrditi sljedeću naredbu.
-- **Win32 thread-affinity hardening** — Portable i Setup drže prozor i message loop na istom OS threadu.
-- **Browser Stop → Play regresije** — Chromium i Firefox moraju umiroviti staru sesiju nakon Stop-a, odbiti Toggle stare sesije i otvoriti svježu sesiju na novom Play-u.
-- **Android Stop → Play regresije** — eksplicitni Stop ne može završiti kao Resume stare servisne sesije; Play/Pause/Resume odluke ostaju pokrivene JVM testovima.
-- **Zadržani release gateovi** — Windows runtime soak, Android lint/release build, browser timeout/stall/race testovi, security contracts, clean-worktree i checksum provjere ostaju obavezni.
-- **Bez novog telemetryja ili širih dozvola** — nema računa, analytics SDK-a, novog backenda ni dodatnog profiliranja korisnika.
+- **Potpuniji transport UI** — Windows player sada izlaže stvarni Stop gumb, Android stalni player ima Prev / Play-Pause / Stop / Next, a browser popup dobiva zaseban Stop control.
+- **Ispravan Stop → Play UX u browseru** — popup razlikuje pauziranu od zaustavljene sesije; glavni Play nakon Stop-a pokreće novi `RB_PLAY` umjesto Toggle-a prema umirovljenoj sesiji.
+- **Automatski oporavak zastarjelih browser streamova** — nakon iscrpljenja lokalnih kandidata Chromium i Firefox jednom po sesiji pokušavaju dohvatiti svježi URL po station UUID-u.
+- **Bounded i sigurniji refresh** — refresh koristi fiksne Radio Browser API hostove, 512 KiB limit odgovora, 4-sekundni per-request timeout i ukupni 9-sekundni recovery budžet; regionalna/INT country pravila ostaju zaključana.
+- **Stale-session zaštita** — STOP ili nova reprodukcijska sesija poništavaju zakašnjeli catalog refresh tako da stari async rezultat ne može ponovno pokrenuti audio.
+- **UI/UX popravci** — Windows `Prikaži sve →` uz Žanrove ima stvarni hit target, Android `Radio` navigacija više nije no-op, a Stop kontrole imaju jasna disabled/busy/accessibility stanja.
+- **Prošireni regression contracti** — testovi zaključavaju duplicate Stop single-flight, Stop → fresh Play, Android Prev/Next wrap, UUID refresh safety, oversized-response fail-closed i Stop tijekom catalog recoveryja.
+- **Bez novog telemetryja ili širih dozvola** — nema analytics SDK-a, trackinga, novog backenda ni dodatnih Android/browser dozvola.
 
 ## Zašto Radio Balkan
 
