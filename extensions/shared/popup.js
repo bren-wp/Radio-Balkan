@@ -409,6 +409,32 @@
     }
   }
 
+  async function stopPlayback() {
+    if (activeCommandToken || !current) return;
+    const token = ++commandGeneration;
+    activeCommandToken = token;
+    playerStatus = 'Zaustavljam…';
+    updatePlayer();
+    syncStationPlaybackUi();
+    try {
+      const result = await ext.runtime.sendMessage({ type: 'RB_STOP' });
+      if (token !== commandGeneration) return;
+      await applyCommandResult(result, token);
+      if (token !== commandGeneration) return;
+      playing = false;
+      playerStatus = result?.error ? 'Zaustavljanje nije uspjelo' : 'Zaustavljeno';
+    } catch {
+      if (token !== commandGeneration) return;
+      playerStatus = playing ? 'Sada svira' : 'Zaustavljanje nije uspjelo';
+    } finally {
+      if (token === commandGeneration) {
+        activeCommandToken = 0;
+        updatePlayer();
+        syncStationPlaybackUi();
+      }
+    }
+  }
+
   function updatePlayer() {
     const station = current;
     $('playerState').textContent = playerStatus;
@@ -437,9 +463,12 @@
     const key = station ? RB.key(station) : '';
     const favorite = !!(key && favs[key]);
     $('playerFav').textContent = favorite ? '♥' : '♡';
-    $('playerFav').disabled = !station;
+    $('playerFav').disabled = !station || commandBusy;
     $('playerFav').setAttribute('aria-pressed', String(favorite));
     $('playerFav').setAttribute('aria-label', favorite ? 'Ukloni iz omiljenih' : 'Dodaj u omiljene');
+    $('playerStop').disabled = !station || commandBusy;
+    $('playerStop').setAttribute('aria-busy', String(commandBusy));
+    $('playerStop').setAttribute('aria-label', commandBusy ? 'Radnja je u tijeku' : 'Zaustavi reprodukciju');
   }
 
   list.addEventListener('click', event => {
@@ -477,6 +506,7 @@
   $('clearFilters').addEventListener('click', resetFilters);
   $('heroPlay').addEventListener('click', () => void toggle());
   $('playerToggle').addEventListener('click', () => void toggle());
+  $('playerStop').addEventListener('click', () => void stopPlayback());
   $('favoritesOnly').addEventListener('click', () => {
     favoritesOnly = !favoritesOnly;
     updateFavoritesFilterButton();
