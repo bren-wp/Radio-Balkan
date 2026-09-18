@@ -1204,7 +1204,6 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     }
     private LinearLayout.LayoutParams chipParams() { LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)); p.setMargins(dp(3), dp(4), dp(4), dp(3)); return p; }
     private Button smallTop(String label) { Button b = chip(label, false); b.setTextSize(11); return b; }
-    private LinearLayout.LayoutParams topButtonParams(int w) { LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(w), dp(38)); p.setMargins(dp(4), 0, 0, 0); return p; }
     private Button playerButton(String label, boolean accent) { Button b = chip(label, accent); b.setTextSize(17); return b; }
     private TextView label(String value, int size, int color, boolean bold) { TextView t = new TextView(this); t.setText(value); t.setTextSize(size); t.setTextColor(color); t.setGravity(Gravity.CENTER_VERTICAL); if (bold) t.setTypeface(Typeface.DEFAULT_BOLD); t.setSingleLine(true); t.setEllipsize(android.text.TextUtils.TruncateAt.END); return t; }
     private GradientDrawable rounded(int fill, int stroke, int radiusDp) { GradientDrawable g = new GradientDrawable(); g.setColor(fill); g.setCornerRadius(dp(radiusDp)); g.setStroke(dp(1), stroke); return g; }
@@ -1214,7 +1213,6 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         return new RippleDrawable(ColorStateList.valueOf(rippleColor), content, mask);
     }
     private LinearLayout.LayoutParams marginParams(int w, int h, int l, int t, int r, int b) { LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(w, h); p.setMargins(dp(l), dp(t), dp(r), dp(b)); return p; }
-    private FrameLayout.LayoutParams playerLayoutParams() { FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(PLAYER_H_DP)); p.gravity = Gravity.BOTTOM; return p; }
     private int dp(int v) { return (int) (v * getResources().getDisplayMetrics().density + 0.5f); }
     private static String safe(String v) { return v == null ? "" : v.trim(); }
 

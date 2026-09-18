@@ -405,14 +405,6 @@ func isBalkanCode(code string) bool {
 	}
 	return false
 }
-func countryCodeByName(name string) string {
-	for _, c := range balkanCountries {
-		if c.Name == name {
-			return c.Code
-		}
-	}
-	return ""
-}
 func countryNameByCode(code string) string {
 	for _, c := range balkanCountries {
 		if c.Code == code {
@@ -470,16 +462,6 @@ func currentStationIndexLocked() int {
 	return -1
 }
 
-func currentStationSnapshot() (RadioStation, string, int, bool) {
-	app.mu.RLock()
-	defer app.mu.RUnlock()
-	idx := currentStationIndexLocked()
-	if idx < 0 || idx >= len(app.stations) {
-		return RadioStation{}, "", -1, false
-	}
-	st := app.stations[idx]
-	return st, stationKey(st), idx, true
-}
 
 var (
 	user32   = syscall.NewLazyDLL("user32.dll")
@@ -583,12 +565,6 @@ func setStatus(v string) {
 	app.mu.Lock()
 	app.status = v
 	app.mu.Unlock()
-}
-func getStatus() string {
-	app.mu.RLock()
-	v := app.status
-	app.mu.RUnlock()
-	return v
 }
 func safeGo(name string, fn func()) {
 	if shuttingDown() {
@@ -2744,23 +2720,6 @@ func drawButton(hdc syscall.Handle, l, t, r, b int32, label string, primary bool
 	selectFont(hdc, app.hFontSmall)
 	text(hdc, label, l+8, t, r-8, b, tc, DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 }
-func drawSmallButton(hdc syscall.Handle, l, t, r, b int32, label string, accent bool) {
-	drawButton(hdc, l, t, r, b, label, accent)
-}
-func drawPill(hdc syscall.Handle, l, t, r, b int32, label string, selected bool) {
-	fill := uint32(0x211a16)
-	border := uint32(0x3d2f27)
-	tc := rgb(181, 170, 162)
-	if selected {
-		fill = 0x39251a
-		border = 0x75411f
-		tc = rgb(255, 165, 94)
-	}
-	drawRounded(hdc, l, t, r, b, 18, fill, border)
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, label, l+12, t, r-12, b, tc, DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-}
-func textButtonWidth(s string) int { return 34 + len([]rune(s))*8 }
 func selectFont(hdc syscall.Handle, h syscall.Handle) {
 	procSelectObject.Call(uintptr(hdc), uintptr(h))
 }
@@ -2769,9 +2728,6 @@ func text(hdc syscall.Handle, s string, l, t, r, b int32, color uintptr, flags u
 	procSetBkMode.Call(uintptr(hdc), TRANSPARENT)
 	procSetTextColor.Call(uintptr(hdc), color)
 	procDrawText.Call(uintptr(hdc), uintptr(unsafe.Pointer(u16(s))), ^uintptr(0), uintptr(unsafe.Pointer(&rc)), uintptr(flags))
-}
-func textRect(hdc syscall.Handle, s string, rc RECT, color uintptr, flags uint32) {
-	text(hdc, s, rc.Left, rc.Top, rc.Right, rc.Bottom, color, flags)
 }
 
 func stationIndexFromHit(h HitRegion) int {
@@ -3403,10 +3359,6 @@ func playbackWatchdog(idx int, stationID string) {
 		return
 	}
 }
-func ensureStream(idx int) (string, bool) {
-	return ensureStreamKey(idx, "")
-}
-
 func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 	app.mu.RLock()
 	if expectedKey != "" {
@@ -5125,7 +5077,6 @@ func rebuildGenres() {
 	}
 }
 
-func clampScroll() { app.mu.Lock(); defer app.mu.Unlock(); clampScrollLocked() }
 func clampScrollLocked() {
 	showPopular := app.tab == "all" && strings.TrimSpace(app.search) == "" && strings.TrimSpace(app.genre) == ""
 	gridTop := 128
@@ -5592,11 +5543,6 @@ func postUI() {
 func postGenres() {
 	if app.hwnd != 0 && !shuttingDown() {
 		procPostMessage.Call(uintptr(app.hwnd), WM_APP+2, 0, 0)
-	}
-}
-func postFilterUI() {
-	if app.hwnd != 0 && !shuttingDown() {
-		procPostMessage.Call(uintptr(app.hwnd), WM_APP+3, 0, 0)
 	}
 }
 func messageBox(hwnd syscall.Handle, title, msg string, flags uintptr) int {
