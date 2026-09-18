@@ -59,7 +59,10 @@
 
     <div class="summary">
       <span id="status" role="status" aria-live="polite">Učitavam provjerene postaje…</span>
-      <button id="favoritesOnly" class="textButton" type="button" aria-pressed="false">♡ Omiljene</button>
+      <div class="summaryActions">
+        <button id="clearFilters" class="textButton subtleButton" type="button" hidden>Očisti</button>
+        <button id="favoritesOnly" class="textButton" type="button" aria-pressed="false">♡ Omiljene</button>
+      </div>
     </div>
 
     <section id="stations" class="stations" role="list" aria-label="Radio stanice"></section>

@@ -15,8 +15,9 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; width: 420px; height: 600px; overflow: hidden; background: var(--bg); color: var(--text); }
 button, input, select { font: inherit; }
-button { -webkit-tap-highlight-color: transparent; }
-button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button { -webkit-tap-highlight-color: transparent; transition: transform .1s ease, filter .12s ease, background-color .12s ease, border-color .12s ease, opacity .12s ease; }
+button:active:not(:disabled) { transform: translateY(1px) scale(.985); }
+button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .app { position: relative; display: flex; flex-direction: column; height: 100%; background: radial-gradient(circle at 16% -8%, #2b190f 0, #10151c 29%, #080d13 72%); }
 .topbar { height: 64px; flex: 0 0 64px; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid #202a36; }
 .brand { min-width: 0; display: flex; align-items: center; gap: 10px; }
@@ -26,6 +27,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .brandCopy span { color: var(--muted); font-size: 10.5px; white-space: nowrap; }
 .iconButton, .playerIcon { width: 44px; height: 44px; border: 0; border-radius: 12px; color: #d5dbe3; background: transparent; cursor: pointer; font-size: 22px; }
 .iconButton:hover:not(:disabled), .playerIcon:hover:not(:disabled) { background: #ffffff0d; }
+.iconButton[aria-busy="true"] { color: var(--accent); animation: rb-spin .8s linear infinite; }
 .hero { margin: 9px 12px 8px; min-height: 98px; padding: 13px 15px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; border: 1px solid #4b3a2f; border-radius: 18px; background: linear-gradient(135deg, #29180f, #141a22 56%, #0e141b); box-shadow: 0 14px 32px #0005; }
 .heroCopy { min-width: 0; }
 .liveBadge { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: .08em; }
@@ -44,12 +46,17 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .selectField select { min-width: 0; width: 100%; height: 27px; border: 0; background: transparent; color: #e7eaf0; padding: 0; outline: 0; font-size: 11.5px; }
 .summary { min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 14px 4px; color: #99a4b1; font-size: 11px; }
 .summary > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.textButton { flex: 0 0 auto; min-height: 30px; padding: 0 9px; border: 0; border-radius: 9px; background: transparent; color: #d9b88f; cursor: pointer; font-size: 11.5px; }
-.textButton:hover { background: #ffffff0b; }
+.summaryActions { flex: 0 0 auto; display: flex; align-items: center; gap: 3px; }
+.textButton { flex: 0 0 auto; min-height: 30px; padding: 0 9px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: #d9b88f; cursor: pointer; font-size: 11.5px; }
+.textButton:hover { background: #ffffff0b; border-color: #ffffff0d; }
+.subtleButton { color: #9ca7b4; }
+[hidden] { display: none !important; }
 .stations { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 1px 10px 92px; scrollbar-width: thin; scrollbar-color: #513b2a transparent; }
 .station { min-height: 72px; contain: layout paint style; content-visibility: auto; contain-intrinsic-size: 72px; display: grid; grid-template-columns: 56px minmax(0, 1fr) 44px; align-items: center; gap: 10px; margin: 5px 0; padding: 7px 8px 7px 7px; border: 1px solid #27323f; border-radius: 15px; background: #101720; cursor: pointer; transition: border-color .12s ease, background .12s ease; }
 .station:hover { border-color: #6e4b2c; background: #151c25; }
+.station:focus-visible { border-color: #d08a31; background: #151c25; }
 .station.active { border-color: #a56d33; background: #181b21; box-shadow: inset 3px 0 0 #ffad38; }
+.station.active:focus-visible { box-shadow: inset 3px 0 0 #ffad38, 0 0 0 2px #ffad3840; }
 .logoBox { width: 56px; height: 56px; display: grid; place-items: center; overflow: hidden; border-radius: 11px; background: #1b232d; }
 .logoBox img { width: 100%; height: 100%; object-fit: cover; }
 .fallback { font-size: 16px; font-weight: 800; color: #f1a441; }
@@ -73,7 +80,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .roundPlay { width: 46px; height: 46px; border: 1px solid #d08a31; border-radius: 50%; background: #251d15; color: #fff; font-size: 16px; cursor: pointer; }
 .roundPlay:hover:not(:disabled) { background: #342519; }
 button:disabled { cursor: default; opacity: .46; box-shadow: none; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@keyframes rb-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; scroll-behavior: auto !important; }
+  .iconButton[aria-busy="true"] { animation: none !important; }
+}
 @media (max-width: 380px) {
   html, body { width: 360px; }
   .hero h1 { max-width: 198px; }

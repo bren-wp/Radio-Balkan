@@ -77,6 +77,15 @@ def prepare_updates(root: Path, version: str, explicit_android_code: int | None 
         "apps/windows/build-release.ps1",
     )
 
+    for relative in ("apps/windows/portable/main.go", "apps/windows/setup/main.go"):
+        source = root / relative
+        updates[source] = replace_once_text(
+            source.read_text(encoding="utf-8"),
+            r'var appVersion\s*=\s*"[^"]+"',
+            f'var appVersion = "{version}"',
+            relative,
+        )
+
     gradle_text = replace_once_text(
         gradle_text,
         r"versionCode\s*=\s*\d+",

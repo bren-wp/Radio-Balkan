@@ -10,9 +10,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -64,6 +66,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private final AtomicInteger healthGeneration = new AtomicInteger();
     private final AtomicBoolean healthRunning = new AtomicBoolean();
     private final AtomicBoolean autoHealthStarted = new AtomicBoolean();
+    private final AtomicBoolean catalogRefreshRunning = new AtomicBoolean();
     private final Object dataLock = new Object();
     private List<RadioStation> allStations = new ArrayList<>();
     private List<RadioStation> visibleStations = new ArrayList<>();
@@ -115,8 +118,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 images.load(artworkStation.favicon, playerArtwork, null);
             }
             if (playerEqualizer != null) playerEqualizer.setActive(playing);
-            playerPlay.setText(playing ? "Ⅱ" : "▶");
             statusText.setText(status.isEmpty() ? "Spremno" : status);
+            updatePlaybackControls();
             if (adapter != null) adapter.setPlayback(currentKey, playing);
         }
     };
@@ -131,6 +134,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         }
         genre = state.genre();
         tab = validTab(state.tab()) ? state.tab() : "all";
+        navSelection = navSelectionForTab(tab);
         images = new ImageLoader();
         repository = new RadioRepository(this);
         buildUi();
@@ -161,9 +165,9 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         LinearLayout stationsHeader = new LinearLayout(this);
         stationsHeader.setGravity(Gravity.CENTER_VERTICAL);
         stationsHeader.addView(label("Sve stanice", 25, Color.WHITE, true), new LinearLayout.LayoutParams(0, dp(54), 1f));
-        Button sort = chip("Popularne ⌄", false);
+        Button sort = chip("Filtriraj ⌄", false);
         sort.setTextSize(14);
-        sort.setBackgroundColor(Color.TRANSPARENT);
+        sort.setBackground(interactiveRounded(0x00000000, 0x00000000, 12, 0x24FFFFFF));
         sort.setTextColor(0xFFB9BDC6);
         sort.setOnClickListener(v -> showBrowseDialog());
         stationsHeader.addView(sort, new LinearLayout.LayoutParams(dp(126), dp(46)));
@@ -198,7 +202,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         Button back = smallTop("‹");
         back.setTextSize(32);
         back.setTextColor(0xFFE8EBF1);
-        back.setBackgroundColor(Color.TRANSPARENT);
+        back.setBackground(interactiveRounded(0x00000000, 0x00000000, 12, 0x24FFFFFF));
         back.setContentDescription("Natrag");
         back.setOnClickListener(v -> onBackPressed());
         bar.addView(back, new LinearLayout.LayoutParams(dp(46), dp(52)));
@@ -219,7 +223,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
         Button searchButton = smallTop("⌕");
         searchButton.setTextSize(24);
-        searchButton.setBackgroundColor(Color.TRANSPARENT);
+        searchButton.setBackground(interactiveRounded(0x00000000, 0x00000000, 12, 0x24FFFFFF));
         searchButton.setContentDescription("Pretraži");
         searchButton.setOnClickListener(v -> {
             if (searchBox == null) return;
@@ -235,7 +239,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
         Button menu = smallTop("⋮");
         menu.setTextSize(24);
-        menu.setBackgroundColor(Color.TRANSPARENT);
+        menu.setBackground(interactiveRounded(0x00000000, 0x00000000, 12, 0x24FFFFFF));
         menu.setContentDescription("Više opcija");
         menu.setOnClickListener(v -> showAppMenu());
         bar.addView(menu, new LinearLayout.LayoutParams(dp(42), dp(48)));
@@ -309,7 +313,9 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         GradientDrawable playBg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{0xFFFFB23F,0xFFFFC15B});
         playBg.setCornerRadius(dp(15));
         playBg.setStroke(dp(1), 0xFFFFC66F);
-        heroPlay.setBackground(playBg);
+        heroPlay.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33111111), playBg, rounded(Color.WHITE, 0x00000000, 15)));
+        heroPlay.setEnabled(false);
+        heroPlay.setContentDescription("Odaberi stanicu za reprodukciju");
         heroPlay.setOnClickListener(v -> { if (featured != null) onPlay(featured); });
         LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(dp(176), dp(54));
         buttonLp.setMargins(0, dp(14), 0, 0);
@@ -355,12 +361,13 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         playerPlay = playerButton("▶", true);
         GradientDrawable playBg = new GradientDrawable();
         playBg.setColor(0xFF201A16); playBg.setCornerRadius(dp(34)); playBg.setStroke(dp(2), 0xFFFFB23F);
-        playerPlay.setBackground(playBg);
+        playerPlay.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), playBg, rounded(Color.WHITE, 0x00000000, 34)));
         playerPlay.setTextColor(0xFFFFF3DD);
         LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(dp(60), dp(60));
         pp.setMargins(dp(9), 0, 0, 0);
         player.addView(playerPlay, pp);
-        playerPlay.setContentDescription("Pokreni ili pauziraj reprodukciju");
+        playerPlay.setEnabled(false);
+        playerPlay.setContentDescription("Odaberi stanicu za reprodukciju");
         playerPlay.setOnClickListener(v -> {
             if (currentKey.isEmpty() && featured != null) { onPlay(featured); return; }
             sendPlayerAction(playing ? RadioPlayerService.ACTION_PAUSE : RadioPlayerService.ACTION_RESUME);
@@ -378,7 +385,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         nav.addView(navItem("◇", "Otkrij", "discover"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         nav.addView(navItem("▥", "Radio", "radio"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         nav.addView(navItem("♡", "Omiljene", "favorites"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
-        nav.addView(navItem("○", "Profil", "profile"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+        nav.addView(navItem("⋯", "Više", "more"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         selectBottomNav(navSelection);
         return nav;
     }
@@ -392,16 +399,25 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         item.addView(ic, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36)));
         item.addView(tx, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(23)));
         bottomNavItems.put(action, item);
+        item.setFocusable(true);
+        item.setClickable(true);
+        item.setContentDescription(title);
         item.setOnClickListener(v -> {
+            if ("discover".equals(action)) { showBrowseDialog(); return; }
+            if ("more".equals(action)) { showAppMenu(); return; }
             selectBottomNav(action);
             if ("all".equals(action)) { tab="all"; state.setTab(tab); applyFilterAsync(); list.smoothScrollToPosition(0); }
-            else if ("discover".equals(action)) showBrowseDialog();
             else if ("favorites".equals(action)) { tab="favorites"; state.setTab(tab); applyFilterAsync(); }
-            else if ("profile".equals(action)) showAboutDialog();
             else if ("radio".equals(action) && !currentKey.isEmpty()) { list.smoothScrollToPosition(0); }
         });
         updateBottomNavItem(action, item);
         return item;
+    }
+
+    private static String navSelectionForTab(String value) {
+        if ("favorites".equals(value)) return "favorites";
+        if ("all".equals(value)) return "all";
+        return "radio";
     }
 
     private void selectBottomNav(String action) {
@@ -412,13 +428,35 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private void updateBottomNavItem(String action, LinearLayout item) {
         if (item == null || item.getChildCount() < 2) return;
         boolean selected = action.equals(navSelection);
-        item.setBackground(selected ? rounded(0xFF382819, 0xFF5D4025, 14) : null);
+        item.setSelected(selected);
+        item.setBackground(interactiveRounded(selected ? 0xFF382819 : 0x00000000, selected ? 0xFF5D4025 : 0x00000000, 14, 0x24FFFFFF));
         TextView icon = (TextView) item.getChildAt(0);
         TextView text = (TextView) item.getChildAt(1);
         int color = selected ? 0xFFFFB23F : 0xFFB9C0CB;
         icon.setTextColor(color);
         text.setTextColor(color);
         text.setTypeface(selected ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+        item.setContentDescription(text.getText() + (selected ? ", odabrano" : ""));
+    }
+
+    private void updatePlaybackControls() {
+        if (heroPlay != null) {
+            boolean hasFeatured = featured != null;
+            boolean featuredCurrent = hasFeatured && featured.key().equals(currentKey);
+            heroPlay.setEnabled(hasFeatured);
+            String heroAction;
+            if (featuredCurrent && playing) heroAction = "Ⅱ   Pauziraj";
+            else if (featuredCurrent && !currentKey.isEmpty()) heroAction = "▶   Nastavi";
+            else heroAction = "▶   Slušaj uživo";
+            heroPlay.setText(heroAction);
+            heroPlay.setContentDescription(hasFeatured ? heroAction.replace("▶", "").replace("Ⅱ", "").trim() + " " + featured.name : "Odaberi stanicu za reprodukciju");
+        }
+        if (playerPlay != null) {
+            boolean available = !currentKey.isEmpty() || featured != null;
+            playerPlay.setEnabled(available);
+            playerPlay.setText(playing ? "Ⅱ" : "▶");
+            playerPlay.setContentDescription(available ? (playing ? "Pauziraj reprodukciju" : "Pokreni reprodukciju") : "Odaberi stanicu za reprodukciju");
+        }
     }
 
     private FrameLayout.LayoutParams bottomNavLayoutParams() {
@@ -428,15 +466,29 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     }
 
     private void showAppMenu() {
-        String[] items = {"Pretraži", "Filtriraj stanice", "Osvježi popis", "Provjeri prikazane stanice", "Rezervni izvori", "Nedostupne stanice", "O aplikaciji"};
+        String[] items = {"Pretraži", "Filtriraj stanice", "Poništi filtre", "Osvježi popis", "Provjeri prikazane stanice", "Rezervni izvori", "Nedostupne stanice", "O aplikaciji"};
         new AlertDialog.Builder(this).setTitle("Radio Balkan").setItems(items, (d, which) -> {
-            if (which == 0 && searchBox != null) { searchBox.setVisibility(View.VISIBLE); search.requestFocus(); }
-            else if (which == 1) showBrowseDialog();
-            else if (which == 2) refreshCatalog();
-            else if (which == 3) checkVisibleStreams();
-            else if (which == 4) { tab="replaced"; state.setTab(tab); applyFilterAsync(); }
-            else if (which == 5) { tab="broken"; state.setTab(tab); applyFilterAsync(); }
-            else showAboutDialog();
+            String chosen = items[which];
+            if ("Pretraži".equals(chosen) && searchBox != null) {
+                searchBox.setVisibility(View.VISIBLE);
+                search.requestFocus();
+                InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm != null) imm.showSoftInput(search, InputMethodManager.SHOW_IMPLICIT);
+            } else if ("Filtriraj stanice".equals(chosen)) {
+                showBrowseDialog();
+            } else if ("Poništi filtre".equals(chosen)) {
+                resetBrowseFilters();
+            } else if ("Osvježi popis".equals(chosen)) {
+                refreshCatalog();
+            } else if ("Provjeri prikazane stanice".equals(chosen)) {
+                checkVisibleStreams();
+            } else if ("Rezervni izvori".equals(chosen)) {
+                tab = "replaced"; state.setTab(tab); selectBottomNav("radio"); applyFilterAsync();
+            } else if ("Nedostupne stanice".equals(chosen)) {
+                tab = "broken"; state.setTab(tab); selectBottomNav("radio"); applyFilterAsync();
+            } else {
+                showAboutDialog();
+            }
         }).show();
     }
 
@@ -444,21 +496,71 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(8), dp(4), dp(8), dp(4));
-        TextView cTitle = label("Država", 14, Color.WHITE, true); panel.addView(cTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
+
+        TextView cTitle = label("Država", 14, Color.WHITE, true);
+        panel.addView(cTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
         LinearLayout countries = chipRow();
-        Map<String,Integer> counts = countryCounts(); int total=0; for (int v:counts.values()) total+=v;
+        List<Button> countryButtons = new ArrayList<>();
+        Map<String,Integer> counts = countryCounts();
+        int total = 0;
+        for (int v : counts.values()) total += v;
         for (String[] c : RadioRepository.COUNTRIES) {
-            String code=c[0], name=c[1]; int count=code.isEmpty()?total:counts.getOrDefault(code,0);
-            Button b=chip(count>0?name+" · "+count:name, code.equalsIgnoreCase(country)); applyFlag(b,code);
-            b.setOnClickListener(v->{ country=code; state.setCountry(code); applyFilterAsync(); }); countries.addView(b, chipParams());
+            String code = c[0], name = c[1];
+            int count = code.isEmpty() ? total : counts.getOrDefault(code, 0);
+            Button b = chip(count > 0 ? name + " · " + count : name, code.equalsIgnoreCase(country));
+            b.setTag(code);
+            applyFlag(b, code);
+            countryButtons.add(b);
+            b.setOnClickListener(v -> {
+                country = code;
+                state.setCountry(code);
+                for (Button item : countryButtons) styleChip(item, String.valueOf(item.getTag()).equalsIgnoreCase(country));
+                applyFilterAsync();
+            });
+            countries.addView(b, chipParams());
         }
         panel.addView(horizontal(countries), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
-        TextView gTitle = label("Žanr", 14, Color.WHITE, true); panel.addView(gTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
-        LinearLayout genres=chipRow();
-        String[][] gs={{"Svi",""},{"Domaća","domaca"},{"Pop & Rock","pop"},{"Narodna","folk"},{"Elektronička","electronic"},{"Jazz","jazz"},{"Klasična","classical"}};
-        for (String[] g:gs) { String label=g[0], value=g[1]; Button b=chip(label,value.equalsIgnoreCase(genre)); b.setOnClickListener(v->{genre=value; state.setGenre(value); applyFilterAsync();}); genres.addView(b,chipParams()); }
+
+        TextView gTitle = label("Žanr", 14, Color.WHITE, true);
+        panel.addView(gTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
+        LinearLayout genres = chipRow();
+        List<Button> genreButtons = new ArrayList<>();
+        String[][] gs = {{"Svi",""},{"Domaća","domaca"},{"Pop & Rock","pop"},{"Narodna","folk"},{"Elektronička","electronic"},{"Jazz","jazz"},{"Klasična","classical"}};
+        for (String[] g : gs) {
+            String label = g[0], value = g[1];
+            Button b = chip(label, value.equalsIgnoreCase(genre));
+            b.setTag(value);
+            genreButtons.add(b);
+            b.setOnClickListener(v -> {
+                genre = value;
+                state.setGenre(value);
+                for (Button item : genreButtons) styleChip(item, String.valueOf(item.getTag()).equalsIgnoreCase(genre));
+                applyFilterAsync();
+            });
+            genres.addView(b, chipParams());
+        }
         panel.addView(horizontal(genres), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
-        new AlertDialog.Builder(this).setTitle("Pregledaj stanice").setView(panel).setPositiveButton("Gotovo", null).show();
+
+        new AlertDialog.Builder(this)
+                .setTitle("Pregledaj stanice")
+                .setView(panel)
+                .setNeutralButton("Poništi filtre", (d, which) -> resetBrowseFilters())
+                .setPositiveButton("Gotovo", null)
+                .show();
+    }
+
+    private void resetBrowseFilters() {
+        country = "";
+        genre = "";
+        tab = "all";
+        query = "";
+        state.setCountry("");
+        state.setGenre("");
+        state.setTab("all");
+        if (search != null && search.getText().length() > 0) search.setText("");
+        selectBottomNav("all");
+        statusText.setText("Filtri su poništeni");
+        applyFilterAsync();
     }
 
     private void showAboutDialog() {
@@ -502,6 +604,10 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
     private void refreshCatalog() {
         if (destroyed) return;
+        if (!catalogRefreshRunning.compareAndSet(false, true)) {
+            Toast.makeText(this, "Osvježavanje je već u tijeku", Toast.LENGTH_SHORT).show();
+            return;
+        }
         statusText.setText("Osvježavam popis stanica…");
         int gen = catalogGeneration.incrementAndGet();
         RadioRepository old = repository;
@@ -509,8 +615,14 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         old.shutdown();
         repository.load(new RadioRepository.Listener() {
             @Override public void onCached(List<RadioStation> stations) { }
-            @Override public void onLoaded(List<RadioStation> stations) { postIfActive(() -> { if (gen != catalogGeneration.get()) return; useStations(stations, "Popis je osvježen"); }); }
-            @Override public void onError(Throwable error, boolean hasCache) { postIfActive(() -> { if (gen != catalogGeneration.get()) return; statusText.setText("Osvježavanje nije uspjelo"); }); }
+            @Override public void onLoaded(List<RadioStation> stations) {
+                catalogRefreshRunning.set(false);
+                postIfActive(() -> { if (gen != catalogGeneration.get()) return; useStations(stations, "Popis je osvježen"); });
+            }
+            @Override public void onError(Throwable error, boolean hasCache) {
+                catalogRefreshRunning.set(false);
+                postIfActive(() -> { if (gen != catalogGeneration.get()) return; statusText.setText("Osvježavanje nije uspjelo"); });
+            }
         });
     }
 
@@ -558,8 +670,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                         heroName.setText(featured.name);
                         heroMeta.setText(featured.meta());
                         applyFlag(heroMeta, featured.countryCode);
-                        heroPlay.setEnabled(true);
                     }
+                    updatePlaybackControls();
                 });
             });
         } catch (RejectedExecutionException ignored) { }
@@ -705,17 +817,21 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             sendPlayerAction(playing ? RadioPlayerService.ACTION_PAUSE : RadioPlayerService.ACTION_RESUME);
             return;
         }
-        currentKey = key; state.addRecent(key); state.setLastStation(key, s.name, s.meta());
         Intent i = new Intent(this, RadioPlayerService.class).setAction(RadioPlayerService.ACTION_PLAY);
         i.putExtra(RadioPlayerService.EXTRA_KEY, key); i.putExtra(RadioPlayerService.EXTRA_NAME, s.name); i.putExtra(RadioPlayerService.EXTRA_META, s.meta());
         i.putExtra(RadioPlayerService.EXTRA_URL, s.url); i.putExtra(RadioPlayerService.EXTRA_RESOLVED, s.urlResolved); i.putExtra(RadioPlayerService.EXTRA_UUID, s.stationUuid); i.putExtra(RadioPlayerService.EXTRA_HOMEPAGE, s.homepage); i.putExtra(RadioPlayerService.EXTRA_COUNTRY, s.countryCode);
         try { if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i); }
         catch (Throwable t) { AppLog.e(this, "player-play", t); Toast.makeText(this, "Reprodukciju nije moguće pokrenuti", Toast.LENGTH_LONG).show(); return; }
+        currentKey = key;
+        state.addRecent(key);
+        state.setLastStation(key, s.name, s.meta());
         currentCountryCode = s.countryCode;
         playerName.setText(s.name); playerMeta.setText(s.meta()); applyFlag(playerMeta, s.countryCode); statusText.setText("Povezujem…");
         if (playerArtwork != null) { playerArtwork.setImageResource(R.drawable.ic_radio_balkan); images.load(s.favicon, playerArtwork, null); }
         if (playerEqualizer != null) playerEqualizer.setActive(false);
-        playing = false; adapter.setPlayback(currentKey, false);
+        playing = false;
+        updatePlaybackControls();
+        adapter.setPlayback(currentKey, false);
         selectBottomNav("radio");
     }
 
@@ -733,7 +849,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         options.add("Kopiraj poveznicu za reprodukciju");
         options.add("Odaberi drugi izvor");
         options.add("Provjeri dostupnost");
-        if (!state.autoReplacement(s.key()).isEmpty() || !state.backups(s.key()).isEmpty()) options.add("Vrati automatski odabir");
+        if (state.manualReplacement(s.key()).isEmpty() && (!state.autoReplacement(s.key()).isEmpty() || !state.backups(s.key()).isEmpty())) options.add("Vrati automatski odabir");
         String[] array = options.toArray(new String[0]);
         new AlertDialog.Builder(this).setTitle(s.name).setItems(array, (d, which) -> {
             String chosen = array[which];
@@ -743,12 +859,19 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             else if (chosen.equals("Kopiraj poveznicu za reprodukciju")) copyText(s.activeUrl);
             else if (chosen.equals("Odaberi drugi izvor")) showSourceDialog(s);
             else if (chosen.equals("Provjeri dostupnost")) checkOne(s);
-            else if (chosen.equals("Vrati automatski odabir")) { state.clearAutomaticSources(s.key()); s.replaced = !state.manualReplacement(s.key()).isEmpty(); s.activeUrl = !s.urlResolved.isEmpty() ? s.urlResolved : s.url; adapter.notifyDataSetChanged(); statusText.setText("Vraćen automatski odabir izvora"); }
+            else if (chosen.equals("Vrati automatski odabir")) {
+                state.clearAutomaticSources(s.key());
+                String manual = state.manualReplacement(s.key());
+                s.replaced = !manual.isEmpty();
+                s.activeUrl = !manual.isEmpty() ? manual : (!s.urlResolved.isEmpty() ? s.urlResolved : s.url);
+                adapter.notifyDataSetChanged();
+                statusText.setText(manual.isEmpty() ? "Vraćen automatski odabir izvora" : "Ručni izvor ostaje aktivan");
+            }
         }).setNegativeButton("Zatvori", null).show();
     }
 
     private void openWeb(RadioStation s) {
-        if (!StreamResolver.isHttp(s.homepage)) { Toast.makeText(this, "Web stranica nije dostupna", Toast.LENGTH_SHORT).show(); return; }
+        if (!StreamResolver.isSafeHttp(s.homepage)) { Toast.makeText(this, "Web stranica nije dostupna", Toast.LENGTH_SHORT).show(); return; }
         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(s.homepage))); }
         catch (Throwable t) { AppLog.e(this, "open-web", t); Toast.makeText(this, "Nije moguće otvoriti web stranicu", Toast.LENGTH_SHORT).show(); }
     }
@@ -935,9 +1058,16 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private LinearLayout chipRow() { LinearLayout l = new LinearLayout(this); l.setOrientation(LinearLayout.HORIZONTAL); l.setGravity(Gravity.CENTER_VERTICAL); return l; }
     private HorizontalScrollView horizontal(View child) { HorizontalScrollView h = new HorizontalScrollView(this); h.setHorizontalScrollBarEnabled(false); h.setFillViewport(false); h.addView(child); return h; }
     private Button chip(String label, boolean selected) {
-        Button b = new Button(this); b.setText(label); b.setAllCaps(false); b.setTextSize(11); b.setTypeface(selected ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
-        b.setTextColor(selected ? 0xFFFFFFFF : 0xFFE4DBD5); b.setPadding(dp(12), 0, dp(12), 0); b.setMinHeight(0); b.setMinimumHeight(0); b.setMinWidth(0); b.setMinimumWidth(0);
-        b.setBackground(rounded(selected ? 0xFFEB5323 : 0xFF2A211D, selected ? 0xFFEB5323 : 0xFF4B3A31, 14)); return b;
+        Button b = new Button(this); b.setText(label); b.setAllCaps(false); b.setTextSize(11);
+        b.setPadding(dp(12), 0, dp(12), 0); b.setMinHeight(0); b.setMinimumHeight(0); b.setMinWidth(0); b.setMinimumWidth(0);
+        styleChip(b, selected);
+        return b;
+    }
+    private void styleChip(Button b, boolean selected) {
+        if (b == null) return;
+        b.setTypeface(selected ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+        b.setTextColor(selected ? 0xFFFFFFFF : 0xFFE4DBD5);
+        b.setBackground(interactiveRounded(selected ? 0xFFEB5323 : 0xFF2A211D, selected ? 0xFFEB5323 : 0xFF4B3A31, 14, 0x30FFFFFF));
     }
     private LinearLayout.LayoutParams chipParams() { LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)); p.setMargins(dp(3), dp(4), dp(4), dp(3)); return p; }
     private Button smallTop(String label) { Button b = chip(label, false); b.setTextSize(11); return b; }
@@ -945,6 +1075,11 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private Button playerButton(String label, boolean accent) { Button b = chip(label, accent); b.setTextSize(17); return b; }
     private TextView label(String value, int size, int color, boolean bold) { TextView t = new TextView(this); t.setText(value); t.setTextSize(size); t.setTextColor(color); t.setGravity(Gravity.CENTER_VERTICAL); if (bold) t.setTypeface(Typeface.DEFAULT_BOLD); t.setSingleLine(true); t.setEllipsize(android.text.TextUtils.TruncateAt.END); return t; }
     private GradientDrawable rounded(int fill, int stroke, int radiusDp) { GradientDrawable g = new GradientDrawable(); g.setColor(fill); g.setCornerRadius(dp(radiusDp)); g.setStroke(dp(1), stroke); return g; }
+    private android.graphics.drawable.Drawable interactiveRounded(int fill, int stroke, int radiusDp, int rippleColor) {
+        GradientDrawable content = rounded(fill, stroke, radiusDp);
+        GradientDrawable mask = rounded(Color.WHITE, 0x00000000, radiusDp);
+        return new RippleDrawable(ColorStateList.valueOf(rippleColor), content, mask);
+    }
     private LinearLayout.LayoutParams marginParams(int w, int h, int l, int t, int r, int b) { LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(w, h); p.setMargins(dp(l), dp(t), dp(r), dp(b)); return p; }
     private FrameLayout.LayoutParams playerLayoutParams() { FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(PLAYER_H_DP)); p.gravity = Gravity.BOTTOM; return p; }
     private int dp(int v) { return (int) (v * getResources().getDisplayMetrics().density + 0.5f); }

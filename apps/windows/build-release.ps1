@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.0.19",
+    [string]$Version = "0.0.20",
     [string]$Output = (Join-Path $PSScriptRoot "dist")
 )
 
@@ -13,12 +13,21 @@ if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
 }
 
 function Test-GoFormatting([string]$Path) {
-    $diff = (& gofmt -d $Path | Out-String)
-    if ($LASTEXITCODE -ne 0) {
-        throw "gofmt provjera nije uspjela za $Path"
-    }
-    if ($diff.Trim()) {
-        Write-Warning "$Path nije potpuno gofmt formatiran; build ne mijenja source datoteku."
+    $resolved = (Resolve-Path $Path).Path
+    $original = [IO.File]::ReadAllText($resolved).Replace("`r`n", "`n")
+    $temp = [IO.Path]::GetTempFileName()
+    try {
+        [IO.File]::WriteAllText($temp, $original, [Text.UTF8Encoding]::new($false))
+        & gofmt -w $temp
+        if ($LASTEXITCODE -ne 0) {
+            throw "gofmt provjera nije uspjela za $Path"
+        }
+        $formatted = [IO.File]::ReadAllText($temp).Replace("`r`n", "`n")
+        if ($original -cne $formatted) {
+            throw "$Path nije gofmt formatiran. Pokreni gofmt prije produkcijskog builda."
+        }
+    } finally {
+        Remove-Item -Force -ErrorAction SilentlyContinue $temp
     }
 }
 

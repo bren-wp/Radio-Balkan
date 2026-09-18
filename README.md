@@ -7,13 +7,23 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.19" src="assets/badges/version.svg">
+  <img alt="version 0.0.20" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
 </p>
 
 Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrvatske i regije bez korisničkog računa, bez telemetry sustava i bez teškog web runtimea u Windows aplikaciji. Projekt objedinjuje nativni Windows klijent, nativni Android klijent i produkcijske ekstenzije za Chrome, Edge, Opera i Firefox.
+
+## Što donosi v0.0.20
+
+- **Premium i jasniji UI/UX** — browser, Android i Windows installer dobili su dosljednije focus, pressed, loading i filter interakcije bez težih UI frameworka.
+- **Browser koji pamti korisnički prikaz** — država, žanr i Omiljene ostaju lokalno spremljeni; ručni refresh sada jasno prijavljuje mrežni neuspjeh umjesto da cache prikaže kao novo osvježavanje, a isti ponovljeni play/pause klik ne šalje dupliciranu runtime komandu dok je prethodna radnja u tijeku.
+- **Potpuna keyboard kontrola** — browser station kartice rade na Enter/Space, a Windows Setup na Tab/strelice/Enter/Space/Escape uz vidljiv fokus i veće click-targete.
+- **Točniji Android sadržaj** — Radio Browser glasovi prikazuju se kao popularnost, ne kao lažni broj trenutačnih slušatelja; redovi stanica prikazuju health status, player CTA prati Slušaj/Nastavi/Pauziraj stanje, spremljeni tab i bottom-nav ostaju usklađeni, a paralelni ručni refresh se sprječava.
+- **Intuitivniji Windows playback** — play kontrole aktivne stanice rade kao pravi pause/resume toggle, a hero i station kartice prikazuju Slušaj/Nastavi/Pauziraj stanje.
+- **Stabilniji lifecycle** — Android katalog sigurno podnosi executor/shutdown race, a postojeći player, cache i cleanup guardovi ostaju aktivni.
+- **Stroži release metadata contract** — Portable i Setup source fallback verzije sada su dio transactional version bumpa i CI provjere, uz linker-injected release verziju.
 
 ## Zašto Radio Balkan
 
@@ -53,7 +63,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.19 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.19):
+Gotovi v0.0.20 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.20):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -93,7 +103,7 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.20
+python scripts/bump_version.py 0.0.21
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.

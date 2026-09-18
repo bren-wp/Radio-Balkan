@@ -22,6 +22,8 @@ def build_fixture(root: Path) -> None:
         "apps/windows/build-release.ps1",
         'param(\n    [string]$Version = "1.2.3"\n)\n-X main.appVersion=$Version\n-X main.appVersion=$Version\n',
     )
+    write(root, "apps/windows/portable/main.go", 'package main\nvar appVersion = "1.2.3"\n')
+    write(root, "apps/windows/setup/main.go", 'package main\nvar appVersion = "1.2.3"\n')
     write(
         root,
         "apps/android/app/build.gradle.kts",
@@ -66,6 +68,8 @@ def main() -> None:
         apply_updates_transactionally(updates, lambda: 0)
         assert (root / "VERSION").read_text(encoding="utf-8") == "1.2.4\n"
         assert '[string]$Version = "1.2.4"' in (root / "apps/windows/build-release.ps1").read_text(encoding="utf-8")
+        assert 'var appVersion = "1.2.4"' in (root / "apps/windows/portable/main.go").read_text(encoding="utf-8")
+        assert 'var appVersion = "1.2.4"' in (root / "apps/windows/setup/main.go").read_text(encoding="utf-8")
         gradle = (root / "apps/android/app/build.gradle.kts").read_text(encoding="utf-8")
         assert "versionCode = 18" in gradle
         assert 'versionName = "1.2.4"' in gradle

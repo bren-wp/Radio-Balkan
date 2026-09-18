@@ -1,5 +1,17 @@
 # Changelog — Windows
 
+
+## 0.0.20
+
+- Windows Setup dobio keyboard navigaciju preko Tab/strelica, Enter/Space aktivaciju i Escape zatvaranje iz idle stanja
+- installer checkbox opcije imaju proširene click-targete preko cijele labele i vidljivo fokus stanje
+- dodani regression testovi za wrapanje keyboard fokusa i checkbox hit-targete
+- Portable i Setup source `appVersion` fallback vrijednosti sada su dio centralnog transactional version bumpa i version-check contracta
+- postojeći durable state write, idempotent shutdown cleanup, mrežni DNS/IP guardovi i installer SHA-256 provjera ostaju aktivni
+- aktivna station/hero play kontrola radi kao pause/resume toggle; UI prikazuje `Pauziraj` ili `Nastavi` prema stvarnom playback stanju
+- Portable i Setup ponovno prolaze strogi normalized `gofmt` gate, Go test, vet, release build i clean-worktree provjeru
+- uklonjen izravni `unsafe.Pointer(lParam)` cast iz `WM_GETMINMAXINFO` handlera; struktura se kopira preko postojećeg memory-copy wrappera
+
 ## 0.0.5
 
 - uklonjeni nepotrebni ugrađeni JPG dizajnerski asseti i raster cache
