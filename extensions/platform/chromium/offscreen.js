@@ -96,10 +96,7 @@ function playbackFailed(token, expectedSession, instance) {
   void start(expectedSession);
 }
 
-function createAudio(token, expectedSession, candidate) {
-  const instance = document.createElement('audio');
-  instance.preload = 'none';
-  instance.src = candidate;
+function bindAudioHandlers(instance, token, expectedSession) {
   instance.onerror = () => playbackFailed(token, expectedSession, instance);
   instance.onended = () => playbackFailed(token, expectedSession, instance);
   instance.onplaying = () => {
@@ -116,8 +113,38 @@ function createAudio(token, expectedSession, candidate) {
   };
   instance.onwaiting = () => scheduleStallRecovery(token, expectedSession, instance);
   instance.onstalled = () => scheduleStallRecovery(token, expectedSession, instance);
+}
+
+function createAudio(token, expectedSession, candidate) {
+  const instance = document.createElement('audio');
+  instance.preload = 'none';
+  instance.src = candidate;
+  bindAudioHandlers(instance, token, expectedSession);
   audio = instance;
   return instance;
+}
+
+async function resumeCurrent(expectedSession) {
+  const instance = audio;
+  if (!instance || !instance.paused || sessionId !== expectedSession) return start(expectedSession);
+  const token = ++generation;
+  bindAudioHandlers(instance, token, expectedSession);
+  try {
+    await playWithTimeout(instance);
+    if (token !== generation || sessionId !== expectedSession || audio !== instance) {
+      return { ...stateEnvelope({ ok: false, stale: true }) };
+    }
+    playing = true;
+    await report();
+    return { ...stateEnvelope({ ok: true }) };
+  } catch {
+    if (token !== generation || sessionId !== expectedSession || audio !== instance) {
+      return { ...stateEnvelope({ ok: false, stale: true }) };
+    }
+    disposeAudio(instance);
+    playing = false;
+    return start(expectedSession);
+  }
 }
 
 async function start(expectedSession) {
@@ -189,7 +216,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return;
     }
     if (index >= candidates.length) index = 0;
-    start(requestedSession)
+    resumeCurrent(requestedSession)
       .then(sendResponse)
       .catch(() => sendResponse({ ...stateEnvelope({ ok: false }) }));
     return true;
@@ -203,8 +230,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     generation += 1;
     resetAudio();
+    const response = { ...stateEnvelope({ ok: true }) };
+    sessionId = null;
+    candidates = [];
+    index = 0;
     void report();
-    sendResponse({ ...stateEnvelope({ ok: true }) });
+    sendResponse(response);
     return;
   }
 
