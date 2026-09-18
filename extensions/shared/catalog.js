@@ -21,6 +21,8 @@ const RB = (() => {
   const CACHE_MS = 12 * 60 * 60 * 1000;
   const MAX_SERVER_RESPONSE_BYTES = 512 * 1024;
   const MAX_CATALOG_RESPONSE_BYTES = 8 * 1024 * 1024;
+  const MAX_DISCOVERED_API_BASES = 4;
+  const MAX_API_BASES = 8;
   const ext = globalThis.browser || globalThis.chrome;
 
   const clean = value => String(value ?? '')
@@ -177,8 +179,15 @@ const RB = (() => {
       const response = await fetchWithTimeout('https://all.api.radio-browser.info/json/servers', { cache: 'no-store', redirect: 'error' }, 6500);
       if (response.ok) {
         const body = await readJsonLimited(response, MAX_SERVER_RESPONSE_BYTES);
-        const dynamic = body.map(x => safeApiBase(x?.name)).filter(Boolean);
-        if (dynamic.length) return [...new Set([...dynamic, ...API_FALLBACKS])];
+        if (!Array.isArray(body)) throw new Error('Neispravan popis API servera');
+        const dynamic = [];
+        for (const row of body) {
+          const candidate = safeApiBase(row?.name);
+          if (!candidate || API_FALLBACKS.includes(candidate) || dynamic.includes(candidate)) continue;
+          dynamic.push(candidate);
+          if (dynamic.length >= MAX_DISCOVERED_API_BASES) break;
+        }
+        return [...new Set([...dynamic, ...API_FALLBACKS])].slice(0, MAX_API_BASES);
       }
     } catch { }
     return API_FALLBACKS;
