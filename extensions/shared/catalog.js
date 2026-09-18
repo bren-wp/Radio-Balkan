@@ -304,20 +304,28 @@ const RB = (() => {
     const serverList = await bases();
     const results = new Map();
     let cursor = 0;
+    let successfulBatches = 0;
     async function worker() {
       while (true) {
         const index = cursor++;
         if (index >= BALKAN_COUNTRIES.length) return;
         const code = BALKAN_COUNTRIES[index][0];
-        try { results.set(code, await fetchCountryFromAny(code, serverList)); }
-        catch { results.set(code, []); }
+        try {
+          results.set(code, await fetchCountryFromAny(code, serverList));
+          successfulBatches += 1;
+        } catch {
+          results.set(code, []);
+        }
       }
     }
-    const foreignPromise = fetchForeignFromAny(serverList).catch(() => []);
+    const foreignPromise = fetchForeignFromAny(serverList)
+      .then(list => { successfulBatches += 1; return list; })
+      .catch(() => []);
     await Promise.all([worker(), worker()]);
     let online = [];
     for (const [code] of BALKAN_COUNTRIES) online.push(...(results.get(code) || []));
     online.push(...await foreignPromise);
+    if (successfulBatches === 0) throw new Error('Radio Browser trenutačno nije dostupan');
     const merged = mergeMissingCountries(online, cached);
     const regionalCount = merged.filter(x => x.countrycode !== FOREIGN_CODE).length;
     if (regionalCount < 600 && cached.length > merged.length) return mergeMissingCountries([...merged, ...cached], cached);
@@ -334,9 +342,23 @@ const RB = (() => {
       await storageSet({ rbCatalog: list, rbCatalogAt: Date.now() });
       return list;
     } catch (error) {
-      if (cached.length) return cached;
+      if (cached.length && !force) return cached;
       throw error;
     }
+  }
+
+  async function uiPreferences() {
+    const x = await storageGet(['rbUiPrefs']);
+    return x.rbUiPrefs && typeof x.rbUiPrefs === 'object' ? x.rbUiPrefs : {};
+  }
+
+  async function setUiPreferences(value) {
+    const safe = value && typeof value === 'object' ? value : {};
+    await storageSet({ rbUiPrefs: {
+      country: clean(safe.country).toUpperCase().slice(0, 3),
+      genre: clean(safe.genre).toLowerCase().slice(0, 32),
+      favoritesOnly: !!safe.favoritesOnly
+    }});
   }
 
   async function favorites() {
@@ -357,7 +379,7 @@ const RB = (() => {
   }
 
   return {
-    load, favorites, setFavorite, key, fold, safeHttp, ext,
+    load, favorites, setFavorite, uiPreferences, setUiPreferences, key, fold, safeHttp, ext,
     COUNTRIES, BALKAN_COUNTRIES, ALLOWED, BALKAN_ALLOWED, FOREIGN_CODE, MAX_FOREIGN
   };
 })();
