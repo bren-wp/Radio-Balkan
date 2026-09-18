@@ -137,7 +137,10 @@ const (
 	SW_SHOWNORMAL = 1
 	VK_RETURN     = 0x0D
 	VK_ESCAPE     = 0x1B
+	VK_SPACE      = 0x20
+	VK_LEFT       = 0x25
 	VK_UP         = 0x26
+	VK_RIGHT      = 0x27
 	VK_DOWN       = 0x28
 	VK_F5         = 0x74
 	VK_CONTROL    = 0x11
@@ -1803,6 +1806,12 @@ func drawIconButton(hdc syscall.Handle, l, t, r, b int32, label string, accent b
 	text(hdc, label, l, t, r, b, tc, DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 }
 
+func drawDisabledIconButton(hdc syscall.Handle, l, t, r, b int32, label string) {
+	drawRounded(hdc, l, t, r, b, 13, color(12, 18, 26), color(34, 42, 52))
+	selectFont(hdc, app.hFontBold)
+	text(hdc, label, l, t, r, b, rgb(91, 100, 112), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+}
+
 func drawSelectBox(hdc syscall.Handle, l, t, r, b int32, label string, open bool) {
 	fill, border := color(17, 25, 35), color(43, 53, 66)
 	if open {
@@ -2436,6 +2445,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	np := ""
 	currentCountry := ""
 	playing := false
+	stopped := true
 	currentIdx := -1
 	var current RadioStation
 	app.mu.RLock()
@@ -2450,6 +2460,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 		}
 	}
 	playing = app.playing
+	stopped = app.audioStopped
 	app.mu.RUnlock()
 	app.stateMu.RLock()
 	vol := app.state.Volume
@@ -2505,8 +2516,13 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	selectFont(hdc, app.hFontTitle)
 	text(hdc, label, cx-28, t+10, cx+28, t+72, rgb(20, 21, 24), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	app.hits = append(app.hits, HitRegion{R: RECT{cx - 35, t + 7, cx + 35, t + 76}, Kind: hitPlayerPlay, Index: -1})
-	drawIconButton(hdc, cx+48, t+25, cx+88, t+65, "■", false)
-	app.hits = append(app.hits, HitRegion{R: RECT{cx + 44, t + 21, cx + 92, t + 69}, Kind: hitPlayerStop, Index: -1})
+	canStop := currentIdx >= 0 && !stopped
+	if canStop {
+		drawIconButton(hdc, cx+48, t+25, cx+88, t+65, "■", false)
+		app.hits = append(app.hits, HitRegion{R: RECT{cx + 44, t + 21, cx + 92, t + 69}, Kind: hitPlayerStop, Index: -1})
+	} else {
+		drawDisabledIconButton(hdc, cx+48, t+25, cx+88, t+65, "■")
+	}
 	selectFont(hdc, app.hFontBold)
 	text(hdc, "▶", cx+112, t+21, cx+150, t+59, rgb(193, 199, 207), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	app.hits = append(app.hits, HitRegion{R: RECT{cx + 108, t + 17, cx + 154, t + 63}, Kind: hitPlayerNext, Index: -1})
@@ -2824,8 +2840,15 @@ func handleKeyDown(key uint32) {
 	genreOpen := app.genreMenuOpen
 	app.mu.RUnlock()
 	if !countryOpen && !genreOpen {
-		if key == VK_F5 {
+		switch key {
+		case VK_F5:
 			safeGo("refresh-hotkey", refreshAll)
+		case VK_SPACE:
+			toggleCurrentPlayback()
+		case VK_LEFT:
+			playAdjacent(-1)
+		case VK_RIGHT:
+			playAdjacent(1)
 		}
 		return
 	}

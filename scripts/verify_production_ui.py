@@ -193,6 +193,14 @@ def main() -> int:
         'heroLabel = "▶  Nastavi"',
         'playLabel = "Ⅱ"',
         "Kind: hitPlayerStop",
+        "drawDisabledIconButton",
+        "canStop := currentIdx >= 0 && !stopped",
+        "case VK_SPACE:",
+        "case VK_LEFT:",
+        "case VK_RIGHT:",
+        "toggleCurrentPlayback()",
+        "playAdjacent(-1)",
+        "playAdjacent(1)",
         '"■"',
     ):
         require(errors, windows, needle, "Windows UI")
