@@ -252,11 +252,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     generation += 1;
     resetAudio();
-    const response = { ...stateEnvelope({ ok: true }) };
     sessionId = null;
     candidates = [];
     index = 0;
     refreshAttempted = false;
+    const response = { ...stateEnvelope({ ok: true }) };
     void report();
     sendResponse(response);
     return;

@@ -167,6 +167,7 @@ async function main() {
   const newest = await playDuringClose;
   closeGate = null;
   assert.equal(stopped.stale, undefined, 'completed stop response may return the current snapshot without reviving old playback');
+  assert.equal(stopped.sessionId, null, 'completed Chromium stop must return a terminal worker snapshot');
   assert.equal(createCalls, 2, 'new play must recreate offscreen only after close completion');
   assert.equal(newest.station.name, 'Radio C');
   assert.equal(newest.playing, true, 'play issued during close must recover into active playback');

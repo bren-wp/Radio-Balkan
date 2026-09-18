@@ -154,9 +154,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         requestToken = ++commandGeneration;
         const requestedSession = currentSessionId;
         if (await hasOffscreen()) {
-          const actual = await offscreen({ type: 'STOP', sessionId: requestedSession });
+          await offscreen({ type: 'STOP', sessionId: requestedSession });
           if (requestToken === commandGeneration && requestedSession === currentSessionId) {
-            acceptOffscreenState(actual, { notify: true });
             await closeOffscreen();
           }
         }

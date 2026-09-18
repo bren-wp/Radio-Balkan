@@ -322,6 +322,7 @@ def main() -> None:
         "new play must wait until the previous offscreen close completes",
         "play issued during close must recover into active playback",
         "Chromium stopped state must expose a retired session",
+        "completed Chromium stop must return a terminal worker snapshot",
         "terminal Chromium play failure must retire the failed session",
         "terminal Chromium resume failure must retire the failed session",
     )
@@ -330,6 +331,7 @@ def main() -> None:
         "pause must not recreate the audio element",
         "resume must reuse the paused audio element",
         "stop must retire the offscreen session",
+        "direct Chromium STOP response must already retire the offscreen session",
         "a hanging first candidate must fall back to the next stream",
         "stalled active audio must recover to a fallback candidate",
         "play after stop must create fresh Chromium playback",

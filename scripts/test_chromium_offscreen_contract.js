@@ -152,6 +152,7 @@ async function main() {
   const stopped = await dispatch({ type: 'STOP', sessionId: 's1' });
   assert.equal(stopped.ok, true);
   assert.equal(stopped.playing, false, 'stop must clear Chromium playback');
+  assert.equal(stopped.sessionId, null, 'direct Chromium STOP response must already retire the offscreen session');
   const playsBeforeStoppedToggle = playCalls;
   const afterStopToggle = await dispatch({ type: 'TOGGLE', sessionId: 's1' });
   assert.equal(afterStopToggle.ok, false, 'toggle after stop must reject the retired Chromium session');
