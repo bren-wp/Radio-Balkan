@@ -9,7 +9,7 @@ Izdanje 0.0.18 fokusirano je na mrežnu sigurnost i dosljedno blokiranje lokalni
 - Windows URL validacija kanonizira hostname prije sigurnosne odluke, pa trailing-dot oblici poput `localhost.`, `radio.local.` i metadata hostova više ne mogu zaobići lokalne host provjere
 - Windows HTTP transport koristi vlastiti `DialContext`: hostname se razrješava prije uspostave veze, cijeli DNS rezultat se odbija ako sadrži privatnu/lokalnu adresu, a TCP veza se uspostavlja na već provjerenu javnu IP adresu
 - Windows testovi dodatno pokrivaju privatne, link-local, multicast, CGNAT, IPv4-mapped IPv6 i trailing-dot host scenarije
-- Android prije stream probea, MediaPlayer pripreme, ICY metadata zahtjeva, homepage discoveryja i učitavanja logotipa radi DNS preflight i odbija rezultat koji sadrži privatnu ili lokalnu adresu
+- Android prije Radio Browser API zahtjeva, stream probea, MediaPlayer pripreme, ICY metadata zahtjeva, homepage discoveryja i učitavanja logotipa radi DNS preflight i odbija rezultat koji sadrži privatnu ili lokalnu adresu
 - Android JUnit regresija provjerava miješani public+private DNS rezultat, link-local metadata adresu i normalan javni skup adresa
 - `verify_security_contracts.py` zaključava cross-platform mrežne zaštite kako se navedeni guardovi i testovi ne bi mogli nenamjerno ukloniti
 - nisu dodane nove Android dozvole, browser broad permissions, analytics, telemetry, tracking SDK-ovi ni runtime dependencyji

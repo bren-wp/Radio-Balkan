@@ -41,6 +41,12 @@ def main() -> None:
         "Context.RECEIVER_NOT_EXPORTED",
     )
     require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/RadioRepository.java",
+        "StreamResolver.isSafeHttpForConnection(current)",
+        "setInstanceFollowRedirects(false)",
+        "isTrustedApiUrl(current)",
+    )
+    require(
         "apps/android/app/src/main/java/net/radiobalkan/app/RadioPlayerService.java",
         'INTERNAL_STATE_PERMISSION = "net.radiobalkan.app.permission.INTERNAL_STATE"',
         "sendBroadcast(i, INTERNAL_STATE_PERMISSION);",
