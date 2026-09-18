@@ -11,7 +11,8 @@ Nativna Windows x64 aplikacija i installer bez Electrona, ugrađenog browser run
 - state zapis koristi durable temp-write + sync + backup/rename putanju, a finalni shutdown persistence/audio cleanup je idempotentan
 - mrežni transport razrješava i validira javne IP adrese prije TCP spajanja te blokira privatne/lokalne/metadata ciljeve
 - installer provjerava SHA-256 instaliranog executabla prije nastavka
-- Portable i Setup prolaze Go test/vet/build te clean-worktree provjeru u CI-ju
+- Portable i Setup prolaze strogi line-ending-neovisni `gofmt` gate, Go vet/test/build te clean-worktree provjeru u CI-ju
+- `WM_GETMINMAXINFO` minimal-size handler koristi kontrolirani memory-copy put umjesto direktnog callback `uintptr → unsafe.Pointer` casta
 
 ## Build
 
