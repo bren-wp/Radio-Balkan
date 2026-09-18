@@ -919,6 +919,7 @@ func main() {
 		messageBox(0, "Greška", err.Error(), MB_ICONERROR)
 		return
 	}
+	safeGo("audio-warmup", warmAudioEngine)
 	safeGo("load-stations", loadStations)
 	var msg MSG
 	for {
@@ -5184,7 +5185,7 @@ func startAudioEngineLocked() error {
 			}
 			return errors.New("audio engine se nije ispravno inicijalizirao")
 		}
-	case <-time.After(6 * time.Second):
+	case <-time.After(15 * time.Second):
 		_ = in.Close()
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
@@ -5304,6 +5305,18 @@ func audioSendExisting(line string) error {
 	}
 	return waitAudioAckLocked()
 }
+func warmAudioEngine() {
+	if shuttingDown() {
+		return
+	}
+	app.audioMu.Lock()
+	err := startAudioEngineLocked()
+	app.audioMu.Unlock()
+	if err != nil && !shuttingDown() {
+		logError("audio-warmup", err)
+	}
+}
+
 func audioShutdown() {
 	app.audioMu.Lock()
 	in := app.audioIn
