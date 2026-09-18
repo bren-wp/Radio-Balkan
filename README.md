@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.23" src="assets/badges/version.svg">
+  <img alt="version 0.0.24" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -15,7 +15,7 @@
 
 Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrvatske i regije bez korisničkog računa, bez telemetry sustava i bez teškog web runtimea u Windows aplikaciji. Projekt objedinjuje nativni Windows klijent, nativni Android klijent i produkcijske ekstenzije za Chrome, Edge, Opera i Firefox.
 
-## Što donosi v0.0.23
+## Što donosi v0.0.24
 
 - **Stvarni Windows player lifecycle gate** — CI nad lokalnim WAV zapisom izvršava `Play → Pause → Volume → Resume → Stop → Play → Stop`, bez ovisnosti o vanjskom radio streamu.
 - **Sigurniji audio ACK protokol** — `PLAY` ima 5-sekundni, a kontrolne naredbe 2-sekundni bounded ACK budžet; timeout ili write failure odbacuju helper proces i kanal prije fallbacka, pa zakašnjeli `OK` ne može potvrditi sljedeću naredbu.
@@ -63,7 +63,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.23 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.23):
+Gotovi v0.0.24 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.24):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -103,7 +103,7 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.24
+python scripts/bump_version.py 0.0.25
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.

@@ -152,7 +152,7 @@ const (
 	WS_EX_DLGMODALFRAME            = 0x00000001
 )
 
-var appVersion = "0.0.23"
+var appVersion = "0.0.24"
 
 type WNDCLASS struct {
 	Style         uint32
