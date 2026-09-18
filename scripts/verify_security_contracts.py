@@ -304,6 +304,9 @@ def main() -> None:
         "time.After(2500 * time.Millisecond)",
         "shutdown-timeout",
         "Do not block the UI thread acquiring app.mu during shutdown.",
+        "func runtimeTestTrace(scope string)",
+        'runtimeTestTrace("wm-close-enter")',
+        'runtimeTestTrace("wm-destroy-before-post-quit")',
         "func writeFileDurable(",
         "return f.Sync()",
         "writeFileDurable(tmp, b, 0644)",
@@ -330,6 +333,7 @@ def main() -> None:
         "Radio Balkan runtime smoke OK",
         "Radio Balkan exited during the",
         "CloseMainWindow()",
+        "RADIO_BALKAN_RUNTIME_TEST",
         "main window rejected the close request",
     )
     forbid(
