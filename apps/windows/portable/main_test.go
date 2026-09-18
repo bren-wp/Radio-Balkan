@@ -152,6 +152,22 @@ func TestPlaybackToggleDecisionLifecycle(t *testing.T) {
 	}
 }
 
+func TestAudioAckTimeoutDiscardsStaleChannel(t *testing.T) {
+	app = App{done: make(chan struct{}), audioAck: make(chan string)}
+
+	app.audioMu.Lock()
+	err := waitAudioAckLocked(15 * time.Millisecond)
+	cleared := app.audioAck == nil && app.audioCmd == nil && app.audioIn == nil
+	app.audioMu.Unlock()
+
+	if err == nil {
+		t.Fatal("audio ACK timeout unexpectedly succeeded")
+	}
+	if !cleared {
+		t.Fatal("timed-out audio helper state was not discarded")
+	}
+}
+
 func TestAudioEngineCommandLifecycle(t *testing.T) {
 	app = App{done: make(chan struct{})}
 	defer audioShutdown()
