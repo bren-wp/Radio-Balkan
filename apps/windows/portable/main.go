@@ -5145,7 +5145,7 @@ func startAudioEngineLocked() error {
 	if app.audioCmd != nil && app.audioCmd.Process != nil {
 		return nil
 	}
-	script := `$ErrorActionPreference='Stop'; Add-Type -AssemblyName PresentationCore; $p=New-Object System.Windows.Media.MediaPlayer; while(($line=[Console]::In.ReadLine()) -ne $null){ try { $sp=$line.Split(' ',3); switch($sp[0]){ 'PLAY' { $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[1])); $v=[double]::Parse($sp[2],[Globalization.CultureInfo]::InvariantCulture); $p.Stop(); $p.Close(); $p.Open([Uri]$u); $p.Volume=$v; $p.Play() } 'PAUSE' { $p.Pause() } 'RESUME' { $p.Play() } 'STOP' { $p.Stop(); $p.Close() } 'VOLUME' { $p.Volume=[double]::Parse($sp[1],[Globalization.CultureInfo]::InvariantCulture) } default { throw 'unknown command' } }; [Console]::Out.WriteLine('OK'); [Console]::Out.Flush() } catch { [Console]::Out.WriteLine('ERR'); [Console]::Out.Flush() } }`
+	script := `$ErrorActionPreference='Stop'; Add-Type -AssemblyName PresentationCore; $p=New-Object System.Windows.Media.MediaPlayer; [Console]::Out.WriteLine('READY'); [Console]::Out.Flush(); while(($line=[Console]::In.ReadLine()) -ne $null){ try { $sp=$line.Split(' ',3); switch($sp[0]){ 'PLAY' { $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[1])); $v=[double]::Parse($sp[2],[Globalization.CultureInfo]::InvariantCulture); $p.Stop(); $p.Close(); $p.Open([Uri]$u); $p.Volume=$v; $p.Play() } 'PAUSE' { $p.Pause() } 'RESUME' { $p.Play() } 'STOP' { $p.Stop(); $p.Close() } 'VOLUME' { $p.Volume=[double]::Parse($sp[1],[Globalization.CultureInfo]::InvariantCulture) } default { throw 'unknown command' } }; [Console]::Out.WriteLine('OK'); [Console]::Out.Flush() } catch { [Console]::Out.WriteLine('ERR'); [Console]::Out.Flush() } }`
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-STA", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	in, err := cmd.StdinPipe()
@@ -5175,6 +5175,28 @@ func startAudioEngineLocked() error {
 		}
 		close(ack)
 	}()
+	select {
+	case ready, ok := <-ack:
+		if !ok || ready != "READY" {
+			_ = in.Close()
+			if cmd.Process != nil {
+				_ = cmd.Process.Kill()
+			}
+			return errors.New("audio engine se nije ispravno inicijalizirao")
+		}
+	case <-time.After(6 * time.Second):
+		_ = in.Close()
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		return errors.New("audio engine startup timeout")
+	case <-app.done:
+		_ = in.Close()
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		return context.Canceled
+	}
 	app.audioCmd = cmd
 	app.audioIn = in
 	app.audioAck = ack
