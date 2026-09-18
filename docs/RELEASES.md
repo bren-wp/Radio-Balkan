@@ -1,5 +1,24 @@
 # Izdavanja
 
+## 0.0.18
+
+Izdanje 0.0.18 fokusirano je na mrežnu sigurnost i dosljedno blokiranje lokalnih, privatnih i metadata odredišta na Windows, Android i browser klijentima, uz regresijske testove koji zaključavaju novo ponašanje.
+
+- browser URL validator ispravlja IPv6 provjeru za cijeli unique-local raspon `fc00::/7`, cijeli link-local raspon `fe80::/10` i multicast `ff00::/8`; postojeća zaštita od IPv4 loopback/private/link-local/CGNAT i IPv4-mapped IPv6 ciljeva ostaje aktivna
+- browser network regression testovi sada eksplicitno pokrivaju `fc00::`, `fd00::`, `fe90::` i `ff02::` scenarije
+- Windows URL validacija kanonizira hostname prije sigurnosne odluke, pa trailing-dot oblici poput `localhost.`, `radio.local.` i metadata hostova više ne mogu zaobići lokalne host provjere
+- Windows HTTP transport koristi vlastiti `DialContext`: hostname se razrješava prije uspostave veze, cijeli DNS rezultat se odbija ako sadrži privatnu/lokalnu adresu, a TCP veza se uspostavlja na već provjerenu javnu IP adresu
+- Windows testovi dodatno pokrivaju privatne, link-local, multicast, CGNAT, IPv4-mapped IPv6 i trailing-dot host scenarije
+- Android prije stream probea, MediaPlayer pripreme, ICY metadata zahtjeva, homepage discoveryja i učitavanja logotipa radi DNS preflight i odbija rezultat koji sadrži privatnu ili lokalnu adresu
+- Android JUnit regresija provjerava miješani public+private DNS rezultat, link-local metadata adresu i normalan javni skup adresa
+- `verify_security_contracts.py` zaključava cross-platform mrežne zaštite kako se navedeni guardovi i testovi ne bi mogli nenamjerno ukloniti
+- nisu dodane nove Android dozvole, browser broad permissions, analytics, telemetry, tracking SDK-ovi ni runtime dependencyji
+- regionalni katalog i kurirani `Strano / INT` katalog ostaju nepromijenjeni po opsegu i prioritetu; ovo izdanje ne degradira postojeće playback/session/lifecycle zaštite iz 0.0.17
+- verzija je sinkronizirana jednim release commitom na `0.0.18`, uz Android `versionCode 18`, a puni Windows/Android/browser/version CI ostaje obavezan prije mergea
+
+Windows transport pinning zatvara DNS-to-private promjenu između provjere i TCP diala za zahtjeve koji koriste zajednički Go HTTP transport. Android DNS preflight značajno smanjuje isti SSRF rizik, ali Android `MediaPlayer` i platformni `HttpURLConnection` ne nude ovom kodu isti stupanj socket-level IP pinninga; stoga se ne tvrdi apsolutna zaštita od svih DNS-rebinding/TOCTOU scenarija. Dostupnost stvarnih radio streamova i dalje ovisi o third-party infrastrukturi.
+
+
 ## 0.0.14
 
 Izdanje 0.0.14 fokusirano je na produkcijski UI/UX, robusnije korisničke opcije i smanjenje nepotrebnog rada u sva tri klijenta, bez novih telemetry komponenti ili širih browser dozvola.
