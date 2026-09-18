@@ -388,8 +388,7 @@
   }
 
   function navigationStations() {
-    const currentKey = current ? RB.key(current) : '';
-    if (visible.length && currentKey && visible.some(station => RB.key(station) === currentKey)) return visible;
+    if (visible.length) return visible;
     return all;
   }
 

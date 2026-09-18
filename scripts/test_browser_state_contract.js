@@ -250,8 +250,8 @@ async function main() {
   elements.refresh.dispatch('click');
   await flush();
   assert.equal(elements.country.value, 'RS', 'selected country filter must survive a catalog refresh');
-  assert.equal(elements.playerPrev.disabled, true, 'previous must disable when the active filter leaves only one station');
-  assert.equal(elements.playerNext.disabled, true, 'next must disable when the active filter leaves only one station');
+  assert.equal(elements.playerPrev.disabled, true, 'previous must disable when the active filter leaves only one visible station, even if the current station is outside that filter');
+  assert.equal(elements.playerNext.disabled, true, 'next must disable when the active filter leaves only one visible station, even if the current station is outside that filter');
   elements.country.value = '';
   elements.country.dispatch('change');
   assert.equal(elements.playerPrev.disabled, false, 'previous must re-enable when multiple stations are visible again');
