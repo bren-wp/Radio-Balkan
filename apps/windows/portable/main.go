@@ -5705,6 +5705,30 @@ func stateBaseDir() string {
 }
 func stateDir() string       { return filepath.Join(stateBaseDir(), "RadioBalkan") }
 func legacyStateDir() string { return filepath.Join(stateBaseDir(), "RadioHrvatska") }
+
+const (
+	maxStateFileBytes int64 = 2 << 20
+	maxCacheFileBytes int64 = 32 << 20
+)
+
+func readFileLimited(path string, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, errors.New("neispravan limit datoteke")
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("datoteka je prevelika: %d B", len(data))
+	}
+	return data, nil
+}
 func migrateLegacyDataDir() {
 	newDir, oldDir := stateDir(), legacyStateDir()
 	if newDir == oldDir {
@@ -5721,7 +5745,11 @@ func migrateLegacyDataDir() {
 	}
 	_ = os.MkdirAll(newDir, 0755)
 	for _, name := range []string{"state.json", "state.json.bak", "stations-cache.json", "stations-cache.json.bak"} {
-		b, err := os.ReadFile(filepath.Join(oldDir, name))
+		limit := maxCacheFileBytes
+		if strings.HasPrefix(name, "state.json") {
+			limit = maxStateFileBytes
+		}
+		b, err := readFileLimited(filepath.Join(oldDir, name), limit)
 		if err == nil {
 			_ = os.WriteFile(filepath.Join(newDir, name), b, 0644)
 		}
@@ -5753,8 +5781,11 @@ func writeFileDurable(path string, data []byte, perm os.FileMode) (err error) {
 func loadState() (PersistedState, bool) {
 	paths := []string{statePath(), statePath() + ".bak"}
 	for i, path := range paths {
-		b, err := os.ReadFile(path)
+		b, err := readFileLimited(path, maxStateFileBytes)
 		if err != nil {
+			if i == 0 && !errors.Is(err, os.ErrNotExist) {
+				logError("load-state", err)
+			}
 			continue
 		}
 		var st PersistedState
@@ -5889,7 +5920,7 @@ func loadCache() []RadioStation {
 	app.cacheFileMu.Lock()
 	defer app.cacheFileMu.Unlock()
 	for i, path := range []string{cachePath(), cacheBackupPath()} {
-		if info, statErr := os.Stat(path); statErr == nil && info.Size() > 32<<20 {
+		if info, statErr := os.Stat(path); statErr == nil && info.Size() > maxCacheFileBytes {
 			logError("load-cache", fmt.Errorf("spremljeni katalog je prevelik: %d B", info.Size()))
 			continue
 		}
@@ -5898,7 +5929,7 @@ func loadCache() []RadioStation {
 			continue
 		}
 		var c CacheFile
-		dec := json.NewDecoder(io.LimitReader(f, 32<<20))
+		dec := json.NewDecoder(io.LimitReader(f, maxCacheFileBytes))
 		err = dec.Decode(&c)
 		_ = f.Close()
 		if err != nil {

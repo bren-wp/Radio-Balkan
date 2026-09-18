@@ -102,6 +102,24 @@ func TestUnsafeNetworkIPRejectsLocalAndSpecialRanges(t *testing.T) {
 }
 
 
+func TestReadFileLimitedRejectsOversizedFiles(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "oversized.json")
+	if err := os.WriteFile(path, []byte("0123456789"), 0600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	if _, err := readFileLimited(path, 9); err == nil {
+		t.Fatal("readFileLimited() accepted a file larger than the configured limit")
+	}
+	got, err := readFileLimited(path, 10)
+	if err != nil {
+		t.Fatalf("readFileLimited() exact-limit error = %v", err)
+	}
+	if string(got) != "0123456789" {
+		t.Fatalf("readFileLimited() = %q; want exact file content", got)
+	}
+}
+
+
 func TestWriteFileDurablePersistsCompleteContent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.tmp")
 	want := []byte("{\"volume\":80,\"country_code\":\"HR\"}\n")
