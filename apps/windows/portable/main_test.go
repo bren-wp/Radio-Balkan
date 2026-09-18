@@ -3,10 +3,14 @@
 package main
 
 import (
+	"encoding/base64"
+	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestSafeHTTPURLRejectsPrivateAndCredentialedTargets(t *testing.T) {
@@ -152,10 +156,52 @@ func TestAudioEngineCommandLifecycle(t *testing.T) {
 	app = App{done: make(chan struct{})}
 	defer audioShutdown()
 
-	commands := []string{"VOLUME 0.25", "PAUSE", "RESUME", "STOP", "VOLUME 0.50"}
-	for _, command := range commands {
+	wavPath := filepath.Join(t.TempDir(), "lifecycle.wav")
+	if err := os.WriteFile(wavPath, silentWAV(8000, 800), 0600); err != nil {
+		t.Fatalf("write lifecycle WAV: %v", err)
+	}
+	fileURL := (&url.URL{Scheme: "file", Path: "/" + filepath.ToSlash(wavPath)}).String()
+	encoded := base64.StdEncoding.EncodeToString([]byte(fileURL))
+	play := fmt.Sprintf("PLAY %s 0.25", encoded)
+
+	commands := []string{play, "PAUSE", "VOLUME 0.60", "RESUME", "STOP", play, "STOP"}
+	for i, command := range commands {
 		if err := audioSend(command); err != nil {
-			t.Fatalf("audio engine command %q acknowledgement failed: %v", command, err)
+			t.Fatalf("audio lifecycle command %d (%q) acknowledgement failed: %v", i+1, command, err)
+		}
+		if i == 0 || i == 5 {
+			time.Sleep(75 * time.Millisecond)
 		}
 	}
+}
+
+func silentWAV(sampleRate, samples int) []byte {
+	dataSize := samples * 2
+	out := make([]byte, 44+dataSize)
+	copy(out[0:4], "RIFF")
+	putLE32(out[4:8], uint32(36+dataSize))
+	copy(out[8:12], "WAVE")
+	copy(out[12:16], "fmt ")
+	putLE32(out[16:20], 16)
+	putLE16(out[20:22], 1)
+	putLE16(out[22:24], 1)
+	putLE32(out[24:28], uint32(sampleRate))
+	putLE32(out[28:32], uint32(sampleRate*2))
+	putLE16(out[32:34], 2)
+	putLE16(out[34:36], 16)
+	copy(out[36:40], "data")
+	putLE32(out[40:44], uint32(dataSize))
+	return out
+}
+
+func putLE16(dst []byte, v uint16) {
+	dst[0] = byte(v)
+	dst[1] = byte(v >> 8)
+}
+
+func putLE32(dst []byte, v uint32) {
+	dst[0] = byte(v)
+	dst[1] = byte(v >> 8)
+	dst[2] = byte(v >> 16)
+	dst[3] = byte(v >> 24)
 }
