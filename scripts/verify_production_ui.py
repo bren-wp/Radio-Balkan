@@ -71,6 +71,9 @@ def main() -> int:
         "row.tabIndex = 0",
         "list.addEventListener('keydown'",
         "playerFav').setAttribute('aria-pressed'",
+        "if (activeCommandToken) return;",
+        "playerToggle').setAttribute('aria-busy'",
+        "button.disabled = !!activeCommandToken && active",
     ):
         require(errors, popup_js, needle, "extensions/shared/popup.js")
     forbid(errors, popup_js, "$('playerName').textContent = station ? station.name : 'Ništa'", "extensions/shared/popup.js")
@@ -95,6 +98,11 @@ def main() -> int:
         'navItem("⋯", "Više", "more")',
         'Button sort = chip("Filtriraj ⌄", false)',
         "new RippleDrawable(",
+        "navSelection = navSelectionForTab(tab)",
+        "catalogRefreshRunning.compareAndSet(false, true)",
+        "updatePlaybackControls()",
+        "StreamResolver.isSafeHttp(s.homepage)",
+        "ui.removeCallbacksAndMessages(null)",
     ):
         require(errors, android, needle, "Android MainActivity")
     for needle in (
@@ -122,6 +130,11 @@ def main() -> int:
         'root.addView(r.more',
         'dp(104)',
         '"Popularnost · " + value + " glasova"',
+        '"Dostupno · zamjenski izvor"',
+        '"Provjeravam dostupnost"',
+        '"Trenutno nedostupno"',
+        'row.root.setSelected(active)',
+        '"trenutno odabrana"',
         "interactiveRounded(",
 
     ):
@@ -152,6 +165,10 @@ def main() -> int:
         'setStatus("Poveznica za reprodukciju je kopirana")',
         'Prazno polje vraća automatski odabir.',
         'Zapis o pogrešci spremljen je lokalno.',
+        "func activateStation(idx int)",
+        'heroLabel = "Ⅱ  Pauziraj"',
+        'heroLabel = "▶  Nastavi"',
+        'playLabel = "Ⅱ"',
     ):
         require(errors, windows, needle, "Windows UI")
     for needle in (
