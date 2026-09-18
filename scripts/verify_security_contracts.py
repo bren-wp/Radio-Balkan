@@ -54,6 +54,9 @@ def main() -> None:
         "StreamResolver.isSafeHttp(repaired.url)",
         "pendingPlayer == mp || player == mp",
         "setInstanceFollowRedirects(false)",
+        "if (!updateForeground(false, \"Povezujem…\"))",
+        "private boolean updateForeground(",
+        "audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
@@ -162,6 +165,11 @@ def main() -> None:
         "sessionId !== expectedSession",
         "instance.onerror = () => playbackFailed(token, expectedSession, instance);",
         "instance.onended = () => playbackFailed(token, expectedSession, instance);",
+        "PLAY_START_TIMEOUT_MS = 12_000",
+        "STALL_RECOVERY_TIMEOUT_MS = 15_000",
+        "async function playWithTimeout(instance)",
+        "instance.onwaiting = () => scheduleStallRecovery(token, expectedSession, instance);",
+        "instance.onstalled = () => scheduleStallRecovery(token, expectedSession, instance);",
     )
     require(
         "extensions/platform/firefox/background-firefox.js",
@@ -177,6 +185,11 @@ def main() -> None:
         "currentSessionId !== expectedSession",
         "instance.onerror = () => playbackFailed(token, expectedSession, instance);",
         "instance.onended = () => playbackFailed(token, expectedSession, instance);",
+        "PLAY_START_TIMEOUT_MS = 12_000",
+        "STALL_RECOVERY_TIMEOUT_MS = 15_000",
+        "async function playWithTimeout(instance)",
+        "instance.onwaiting = () => scheduleStallRecovery(token, expectedSession, instance);",
+        "instance.onstalled = () => scheduleStallRecovery(token, expectedSession, instance);",
         "if (msg.type === 'RB_STOP')",
         "currentSessionId = null;",
         "candidates = [];",
@@ -224,11 +237,18 @@ def main() -> None:
         "play issued during close must recover into active playback",
     )
     require(
+        "scripts/test_chromium_offscreen_contract.js",
+        "a hanging first candidate must fall back to the next stream",
+        "stalled active audio must recover to a fallback candidate",
+    )
+    require(
         "scripts/test_firefox_player_contract.js",
         "stop must terminate the Firefox playback session",
         "toggle after stop must not revive the stopped session",
         "superseded play request must be marked stale",
         "slow old playback must not replace the newer station",
+        "a hanging first candidate must recover to the next Firefox stream",
+        "Firefox stalled audio must recover to the next candidate",
     )
     forbid(
         "extensions/platform/chromium/offscreen.js",
@@ -278,6 +298,13 @@ def main() -> None:
         "writeFileDurable(tmp, b, 0644)",
         "if shuttingDown() {",
         "func prepareShutdown()",
+    )
+    require(
+        "scripts/test-windows-runtime.ps1",
+        "Radio Balkan runtime smoke OK",
+        "Radio Balkan exited during the",
+        "PostMessage",
+        "WM_CLOSE",
     )
     require(
         "apps/windows/setup/main.go",
@@ -356,6 +383,10 @@ def main() -> None:
         "Verify Android build leaves repository clean",
         "Test browser network safety contract",
         "Test Chromium player close/session contract",
+        "Test Chromium offscreen timeout/stall contract",
+        "Test Firefox player timeout/stall/session contract",
+        "Soak-test Windows startup runtime",
+        "scripts/test-windows-runtime.ps1",
         "python scripts/check_clean_worktree.py",
         "Test release checksum manifest",
         "python scripts/test_release_checksums.py",
