@@ -76,7 +76,7 @@ function deferred() {
 
 const ids = [
   'search', 'country', 'genre', 'stations', 'status', 'refresh', 'heroPlay',
-  'playerToggle', 'favoritesOnly', 'clearFilters', 'playerFav', 'playerState',
+  'playerToggle', 'playerStop', 'favoritesOnly', 'clearFilters', 'playerFav', 'playerState',
   'playerName', 'playerMeta', 'heroName', 'heroMeta', 'playerLogo'
 ];
 const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
@@ -115,9 +115,12 @@ const extraStations = Array.from({ length: 58 }, (_, index) => ({
 let runtimeListener = null;
 let getState = { epoch: 'epoch-a', revision: 1, station: stationA, playing: true };
 let toggleResult = null;
+let stopResult = null;
 let getStateCalls = 0;
 let toggleCalls = 0;
+let stopCalls = 0;
 const toggleQueue = [];
+const stopQueue = [];
 
 function copy(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -138,6 +141,11 @@ const runtime = {
       toggleCalls += 1;
       if (toggleQueue.length) return await toggleQueue.shift().promise;
       return copy(toggleResult || getState);
+    }
+    if (message?.type === 'RB_STOP') {
+      stopCalls += 1;
+      if (stopQueue.length) return await stopQueue.shift().promise;
+      return copy(stopResult || getState);
     }
     if (message?.type === 'RB_PLAY') return copy(getState);
     throw new Error(`Unexpected runtime message: ${message?.type}`);
@@ -208,6 +216,7 @@ async function main() {
   assert.equal(elements.playerName.textContent, 'Radio A', 'initial GET_STATE must select the active station');
   assert.equal(elements.playerState.textContent, 'Sada svira', 'initial playing state must be rendered');
   assert.equal(elements.playerToggle.disabled, false, 'player toggle must be enabled after a station is available');
+  assert.equal(elements.playerStop.disabled, false, 'player stop must be enabled after a station is available');
   assert.equal(elements.playerFav.disabled, false, 'favorite control must be enabled after a station is available');
   assert.equal(elements.playerFav.attributes['aria-pressed'], 'false', 'favorite state must be announced accessibly');
 
@@ -287,6 +296,21 @@ async function main() {
   assert.equal(elements.playerToggle.disabled, false, 'player toggle must be re-enabled after command completion');
   assert.equal(elements.playerToggle.attributes['aria-busy'], 'false', 'busy state must clear after command completion');
   assert.equal(elements.playerName.textContent, 'Radio B');
+
+  stopResult = null;
+  const pendingStop = deferred();
+  stopQueue.push(pendingStop);
+  const callsBeforeBusyStop = stopCalls;
+  elements.playerStop.dispatch('click');
+  elements.playerStop.dispatch('click');
+  assert.equal(stopCalls, callsBeforeBusyStop + 1, 'duplicate stop clicks must be ignored while stop is in flight');
+  assert.equal(elements.playerStop.disabled, true, 'player stop must be disabled while stop is in flight');
+  assert.equal(elements.playerStop.attributes['aria-busy'], 'true', 'stop busy state must be announced accessibly');
+  pendingStop.resolve({ epoch: 'epoch-b', revision: 5, station: stationB, playing: false });
+  await flush();
+  assert.equal(elements.playerState.textContent, 'Zaustavljeno', 'completed stop command must render an explicit stopped state');
+  assert.equal(elements.playerStop.disabled, false, 'player stop must recover after command completion');
+  assert.equal(elements.playerStop.attributes['aria-busy'], 'false', 'stop busy state must clear after completion');
 
   console.log('Browser popup state and UI regression tests OK');
 }

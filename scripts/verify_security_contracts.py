@@ -83,6 +83,7 @@ def main() -> None:
         "explicitStopCannotResumeAnOldServiceSession",
         "pausedOrRecoverablePlaybackCanResume",
         "stopThenPlayUsesFreshSessionInsteadOfResume",
+        "adjacentNavigationWrapsAndHandlesMissingSelection",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
@@ -244,10 +245,14 @@ def main() -> None:
         "if (token !== commandGeneration) return;",
         "message?.type !== 'RB_STATE' || activeCommandToken",
         "$('playerState').textContent = playerStatus;",
+        "async function stopPlayback()",
+        "ext.runtime.sendMessage({ type: 'RB_STOP' })",
+        "playerStop').setAttribute('aria-busy'",
     )
     require(
         "extensions/shared/popup.html",
         'id="playerState"',
+        'id="playerStop"',
         'aria-live="polite"',
     )
     require(
@@ -259,6 +264,8 @@ def main() -> None:
         "duplicate toggle clicks must be ignored while a command is in flight",
         "busy playback state must be announced accessibly",
         "player toggle must be re-enabled after command completion",
+        "duplicate stop clicks must be ignored while stop is in flight",
+        "completed stop command must render an explicit stopped state",
     )
     require(
         "scripts/test_chromium_player_contract.js",
@@ -371,6 +378,7 @@ def main() -> None:
         "defer runtime.UnlockOSThread()",
         "func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleAction",
         "playbackToggleReconnect",
+        "Kind: hitPlayerStop",
         "playStationByKey(currentKey, current)",
         "app.audioStopped = true",
         "audioSetVolume(v)",

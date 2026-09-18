@@ -52,6 +52,7 @@ def main() -> int:
         'role="list"',
         'aria-pressed="false"',
         'id="playerToggle"',
+        'id="playerStop"',
         'id="clearFilters"',
         'disabled>▶</button>',
         'Nije odabrano',
@@ -73,6 +74,9 @@ def main() -> int:
         "playerFav').setAttribute('aria-pressed'",
         "if (activeCommandToken) return;",
         "playerToggle').setAttribute('aria-busy'",
+        "playerStop').setAttribute('aria-busy'",
+        "function stopPlayback()",
+        "ext.runtime.sendMessage({ type: 'RB_STOP' })",
         "button.disabled = !!activeCommandToken && active",
         "function renderEmptyState(",
         "'Pokušaj ponovno'",
@@ -105,6 +109,11 @@ def main() -> int:
         "navSelection = navSelectionForTab(tab)",
         "catalogRefreshRunning.compareAndSet(false, true)",
         "updatePlaybackControls()",
+        "playerStop.setOnClickListener",
+        "RadioPlayerService.ACTION_STOP",
+        "playerPrev.setOnClickListener",
+        "playerNext.setOnClickListener",
+        "PlaybackLifecycle.adjacentIndex",
         "StreamResolver.isSafeHttp(s.homepage)",
         "ui.removeCallbacksAndMessages(null)",
         "setSearchVisible(",
@@ -176,6 +185,8 @@ def main() -> int:
         'heroLabel = "Ⅱ  Pauziraj"',
         'heroLabel = "▶  Nastavi"',
         'playLabel = "Ⅱ"',
+        "Kind: hitPlayerStop",
+        '"■"',
     ):
         require(errors, windows, needle, "Windows UI")
     for needle in (
