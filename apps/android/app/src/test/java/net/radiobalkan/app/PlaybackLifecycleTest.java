@@ -28,4 +28,14 @@ public final class PlaybackLifecycleTest {
         assertTrue(PlaybackLifecycle.canResume(false, false, true));
         assertFalse(PlaybackLifecycle.canResume(false, false, false));
     }
+
+    @Test public void stopThenPlayUsesFreshSessionInsteadOfResume() {
+        assertFalse(PlaybackLifecycle.canResume(true, true, true));
+        assertEquals(PlaybackLifecycle.UiCommand.PLAY,
+                PlaybackLifecycle.uiCommand(true, false, true));
+        assertEquals(PlaybackLifecycle.UiCommand.PAUSE,
+                PlaybackLifecycle.uiCommand(true, true, false));
+        assertEquals(PlaybackLifecycle.UiCommand.RESUME,
+                PlaybackLifecycle.uiCommand(true, false, false));
+    }
 }

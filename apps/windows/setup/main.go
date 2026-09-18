@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -67,7 +68,7 @@ const (
 	SW_SHOW              = 5
 )
 
-var appVersion = "0.0.22"
+var appVersion = "0.0.23"
 
 type WNDCLASS struct {
 	Style                                    uint32
@@ -198,6 +199,12 @@ func main() {
 		uninstall()
 		return
 	}
+
+	// Win32 owns a window and its message queue on the thread that created it.
+	// Keep the Setup window and GetMessage loop on that same Windows thread.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	initGDI()
 	defer cleanup()
 	st.desktop = true

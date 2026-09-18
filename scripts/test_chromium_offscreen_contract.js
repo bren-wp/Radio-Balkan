@@ -149,6 +149,15 @@ async function main() {
   assert.equal(afterStopToggle.sessionId, null, 'stop must retire the offscreen session');
   assert.equal(playCalls, playsBeforeStoppedToggle, 'toggle after stop must not create a playback attempt');
 
+  const restarted = await dispatch({
+    type: 'PLAY',
+    sessionId: 's1-restart',
+    station: { name: 'Radio A', streams: ['https://example.com/a'] }
+  });
+  assert.equal(restarted.ok, true);
+  assert.equal(restarted.playing, true, 'play after stop must create fresh Chromium playback');
+  assert.equal(restarted.sessionId, 's1-restart', 'replay after stop must use the newly requested Chromium session');
+
   const hanging = deferred();
   playPlans.push(hanging.promise, Promise.resolve());
   fastTimeout = true;

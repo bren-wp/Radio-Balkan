@@ -82,6 +82,7 @@ def main() -> None:
         "uiCommandDistinguishesPauseResumeAndRestart",
         "explicitStopCannotResumeAnOldServiceSession",
         "pausedOrRecoverablePlaybackCanResume",
+        "stopThenPlayUsesFreshSessionInsteadOfResume",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
@@ -272,6 +273,8 @@ def main() -> None:
         "stop must retire the offscreen session",
         "a hanging first candidate must fall back to the next stream",
         "stalled active audio must recover to a fallback candidate",
+        "play after stop must create fresh Chromium playback",
+        "replay after stop must use the newly requested Chromium session",
     )
     require(
         "scripts/test_firefox_player_contract.js",
@@ -283,6 +286,8 @@ def main() -> None:
         "slow old playback must not replace the newer station",
         "a hanging first candidate must recover to the next Firefox stream",
         "Firefox stalled audio must recover to the next candidate",
+        "play after stop must create fresh Firefox playback",
+        "replay after stop must not reuse the retired Firefox session",
     )
     forbid(
         "extensions/platform/chromium/offscreen.js",
@@ -349,7 +354,12 @@ def main() -> None:
         "func scheduleStartupHealth(limit int)",
         "time.NewTimer(8 * time.Second)",
         "audioAck",
-        "func waitAudioAckLocked() error",
+        "func resetAudioEngineLocked()",
+        "func audioCommandTimeout(line string) time.Duration",
+        "return 5 * time.Second",
+        "func waitAudioAckLocked(timeout time.Duration) error",
+        "A late ACK must never be consumed by the next command.",
+        "resetAudioEngineLocked()",
         "audio engine nije odgovorio na vrijeme",
         "READY",
         "time.After(15 * time.Second)",
@@ -385,6 +395,8 @@ def main() -> None:
     )
     require(
         "apps/windows/setup/main.go",
+        "runtime.LockOSThread()",
+        "defer runtime.UnlockOSThread()",
         "func writeFileDurable(",
         "return f.Sync()",
         "writeFileDurable(tmp, appBytes, 0755)",
@@ -408,8 +420,13 @@ def main() -> None:
         "TestWriteFileDurablePersistsCompleteContent",
         "TestPlaybackToggleDecisionLifecycle",
         "stopped reconnects",
+        "TestAudioAckTimeoutDiscardsStaleChannel",
+        "timed-out audio helper state was not discarded",
         "TestAudioEngineCommandLifecycle",
-        "\"PAUSE\", \"RESUME\", \"STOP\"",
+        "lifecycle.wav",
+        "PLAY %s 0.25",
+        "\"PAUSE\", \"VOLUME 0.60\", \"RESUME\", \"STOP\"",
+        "silentWAV",
     )
 
     require(

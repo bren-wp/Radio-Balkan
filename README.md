@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.22" src="assets/badges/version.svg">
+  <img alt="version 0.0.23" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -15,15 +15,14 @@
 
 Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrvatske i regije bez korisničkog računa, bez telemetry sustava i bez teškog web runtimea u Windows aplikaciji. Projekt objedinjuje nativni Windows klijent, nativni Android klijent i produkcijske ekstenzije za Chrome, Edge, Opera i Firefox.
 
-## Što donosi v0.0.22
+## Što donosi v0.0.23
 
-- **Stabilniji Windows startup i shutdown** — CI sada pokreće stvarni Portable executable, drži ga živim kroz startup/background fazu i zahtijeva uredno zatvaranje; finalni state/audio cleanup ima ograničen vremenski budžet.
-- **Pouzdaniji Windows audio backend** — PresentationCore player zagrijava se u backgroundu, ima READY handshake i OK/ERR potvrdu svake naredbe, dok MCI ostaje fallback ako primarni backend nije dostupan.
-- **Ispravljen Stop → Play i volume lifecycle na Windowsu** — nakon Stop-a Play radi svježi reconnect umjesto resumea zatvorenog sourcea, a promjena glasnoće primjenjuje se i dok je player pauziran.
-- **Android foreground-service crash guard** — neuspjela foreground promocija više ne ostavlja servis u fatalnom polustanju; MediaSession/audio-focus/channel inicijalizacija izolirana je od platformskih/OEM iznimki.
-- **Mirniji startup na Windowsu i Androidu** — automatske health provjere odgođene su nakon početnog rendera i rade nad manjim početnim skupom stanica.
-- **Browser playback recovery** — Chromium i Firefox imaju ograničen start playbacka te recovery za dugotrajni `waiting/stalled` koji prelazi na sljedeći siguran stream kandidat.
-- **Stroži release gate** — Windows `go vet`, `go test` i `go build` sada eksplicitno ruše pipeline na grešci; CI više ne može nastaviti nakon neuspjelog Go testa.
+- **Stvarni Windows player lifecycle gate** — CI nad lokalnim WAV zapisom izvršava `Play → Pause → Volume → Resume → Stop → Play → Stop`, bez ovisnosti o vanjskom radio streamu.
+- **Sigurniji audio ACK protokol** — `PLAY` ima 5-sekundni, a kontrolne naredbe 2-sekundni bounded ACK budžet; timeout ili write failure odbacuju helper proces i kanal prije fallbacka, pa zakašnjeli `OK` ne može potvrditi sljedeću naredbu.
+- **Win32 thread-affinity hardening** — Portable i Setup drže prozor i message loop na istom OS threadu.
+- **Browser Stop → Play regresije** — Chromium i Firefox moraju umiroviti staru sesiju nakon Stop-a, odbiti Toggle stare sesije i otvoriti svježu sesiju na novom Play-u.
+- **Android Stop → Play regresije** — eksplicitni Stop ne može završiti kao Resume stare servisne sesije; Play/Pause/Resume odluke ostaju pokrivene JVM testovima.
+- **Zadržani release gateovi** — Windows runtime soak, Android lint/release build, browser timeout/stall/race testovi, security contracts, clean-worktree i checksum provjere ostaju obavezni.
 - **Bez novog telemetryja ili širih dozvola** — nema računa, analytics SDK-a, novog backenda ni dodatnog profiliranja korisnika.
 
 ## Zašto Radio Balkan
@@ -64,7 +63,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.22 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.22):
+Gotovi v0.0.23 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.23):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -104,7 +103,7 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.23
+python scripts/bump_version.py 0.0.24
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.
