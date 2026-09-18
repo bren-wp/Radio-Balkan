@@ -9,6 +9,10 @@ let idx = 0;
 let generation = 0;
 let sessionCounter = 0;
 let currentSessionId = null;
+let stallTimer = null;
+let stallTarget = null;
+const PLAY_START_TIMEOUT_MS = 12_000;
+const STALL_RECOVERY_TIMEOUT_MS = 15_000;
 
 function urls(station) { return RBNet.candidateUrls(station); }
 
@@ -33,13 +37,52 @@ function newSessionId() {
   return `${epoch}:${sessionCounter}`;
 }
 
+function clearStallTimer(target = null) {
+  if (target && stallTarget && stallTarget !== target) return;
+  if (stallTimer) clearTimeout(stallTimer);
+  stallTimer = null;
+  stallTarget = null;
+}
+
+function scheduleStallRecovery(token, expectedSession, instance) {
+  clearStallTimer();
+  stallTarget = instance;
+  stallTimer = setTimeout(() => {
+    stallTimer = null;
+    stallTarget = null;
+    const sessionMatches = currentSessionId === expectedSession;
+    if (token !== generation || !sessionMatches || audio !== instance) return;
+    state.playing = false;
+    idx += 1;
+    disposeAudio(instance);
+    void start(expectedSession);
+  }, STALL_RECOVERY_TIMEOUT_MS);
+}
+
+async function playWithTimeout(instance) {
+  let timeout = null;
+  try {
+    await Promise.race([
+      instance.play(),
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('playback start timeout')), PLAY_START_TIMEOUT_MS);
+      })
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 function disposeAudio(target = audio) {
   if (!target) return;
+  clearStallTimer(target);
   if (audio === target) audio = null;
   target.onerror = null;
   target.onended = null;
   target.onplaying = null;
   target.onpause = null;
+  target.onwaiting = null;
+  target.onstalled = null;
   try { target.pause(); } catch { }
   try {
     target.removeAttribute('src');
@@ -67,13 +110,17 @@ function createAudio(token, expectedSession, candidate) {
   instance.onerror = () => playbackFailed(token, expectedSession, instance);
   instance.onended = () => playbackFailed(token, expectedSession, instance);
   instance.onplaying = () => {
+    clearStallTimer(instance);
     if (token !== generation || currentSessionId !== expectedSession || audio !== instance) return;
     if (!state.playing) commitState({ playing: true });
   };
   instance.onpause = () => {
+    clearStallTimer(instance);
     if (token !== generation || currentSessionId !== expectedSession || audio !== instance || !state.playing) return;
     commitState({ playing: false });
   };
+  instance.onwaiting = () => scheduleStallRecovery(token, expectedSession, instance);
+  instance.onstalled = () => scheduleStallRecovery(token, expectedSession, instance);
   audio = instance;
   return instance;
 }
@@ -86,7 +133,7 @@ async function start(expectedSession) {
     disposeAudio();
     const instance = createAudio(token, expectedSession, candidate);
     try {
-      await instance.play();
+      await playWithTimeout(instance);
       if (token !== generation || currentSessionId !== expectedSession || audio !== instance) {
         return { ok: false, stale: true };
       }
