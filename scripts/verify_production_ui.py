@@ -90,6 +90,10 @@ def main() -> int:
     require(errors, popup_css, "button:active:not(:disabled)", "extensions/shared/popup.css")
     require(errors, popup_css, ".emptyAction", "extensions/shared/popup.css")
 
+    obsolete_people_icon = ROOT / "apps/android/app/src/main/res/drawable/ic_people.xml"
+    if obsolete_people_icon.exists():
+        errors.append("Android resources: obsolete ic_people.xml must stay removed after profile/listener UI cleanup")
+
     android = read("apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java")
     adapter = read("apps/android/app/src/main/java/net/radiobalkan/app/StationAdapter.java")
     for needle in (
