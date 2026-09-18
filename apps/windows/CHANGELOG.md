@@ -8,7 +8,8 @@
 - dodani regression testovi za wrapanje keyboard fokusa i checkbox hit-targete
 - Portable i Setup source `appVersion` fallback vrijednosti sada su dio centralnog transactional version bumpa i version-check contracta
 - postojeći durable state write, idempotent shutdown cleanup, mrežni DNS/IP guardovi i installer SHA-256 provjera ostaju aktivni
-- Portable i Setup ponovno prolaze Go test, vet, release build i clean-worktree provjeru
+- Portable i Setup ponovno prolaze strogi normalized `gofmt` gate, Go test, vet, release build i clean-worktree provjeru
+- uklonjen izravni `unsafe.Pointer(lParam)` cast iz `WM_GETMINMAXINFO` handlera; struktura se kopira preko postojećeg memory-copy wrappera
 
 ## 0.0.5
 
