@@ -10,11 +10,11 @@ Od 0.0.5 Windows UI ne ugrađuje JPG hero/genre fallbackove. Hero, genre kartice
 
 ## Android
 
-`apps/android` je nativni Java/Android klijent. Reprodukcija je izdvojena u foreground servis, a activity se može ponovno kreirati bez gubitka osnovnog playback stanja. Bitmap cache, mrežni responsei i background worker pool imaju definirane gornje granice. Activity, repository, image loader i player imaju eksplicitne shutdown/cleanup putanje; UI callback queue se prazni pri destroyu, a repository odbija rad nakon gašenja bez propuštanja executor iznimke prema UI threadu.
+`apps/android` je nativni Java/Android klijent. Reprodukcija je izdvojena u foreground servis, a activity se može ponovno kreirati bez gubitka osnovnog playback stanja. Bitmap cache, mrežni responsei i background worker pool imaju definirane gornje granice. Activity, repository, image loader i player imaju eksplicitne shutdown/cleanup putanje; UI callback queue se prazni pri destroyu, repository odbija rad nakon gašenja bez propuštanja executor iznimke prema UI threadu, a ručni catalog refresh koristi single-flight guard kako ponovljeni UI klik ne bi stvarao paralelne repository instance.
 
 ## Browser ekstenzije
 
-`extensions/shared` je jedini izvor za popup UI, katalog i mrežnu sigurnosnu validaciju. `extensions/platform` sadrži samo nužne razlike playback sloja za Chromium i Firefox. Manifesti su odvojeni, ali ih isti build proces validira i pakira. Popup sprema samo lokalne UI preference (država, žanr i Omiljene), podržava keyboard station navigaciju i razlikuje stvarni mrežni refresh od cache fallbacka.
+`extensions/shared` je jedini izvor za popup UI, katalog i mrežnu sigurnosnu validaciju. `extensions/platform` sadrži samo nužne razlike playback sloja za Chromium i Firefox. Manifesti su odvojeni, ali ih isti build proces validira i pakira. Popup sprema samo lokalne UI preference (država, žanr i Omiljene), podržava keyboard station navigaciju, razlikuje stvarni mrežni refresh od cache fallbacka i koristi UI command single-flight guard za isti aktivni play/pause zahtjev.
 
 ## Jedinstveni release tok
 
