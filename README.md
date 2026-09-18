@@ -18,9 +18,10 @@ Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrva
 ## Što donosi v0.0.20
 
 - **Premium i jasniji UI/UX** — browser, Android i Windows installer dobili su dosljednije focus, pressed, loading i filter interakcije bez težih UI frameworka.
-- **Browser koji pamti korisnički prikaz** — država, žanr i Omiljene ostaju lokalno spremljeni; ručni refresh sada jasno prijavljuje mrežni neuspjeh umjesto da cache prikaže kao novo osvježavanje.
+- **Browser koji pamti korisnički prikaz** — država, žanr i Omiljene ostaju lokalno spremljeni; ručni refresh sada jasno prijavljuje mrežni neuspjeh umjesto da cache prikaže kao novo osvježavanje, a isti ponovljeni play/pause klik ne šalje dupliciranu runtime komandu dok je prethodna radnja u tijeku.
 - **Potpuna keyboard kontrola** — browser station kartice rade na Enter/Space, a Windows Setup na Tab/strelice/Enter/Space/Escape uz vidljiv fokus i veće click-targete.
-- **Točniji Android sadržaj** — Radio Browser glasovi prikazuju se kao popularnost, ne kao lažni broj trenutačnih slušatelja; filteri i donja navigacija jasnije odgovaraju stvarnim mogućnostima aplikacije.
+- **Točniji Android sadržaj** — Radio Browser glasovi prikazuju se kao popularnost, ne kao lažni broj trenutačnih slušatelja; redovi stanica prikazuju health status, player CTA prati Slušaj/Nastavi/Pauziraj stanje, spremljeni tab i bottom-nav ostaju usklađeni, a paralelni ručni refresh se sprječava.
+- **Intuitivniji Windows playback** — play kontrole aktivne stanice rade kao pravi pause/resume toggle, a hero i station kartice prikazuju Slušaj/Nastavi/Pauziraj stanje.
 - **Stabilniji lifecycle** — Android katalog sigurno podnosi executor/shutdown race, a postojeći player, cache i cleanup guardovi ostaju aktivni.
 - **Stroži release metadata contract** — Portable i Setup source fallback verzije sada su dio transactional version bumpa i CI provjere, uz linker-injected release verziju.
 
