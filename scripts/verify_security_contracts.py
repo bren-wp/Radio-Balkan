@@ -38,6 +38,9 @@ def main() -> None:
         "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
         '@android.annotation.SuppressLint("UnspecifiedRegisterReceiverFlag")',
         "RadioPlayerService.INTERNAL_STATE_PERMISSION",
+        "RadioPlayerService.EXTRA_STOPPED",
+        "PlaybackLifecycle.uiCommand",
+        "playbackStopped",
         "Context.RECEIVER_NOT_EXPORTED",
         "ui.removeCallbacksAndMessages(null)",
         "source.size() > 16",
@@ -59,6 +62,26 @@ def main() -> None:
         "if (!updateForeground(false, \"Povezujem…\"))",
         "private boolean updateForeground(",
         "audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)",
+        'EXTRA_STOPPED = "stopped"',
+        "private boolean explicitlyStopped = true;",
+        "PlaybackLifecycle.canResume",
+        "explicitlyStopped = true;",
+        "explicitlyStopped = false;",
+        "i.putExtra(EXTRA_STOPPED, stopped);",
+    )
+    require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/PlaybackLifecycle.java",
+        "enum UiCommand { PLAY, PAUSE, RESUME }",
+        "static UiCommand uiCommand",
+        "static boolean canResume",
+        "if (!sameStation || explicitlyStopped) return UiCommand.PLAY;",
+        "return !explicitlyStopped && (hasPlayer || hasCandidates);",
+    )
+    require(
+        "apps/android/app/src/test/java/net/radiobalkan/app/PlaybackLifecycleTest.java",
+        "uiCommandDistinguishesPauseResumeAndRestart",
+        "explicitStopCannotResumeAnOldServiceSession",
+        "pausedOrRecoverablePlaybackCanResume",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
