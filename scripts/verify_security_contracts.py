@@ -96,6 +96,14 @@ def main() -> None:
         "playerArtwork = null",
     )
     require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/AppLog.java",
+        "MAX_LOG_BYTES = 512L * 1024L",
+        "MAX_STACK_FRAMES = 160",
+        "rotateOrTruncate",
+        "new FileWriter(current, false)",
+        "bounded(String.valueOf(error), 2048)",
+    )
+    require(
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
         "MAX_REDIRECTS = 4",
         "setInstanceFollowRedirects(false)",
