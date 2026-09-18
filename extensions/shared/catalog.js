@@ -19,6 +19,10 @@ const RB = (() => {
   const FOREIGN_SCAN_LIMIT = 500;
   const MAX_CATALOG = 7050;
   const CACHE_MS = 12 * 60 * 60 * 1000;
+  const MAX_SERVER_RESPONSE_BYTES = 512 * 1024;
+  const MAX_CATALOG_RESPONSE_BYTES = 8 * 1024 * 1024;
+  const MAX_DISCOVERED_API_BASES = 4;
+  const MAX_API_BASES = 8;
   const ext = globalThis.browser || globalThis.chrome;
 
   const clean = value => String(value ?? '')
@@ -38,6 +42,37 @@ const RB = (() => {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  async function readJsonLimited(response, maxBytes) {
+    if (!response || !Number.isFinite(maxBytes) || maxBytes <= 0) throw new Error('Neispravan limit odgovora');
+    const declaredRaw = response.headers?.get?.('content-length');
+    const declared = Number(declaredRaw);
+    if (declaredRaw && Number.isFinite(declared) && declared > maxBytes) {
+      throw new Error('API odgovor je prevelik');
+    }
+
+    if (!response.body?.getReader) throw new Error('Streaming API odgovor nije dostupan');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const parts = [];
+    let total = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value?.byteLength || 0;
+        if (total > maxBytes) {
+          try { await reader.cancel(); } catch { }
+          throw new Error('API odgovor je prevelik');
+        }
+        parts.push(decoder.decode(value, { stream: true }));
+      }
+      parts.push(decoder.decode());
+    } finally {
+      try { reader.releaseLock?.(); } catch { }
+    }
+    return JSON.parse(parts.join(''));
   }
 
   const host = raw => {
@@ -143,9 +178,16 @@ const RB = (() => {
     try {
       const response = await fetchWithTimeout('https://all.api.radio-browser.info/json/servers', { cache: 'no-store', redirect: 'error' }, 6500);
       if (response.ok) {
-        const body = await response.json();
-        const dynamic = body.map(x => safeApiBase(x?.name)).filter(Boolean);
-        if (dynamic.length) return [...new Set([...dynamic, ...API_FALLBACKS])];
+        const body = await readJsonLimited(response, MAX_SERVER_RESPONSE_BYTES);
+        if (!Array.isArray(body)) throw new Error('Neispravan popis API servera');
+        const dynamic = [];
+        for (const row of body) {
+          const candidate = safeApiBase(row?.name);
+          if (!candidate || API_FALLBACKS.includes(candidate) || dynamic.includes(candidate)) continue;
+          dynamic.push(candidate);
+          if (dynamic.length >= MAX_DISCOVERED_API_BASES) break;
+        }
+        return [...new Set([...dynamic, ...API_FALLBACKS])].slice(0, MAX_API_BASES);
       }
     } catch { }
     return API_FALLBACKS;
@@ -157,7 +199,7 @@ const RB = (() => {
       const url = `${base}/json/stations/search?countrycode=${encodeURIComponent(code)}&hidebroken=true&order=votes&reverse=true&limit=${PAGE}&offset=${offset}`;
       const response = await fetchWithTimeout(url, { cache: 'no-store', redirect: 'error' }, 10000);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const page = await response.json();
+      const page = await readJsonLimited(response, MAX_CATALOG_RESPONSE_BYTES);
       if (!Array.isArray(page) || !page.length) break;
       let accepted = 0;
       for (const raw of page) {
@@ -192,7 +234,7 @@ const RB = (() => {
         const url = `${base}/json/stations/search?hidebroken=true&order=votes&reverse=true&limit=${FOREIGN_SCAN_LIMIT}`;
         const response = await fetchWithTimeout(url, { cache: 'no-store', redirect: 'error' }, 11000);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const page = await response.json();
+        const page = await readJsonLimited(response, MAX_CATALOG_RESPONSE_BYTES);
         if (!Array.isArray(page)) throw new Error('Neispravan strani katalog');
         const mapped = [];
         for (const raw of page) {

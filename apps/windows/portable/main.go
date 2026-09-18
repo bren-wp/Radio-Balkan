@@ -344,6 +344,7 @@ type App struct {
 	streamSem                                chan struct{}
 	done                                     chan struct{}
 	closeOnce                                sync.Once
+	shutdownOnce                             sync.Once
 	alertMu                                  sync.Mutex
 	alerts                                   []UIAlert
 }
@@ -1509,15 +1510,11 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 		return 0
 	case WM_CLOSE:
 		captureWindowSize()
-		signalShutdown()
-		saveState()
-		audioShutdown()
+		prepareShutdown()
 		procDestroyWindow.Call(uintptr(hwnd))
 		return 0
 	case WM_DESTROY:
-		signalShutdown()
-		saveState()
-		audioShutdown()
+		prepareShutdown()
 		markCleanShutdown()
 		procPostQuitMessage.Call(0)
 		return 0
@@ -5380,6 +5377,14 @@ func signalShutdown() {
 	})
 }
 
+func prepareShutdown() {
+	app.shutdownOnce.Do(func() {
+		signalShutdown()
+		saveState()
+		audioShutdown()
+	})
+}
+
 func scheduleSearchFilter() {
 	app.mu.Lock()
 	app.searchSeq++
@@ -5466,6 +5471,26 @@ func migrateLegacyDataDir() {
 func statePath() string       { return filepath.Join(stateDir(), "state.json") }
 func cachePath() string       { return filepath.Join(stateDir(), "stations-cache.json") }
 func cacheBackupPath() string { return cachePath() + ".bak" }
+
+func writeFileDurable(path string, data []byte, perm os.FileMode) (err error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := f.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+	n, err := f.Write(data)
+	if err != nil {
+		return err
+	}
+	if n != len(data) {
+		return io.ErrShortWrite
+	}
+	return f.Sync()
+}
 func loadState() (PersistedState, bool) {
 	paths := []string{statePath(), statePath() + ".bak"}
 	for i, path := range paths {
@@ -5504,6 +5529,9 @@ func scheduleStateSave() {
 				logError("state-save-timer", fmt.Errorf("panic: %v", r))
 			}
 		}()
+		if shuttingDown() {
+			return
+		}
 		saveState()
 	})
 	app.saveMu.Unlock()
@@ -5525,7 +5553,8 @@ func saveState() {
 	}
 	tmp := statePath() + ".tmp"
 	bak := statePath() + ".bak"
-	if err = os.WriteFile(tmp, b, 0644); err != nil {
+	if err = writeFileDurable(tmp, b, 0644); err != nil {
+		_ = os.Remove(tmp)
 		logError("save-state-write", err)
 		return
 	}

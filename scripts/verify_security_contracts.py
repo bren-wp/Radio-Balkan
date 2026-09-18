@@ -39,6 +39,7 @@ def main() -> None:
         '@android.annotation.SuppressLint("UnspecifiedRegisterReceiverFlag")',
         "RadioPlayerService.INTERNAL_STATE_PERMISSION",
         "Context.RECEIVER_NOT_EXPORTED",
+        "ui.removeCallbacksAndMessages(null)",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/RadioRepository.java",
@@ -87,6 +88,29 @@ def main() -> None:
         "setInstanceFollowRedirects(true)",
     )
 
+    require(
+        "extensions/shared/catalog.js",
+        "MAX_SERVER_RESPONSE_BYTES = 512 * 1024",
+        "MAX_CATALOG_RESPONSE_BYTES = 8 * 1024 * 1024",
+        "MAX_DISCOVERED_API_BASES = 4",
+        "MAX_API_BASES = 8",
+        "async function readJsonLimited(response, maxBytes)",
+        "response.body?.getReader",
+        "total > maxBytes",
+        "readJsonLimited(response, MAX_SERVER_RESPONSE_BYTES)",
+        "readJsonLimited(response, MAX_CATALOG_RESPONSE_BYTES)",
+    )
+    forbid(
+        "extensions/shared/catalog.js",
+        "await response.json()",
+        "await response.text()",
+    )
+    require(
+        "scripts/test_browser_catalog_contract.js",
+        "oversized country response must be rejected",
+        "oversized response must not be parsed into the catalog",
+        "dynamic API discovery must be capped before stable fallbacks are tried",
+    )
     require(
         "extensions/shared/network.js",
         "h === '::'",
@@ -227,6 +251,13 @@ def main() -> None:
         "net.DefaultResolver.LookupIPAddr",
         "unsafeNetworkIP",
         "strings.TrimRight",
+        "shutdownOnce",
+        "func prepareShutdown()",
+        "func writeFileDurable(",
+        "return f.Sync()",
+        "writeFileDurable(tmp, b, 0644)",
+        "if shuttingDown() {",
+        "func prepareShutdown()",
     )
     require(
         "apps/windows/portable/main_test.go",
@@ -236,6 +267,7 @@ def main() -> None:
         "http://192.168.1.10/live",
         "https://user:pass@example.com/live",
         "TestValidateStateDropsUnsafeReplacementURLs",
+        "TestWriteFileDurablePersistsCompleteContent",
     )
 
     require(

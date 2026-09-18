@@ -1,5 +1,25 @@
 # Izdavanja
 
+## 0.0.19
+
+Izdanje 0.0.19 fokusirano je na kontrolu memorije i mrežnog fan-outa u browser katalogu, pouzdanije spremanje Windows stanja te stroži Android lifecycle cleanup, bez novih dozvola, telemetry komponenti ili runtime dependencyja.
+
+- browser više ne koristi neograničeni `response.json()` za Radio Browser API odgovore; JSON se dekodira iz streaming bodyja uz provjeru stvarno pročitanih bajtova prije pune alokacije odgovora
+- discovery popis Radio Browser servera ograničen je na 512 KiB, a pojedini station-catalog odgovor na 8 MiB
+- browser namjerno nema fallback koji bi prvo učitao cijeli response preko `response.text()` pa tek potom provjerio veličinu; ako streaming body nije dostupan, odgovor se odbija
+- dinamički Radio Browser server discovery ograničen je na najviše četiri novootkrivena hosta uz četiri stabilna fallback hosta, odnosno najviše osam API baza po osvježavanju
+- izvršni browser regression test simulira preveliki country response i velik dinamički server-list te potvrđuje da ostali country batchovi nastavljaju raditi, a API fan-out ostaje ograničen
+- Windows `state.json.tmp` sada se zapisuje preko eksplicitnog durable writera koji radi puni write i `Sync()` prije backup/rename commit koraka
+- Windows završni shutdown state/audio cleanup konsolidiran je u `sync.Once` sekvencu, tako da `WM_CLOSE` i `WM_DESTROY` više ne izvršavaju isti finalni persistence/audio posao dvaput
+- debounce state-save callback provjerava shutdown stanje neposredno prije zapisa i ne pokreće zakašnjeli disk write nakon početka finalnog zatvaranja
+- Windows regression test provjerava potpuni durable write te zamjenu postojećeg sadržaja
+- Android `MainActivity.onDestroy()` uklanja sve pending Handler callbackove i poruke, uključujući odgođeni health scan i worker-to-UI callbackove, čime se smanjuje post-destroy rad i kratkotrajno zadržavanje Activity reference
+- cross-platform security/lifecycle contracts zaključavaju response limite, zabranu neograničenih browser JSON fallbackova, API discovery cap, durable Windows writer, shutdown sekvencu i Android Handler cleanup
+- regionalni katalog, kurirani `Strano / INT` katalog, browser playback session zaštite i mrežni hardening iz 0.0.18 ostaju nepromijenjeni
+- verzija je sinkronizirana na `0.0.19`, uz Android `versionCode 19`; puni Windows/Android/browser/version CI obavezan je prije promocije na `main`
+
+Ograničenja odgovora i broja API hostova štite klijenta od nepotrebnog RAM/CPU/network opterećenja uzrokovanog neispravnim ili neočekivano velikim katalogom, ali ne mogu jamčiti dostupnost third-party Radio Browser servisa ili pojedinih radio streamova. Durable file sync smanjuje rizik gubitka Windows postavki pri prekidu rada, ali aplikacija ne tvrdi apsolutnu otpornost na svaki hardverski ili filesystem kvar.
+
 ## 0.0.18
 
 Izdanje 0.0.18 fokusirano je na mrežnu sigurnost i dosljedno blokiranje lokalnih, privatnih i metadata odredišta na Windows, Android i browser klijentima, uz regresijske testove koji zaključavaju novo ponašanje.
