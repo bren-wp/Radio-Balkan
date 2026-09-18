@@ -92,6 +92,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private RadioStation featured;
     private Runnable searchRunnable;
     private boolean receiverRegistered;
+    private android.window.OnBackInvokedCallback backInvokedCallback;
     private volatile boolean destroyed;
     private final Map<String, LinearLayout> bottomNavItems = new HashMap<>();
     private String navSelection = "radio";
@@ -140,6 +141,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         images = new ImageLoader();
         repository = new RadioRepository(this);
         buildUi();
+        installBackHandler();
         registerPlayerReceiver();
         queryPlayerState();
         loadStations();
@@ -206,7 +208,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         back.setTextColor(0xFFE8EBF1);
         back.setBackground(interactiveRounded(0x00000000, 0x00000000, 12, 0x24FFFFFF));
         back.setContentDescription("Natrag");
-        back.setOnClickListener(v -> onBackPressed());
+        back.setOnClickListener(v -> handleBackNavigation());
         bar.addView(back, new LinearLayout.LayoutParams(dp(46), dp(52)));
 
         EqualizerView mark = new EqualizerView(this);
@@ -327,16 +329,21 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         shell.setStroke(dp(1), 0xFF3B414C);
         player.setBackground(shell);
 
-        playerArtwork = new ImageView(this);
-        playerArtwork.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        playerArtwork.setImageResource(R.drawable.ic_radio_balkan);
-        playerArtwork.setBackground(rounded(0xFF20262F, 0xFF3C4653, 16));
-        playerArtwork.setClipToOutline(true);
-        player.addView(playerArtwork, new LinearLayout.LayoutParams(dp(68), dp(68)));
+        boolean compactPlayer = isCompactWidth();
+        if (!compactPlayer) {
+            playerArtwork = new ImageView(this);
+            playerArtwork.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            playerArtwork.setImageResource(R.drawable.ic_radio_balkan);
+            playerArtwork.setBackground(rounded(0xFF20262F, 0xFF3C4653, 16));
+            playerArtwork.setClipToOutline(true);
+            player.addView(playerArtwork, new LinearLayout.LayoutParams(dp(68), dp(68)));
+        } else {
+            playerArtwork = null;
+        }
 
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
-        info.setPadding(dp(12), 0, dp(8), 0);
+        info.setPadding(dp(compactPlayer ? 6 : 12), 0, dp(compactPlayer ? 4 : 8), 0);
         TextView nowLabel = label("Sada svira", 11, 0xFFFFB23F, false);
         playerName = label("Odaberi radio stanicu", 17, Color.WHITE, true);
         playerMeta = label("Radio iz Hrvatske i regije", 11, 0xFFADB3BD, false);
@@ -347,7 +354,6 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         info.addView(statusText, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(17)));
         player.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
 
-        boolean compactPlayer = isCompactWidth();
         playerEqualizer = new EqualizerView(this);
         playerEqualizer.setBarCount(9);
         if (!compactPlayer) {
@@ -433,13 +439,26 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         item.setOnClickListener(v -> {
             if ("discover".equals(action)) { showBrowseDialog(); return; }
             if ("more".equals(action)) { showAppMenu(); return; }
+            if ("radio".equals(action)) { showRadioLibrary(); return; }
             selectBottomNav(action);
             if ("all".equals(action)) { tab="all"; state.setTab(tab); applyFilterAsync(); list.smoothScrollToPosition(0); }
             else if ("favorites".equals(action)) { tab="favorites"; state.setTab(tab); applyFilterAsync(); }
-            else if ("radio".equals(action)) { tab="all"; state.setTab(tab); applyFilterAsync(); list.smoothScrollToPosition(0); }
         });
         updateBottomNavItem(action, item);
         return item;
+    }
+
+    private void showRadioLibrary() {
+        tab = "all";
+        state.setTab(tab);
+        selectBottomNav("radio");
+        applyFilterAsync();
+        if (list != null) {
+            list.post(() -> {
+                if (destroyed || list.getCount() <= 1) return;
+                list.smoothScrollToPosition(1);
+            });
+        }
     }
 
     private static String navSelectionForTab(String value) {
@@ -1058,6 +1077,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         if (v != null) { InputMethodManager im = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE); if (im != null) im.hideSoftInputFromWindow(v.getWindowToken(), 0); }
     }
 
+    @SuppressWarnings("deprecation")
     private void installSystemBarInsets(View root) {
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             int top;
@@ -1089,7 +1109,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 r.run();
             } catch (Throwable error) {
                 AppLog.e(MainActivity.this, "ui-update", error);
-                if (statusText != null) statusText.setText("Prikaz je osvježen");
+                if (statusText != null) statusText.setText("Prikaz nije moguće osvježiti");
             }
         });
     }
@@ -1107,18 +1127,52 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         search.clearFocus();
         if (imm != null) imm.hideSoftInputFromWindow(search.getWindowToken(), 0);
         if (searchRunnable != null) ui.removeCallbacks(searchRunnable);
-        if (search.length() > 0) search.setText("");
-        if (searchRunnable != null) ui.removeCallbacks(searchRunnable);
         searchRunnable = null;
+        if (search.length() > 0) search.setText("");
         query = "";
         applyFilterAsync();
     }
 
-    @Override public void onBackPressed() {
+    private void installBackHandler() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            backInvokedCallback = this::handleBackNavigation;
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                    backInvokedCallback);
+        }
+    }
+
+    private void uninstallBackHandler() {
+        if (Build.VERSION.SDK_INT >= 33 && backInvokedCallback != null) {
+            try {
+                getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backInvokedCallback);
+            } catch (Throwable error) {
+                AppLog.e(this, "back-handler-unregister", error);
+            }
+            backInvokedCallback = null;
+        }
+    }
+
+    private boolean closeTransientUiForBack() {
         if (searchBox != null && searchBox.getVisibility() == View.VISIBLE) {
             setSearchVisible(false);
+            return true;
+        }
+        return false;
+    }
+
+    private void handleBackNavigation() {
+        if (closeTransientUiForBack()) return;
+        finishAfterTransition();
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override public void onBackPressed() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            handleBackNavigation();
             return;
         }
+        if (closeTransientUiForBack()) return;
         super.onBackPressed();
     }
 
@@ -1162,7 +1216,6 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     }
     private LinearLayout.LayoutParams chipParams() { LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)); p.setMargins(dp(3), dp(4), dp(4), dp(3)); return p; }
     private Button smallTop(String label) { Button b = chip(label, false); b.setTextSize(11); return b; }
-    private LinearLayout.LayoutParams topButtonParams(int w) { LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(w), dp(38)); p.setMargins(dp(4), 0, 0, 0); return p; }
     private Button playerButton(String label, boolean accent) { Button b = chip(label, accent); b.setTextSize(17); return b; }
     private TextView label(String value, int size, int color, boolean bold) { TextView t = new TextView(this); t.setText(value); t.setTextSize(size); t.setTextColor(color); t.setGravity(Gravity.CENTER_VERTICAL); if (bold) t.setTypeface(Typeface.DEFAULT_BOLD); t.setSingleLine(true); t.setEllipsize(android.text.TextUtils.TruncateAt.END); return t; }
     private GradientDrawable rounded(int fill, int stroke, int radiusDp) { GradientDrawable g = new GradientDrawable(); g.setColor(fill); g.setCornerRadius(dp(radiusDp)); g.setStroke(dp(1), stroke); return g; }
@@ -1172,7 +1225,6 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         return new RippleDrawable(ColorStateList.valueOf(rippleColor), content, mask);
     }
     private LinearLayout.LayoutParams marginParams(int w, int h, int l, int t, int r, int b) { LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(w, h); p.setMargins(dp(l), dp(t), dp(r), dp(b)); return p; }
-    private FrameLayout.LayoutParams playerLayoutParams() { FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(PLAYER_H_DP)); p.gravity = Gravity.BOTTOM; return p; }
     private int dp(int v) { return (int) (v * getResources().getDisplayMetrics().density + 0.5f); }
     private static String safe(String v) { return v == null ? "" : v.trim(); }
 
@@ -1193,6 +1245,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         healthGeneration.incrementAndGet(); filterGeneration.incrementAndGet(); catalogGeneration.incrementAndGet();
         ui.removeCallbacksAndMessages(null);
         searchRunnable = null;
+        uninstallBackHandler();
         if (receiverRegistered) { try { unregisterReceiver(playerReceiver); } catch (Throwable ignored) { } }
         if (repository != null) repository.shutdown();
         filterWorker.shutdownNow(); ioWorker.shutdownNow();

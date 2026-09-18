@@ -43,6 +43,8 @@ def main() -> None:
         "playbackStopped",
         "Context.RECEIVER_NOT_EXPORTED",
         "ui.removeCallbacksAndMessages(null)",
+        "uninstallBackHandler();",
+        "unregisterOnBackInvokedCallback(backInvokedCallback)",
         "source.size() > 16",
         "}, 8000);",
     )
@@ -68,6 +70,9 @@ def main() -> None:
         "explicitlyStopped = true;",
         "explicitlyStopped = false;",
         "i.putExtra(EXTRA_STOPPED, stopped);",
+        'status = "Stanica trenutno nije dostupna";',
+        "explicitlyStopped = true;",
+        "stopForeground(STOP_FOREGROUND_REMOVE);",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/PlaybackLifecycle.java",
@@ -84,6 +89,22 @@ def main() -> None:
         "pausedOrRecoverablePlaybackCanResume",
         "stopThenPlayUsesFreshSessionInsteadOfResume",
         "adjacentNavigationWrapsAndHandlesMissingSelection",
+    )
+    require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
+        "installBackHandler()",
+        "OnBackInvokedDispatcher.PRIORITY_DEFAULT",
+        "showRadioLibrary()",
+        "list.smoothScrollToPosition(1)",
+        "playerArtwork = null",
+    )
+    require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/AppLog.java",
+        "MAX_LOG_BYTES = 512L * 1024L",
+        "MAX_STACK_FRAMES = 160",
+        "rotateOrTruncate",
+        "new FileWriter(current, false)",
+        "bounded(String.valueOf(error), 2048)",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
@@ -108,6 +129,17 @@ def main() -> None:
         "https://user:pass@example.com/live",
         "http://169.254.169.254/latest/meta-data/",
         "resolvedAddressSetRejectsAnyPrivateOrLocalTarget",
+    )
+    forbid(
+        "apps/android/app/src/main/AndroidManifest.xml",
+        'android.permission.ACCESS_NETWORK_STATE',
+    )
+
+    forbid(
+        "apps/android/app/src/main/java/net/radiobalkan/app/RadioPlayerService.java",
+        "stopForeground(true)",
+        "stopForeground(false)",
+        "STOP_FOREGROUND_DETACH",
     )
     forbid(
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
@@ -154,7 +186,8 @@ def main() -> None:
         "MAX_REFRESH_RESPONSE_BYTES = 512 * 1024",
         "REFRESH_TOTAL_TIMEOUT_MS = 9000",
         "RADIO_BROWSER_API_BASES",
-        "async function refreshCandidateUrls(station)",
+        "async function refreshCandidateUrls(station, budgetMs = REFRESH_TOTAL_TIMEOUT_MS)",
+        "effectiveBudget",
         "redirect: 'error'",
         "BALKAN.has(actualCountry)",
     )
@@ -189,6 +222,7 @@ def main() -> None:
         "async function closeOffscreen()",
         "await waitForOffscreenClose();",
         "requestToken === commandGeneration && requestedSession === currentSessionId",
+        "async function retireFailedSession(requestToken, requestedSession)",
     )
     require(
         "extensions/platform/chromium/offscreen.js",
@@ -207,11 +241,12 @@ def main() -> None:
         "instance.onended = () => playbackFailed(token, expectedSession, instance);",
         "PLAY_START_TIMEOUT_MS = 12_000",
         "STALL_RECOVERY_TIMEOUT_MS = 15_000",
-        "async function playWithTimeout(instance)",
+        "CONNECTION_ATTEMPT_BUDGET_MS = 36_000",
+        "async function playWithTimeout(instance, timeoutMs = PLAY_START_TIMEOUT_MS)",
         "instance.onwaiting = () => scheduleStallRecovery(token, expectedSession, instance);",
         "instance.onstalled = () => scheduleStallRecovery(token, expectedSession, instance);",
         "let refreshAttempted = false;",
-        "RBNet.refreshCandidateUrls(expectedStation)",
+        "RBNet.refreshCandidateUrls(expectedStation, deadline - Date.now())",
     )
     require(
         "extensions/platform/firefox/background-firefox.js",
@@ -231,12 +266,14 @@ def main() -> None:
         "instance.onended = () => playbackFailed(token, expectedSession, instance);",
         "PLAY_START_TIMEOUT_MS = 12_000",
         "STALL_RECOVERY_TIMEOUT_MS = 15_000",
-        "async function playWithTimeout(instance)",
+        "CONNECTION_ATTEMPT_BUDGET_MS = 36_000",
+        "async function playWithTimeout(instance, timeoutMs = PLAY_START_TIMEOUT_MS)",
         "instance.onwaiting = () => scheduleStallRecovery(token, expectedSession, instance);",
         "instance.onstalled = () => scheduleStallRecovery(token, expectedSession, instance);",
         "if (msg.type === 'RB_STOP')",
         "let refreshAttempted = false;",
-        "RBNet.refreshCandidateUrls(expectedStation)",
+        "function retireFailedSession(expectedSession)",
+        "RBNet.refreshCandidateUrls(expectedStation, deadline - Date.now())",
         "currentSessionId = null;",
         "candidates = [];",
         "idx = 0;",
@@ -292,12 +329,16 @@ def main() -> None:
         "new play must wait until the previous offscreen close completes",
         "play issued during close must recover into active playback",
         "Chromium stopped state must expose a retired session",
+        "completed Chromium stop must return a terminal worker snapshot",
+        "terminal Chromium play failure must retire the failed session",
+        "terminal Chromium resume failure must retire the failed session",
     )
     require(
         "scripts/test_chromium_offscreen_contract.js",
         "pause must not recreate the audio element",
         "resume must reuse the paused audio element",
         "stop must retire the offscreen session",
+        "direct Chromium STOP response must already retire the offscreen session",
         "a hanging first candidate must fall back to the next stream",
         "stalled active audio must recover to a fallback candidate",
         "play after stop must create fresh Chromium playback",
@@ -305,6 +346,7 @@ def main() -> None:
         "candidate exhaustion must recover through a refreshed station URL",
         "catalog refresh finishing after stop must be rejected as stale",
         "refreshed Chromium stream must become the active session URL",
+        "Chromium connection attempts must have a total budget",
     )
     require(
         "scripts/test_firefox_player_contract.js",
@@ -321,6 +363,8 @@ def main() -> None:
         "Firefox candidate exhaustion must recover through a refreshed station URL",
         "Firefox must reject a catalog refresh that finishes after stop",
         "refreshed Firefox stream must become the active session URL",
+        "terminal Firefox play failure must retire the failed session",
+        "Firefox connection attempts must have a total budget",
     )
     forbid(
         "extensions/platform/chromium/offscreen.js",
@@ -375,12 +419,23 @@ def main() -> None:
         "shutdown-timeout",
         "Do not block the UI thread acquiring app.mu during shutdown.",
         "func runtimeTestTrace(scope string)",
+        "maxAppLogBytes",
+        "maxAppLogEntryRunes",
+        "func boundedLogText(",
+        "func rotateAppLog(",
+        "_ = os.WriteFile(path, nil, 0644)",
         "func scheduleCIRuntimeSmokeClose()",
         'runtimeTestTrace("ci-smoke-post-wm-close")',
         '"runtime-test-stacks"',
         "runtime.Stack(buf, true)",
         'runtimeTestTrace("wm-close-enter")',
         'runtimeTestTrace("wm-destroy-before-post-quit")',
+        "maxStateFileBytes",
+        "maxCacheFileBytes",
+        "func readFileLimited(",
+        "io.LimitReader(f, maxBytes+1)",
+        "readFileLimited(path, maxStateFileBytes)",
+        "readFileLimited(filepath.Join(oldDir, name), limit)",
         "func writeFileDurable(",
         "return f.Sync()",
         "writeFileDurable(tmp, b, 0644)",
@@ -405,6 +460,14 @@ def main() -> None:
         "func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleAction",
         "playbackToggleReconnect",
         "Kind: hitPlayerStop",
+        "drawDisabledIconButton",
+        "canStop := currentIdx >= 0 && !stopped",
+        "VK_SPACE",
+        "VK_LEFT",
+        "VK_RIGHT",
+        "case VK_SPACE:",
+        "case VK_LEFT:",
+        "case VK_RIGHT:",
         "playStationByKey(currentKey, current)",
         "app.audioStopped = true",
         "audioSetVolume(v)",
@@ -451,6 +514,8 @@ def main() -> None:
         "http://192.168.1.10/live",
         "https://user:pass@example.com/live",
         "TestValidateStateDropsUnsafeReplacementURLs",
+        "TestReadFileLimitedRejectsOversizedFiles",
+        "readFileLimited() accepted a file larger than the configured limit",
         "TestWriteFileDurablePersistsCompleteContent",
         "TestPlaybackToggleDecisionLifecycle",
         "stopped reconnects",
@@ -510,6 +575,9 @@ def main() -> None:
     )
     require(
         ".github/workflows/ci.yml",
+        "actions/checkout@v6",
+        "actions/setup-java@v6",
+        "gradle/actions/setup-gradle@v6",
         "Verify browser build leaves repository clean",
         "Verify Windows build leaves repository clean",
         "Verify Android build leaves repository clean",
@@ -529,6 +597,9 @@ def main() -> None:
     )
     require(
         ".github/workflows/publish.yml",
+        "actions/checkout@v6",
+        "actions/setup-java@v6",
+        "gradle/actions/setup-gradle@v6",
         "Verify Windows build leaves repository clean",
         "Verify browser build leaves repository clean",
         "Verify Android build leaves repository clean",
@@ -538,6 +609,7 @@ def main() -> None:
     )
     require(
         ".github/workflows/screenshots.yml",
+        "actions/checkout@v6",
         "Verify screenshot build leaves repository clean",
         "python scripts/check_clean_worktree.py",
     )

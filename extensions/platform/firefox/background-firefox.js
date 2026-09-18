@@ -14,6 +14,7 @@ let stallTarget = null;
 let refreshAttempted = false;
 const PLAY_START_TIMEOUT_MS = 12_000;
 const STALL_RECOVERY_TIMEOUT_MS = 15_000;
+const CONNECTION_ATTEMPT_BUDGET_MS = 36_000;
 
 function urls(station) { return RBNet.candidateUrls(station); }
 
@@ -38,6 +39,18 @@ function newSessionId() {
   return `${epoch}:${sessionCounter}`;
 }
 
+function retireFailedSession(expectedSession) {
+  if (!expectedSession || currentSessionId !== expectedSession) return false;
+  generation += 1;
+  resetAudio();
+  currentSessionId = null;
+  candidates = [];
+  idx = 0;
+  refreshAttempted = false;
+  commitState({ playing: false });
+  return true;
+}
+
 function clearStallTimer(target = null) {
   if (target && stallTarget && stallTarget !== target) return;
   if (stallTimer) clearTimeout(stallTimer);
@@ -60,13 +73,14 @@ function scheduleStallRecovery(token, expectedSession, instance) {
   }, STALL_RECOVERY_TIMEOUT_MS);
 }
 
-async function playWithTimeout(instance) {
+async function playWithTimeout(instance, timeoutMs = PLAY_START_TIMEOUT_MS) {
   let timeout = null;
+  const boundedTimeout = Math.max(1, Math.min(PLAY_START_TIMEOUT_MS, Number(timeoutMs) || PLAY_START_TIMEOUT_MS));
   try {
     await Promise.race([
       instance.play(),
       new Promise((_, reject) => {
-        timeout = setTimeout(() => reject(new Error('playback start timeout')), PLAY_START_TIMEOUT_MS);
+        timeout = setTimeout(() => reject(new Error('playback start timeout')), boundedTimeout);
       })
     ]);
   } finally {
@@ -152,17 +166,17 @@ async function resumeCurrent(expectedSession) {
   }
 }
 
-async function start(expectedSession) {
+async function start(expectedSession, deadline = Date.now() + CONNECTION_ATTEMPT_BUDGET_MS) {
   const token = ++generation;
   let expectedStation = state.station;
-  while (token === generation && currentSessionId === expectedSession) {
-    while (idx < candidates.length && token === generation && currentSessionId === expectedSession) {
+  while (token === generation && currentSessionId === expectedSession && Date.now() < deadline) {
+    while (idx < candidates.length && token === generation && currentSessionId === expectedSession && Date.now() < deadline) {
       const candidate = candidates[idx];
       state.playing = false;
       disposeAudio();
       const instance = createAudio(token, expectedSession, candidate);
       try {
-        await playWithTimeout(instance);
+        await playWithTimeout(instance, deadline - Date.now());
         if (token !== generation || currentSessionId !== expectedSession || audio !== instance) {
           return { ok: false, stale: true };
         }
@@ -177,10 +191,10 @@ async function start(expectedSession) {
       }
     }
 
-    if (refreshAttempted) break;
+    if (refreshAttempted || Date.now() >= deadline) break;
     refreshAttempted = true;
     let refreshed = [];
-    try { refreshed = await RBNet.refreshCandidateUrls(expectedStation); } catch { }
+    try { refreshed = await RBNet.refreshCandidateUrls(expectedStation, deadline - Date.now()); } catch { }
     if (token !== generation || currentSessionId !== expectedSession) return { ok: false, stale: true };
     const before = candidates.length;
     for (const value of refreshed || []) {
@@ -214,7 +228,9 @@ api.runtime.onMessage.addListener(async msg => {
     commitState({ station: msg.station, playing: false });
     const result = await start(requestedSession);
     if (currentSessionId !== requestedSession) return snapshot({ stale: true });
-    return result.ok ? snapshot() : snapshot({ error: 'Stanica trenutačno nije dostupna' });
+    if (result.ok) return snapshot();
+    retireFailedSession(requestedSession);
+    return snapshot({ error: 'Stanica trenutačno nije dostupna' });
   }
 
   if (msg.type === 'RB_TOGGLE') {
@@ -230,7 +246,9 @@ api.runtime.onMessage.addListener(async msg => {
     if (idx >= candidates.length) idx = 0;
     const result = await resumeCurrent(requestedSession);
     if (currentSessionId !== requestedSession) return snapshot({ stale: true });
-    return result.ok ? snapshot() : snapshot({ error: 'Reprodukcija trenutačno nije dostupna' });
+    if (result.ok) return snapshot();
+    retireFailedSession(requestedSession);
+    return snapshot({ error: 'Reprodukcija trenutačno nije dostupna' });
   }
 
   if (msg.type === 'RB_STOP') {

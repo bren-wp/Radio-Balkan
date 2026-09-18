@@ -152,6 +152,7 @@ async function main() {
   const stopped = await dispatch({ type: 'STOP', sessionId: 's1' });
   assert.equal(stopped.ok, true);
   assert.equal(stopped.playing, false, 'stop must clear Chromium playback');
+  assert.equal(stopped.sessionId, null, 'direct Chromium STOP response must already retire the offscreen session');
   const playsBeforeStoppedToggle = playCalls;
   const afterStopToggle = await dispatch({ type: 'TOGGLE', sessionId: 's1' });
   assert.equal(afterStopToggle.ok, false, 'toggle after stop must reject the retired Chromium session');
@@ -234,6 +235,9 @@ async function main() {
   assert.equal(playCalls, playsBeforeStopDuringRefresh, 'stale refresh must not start a new audio instance after stop');
 
   assert.ok(reports.some(message => message.type === 'RB_OFFSCREEN_STATE'), 'offscreen player must continue reporting state');
+  const offscreenSource = fs.readFileSync(playerPath, 'utf8');
+  assert.match(offscreenSource, /CONNECTION_ATTEMPT_BUDGET_MS\s*=\s*36_000/, 'Chromium connection attempts must have a total budget');
+  assert.match(offscreenSource, /refreshCandidateUrls\(expectedStation, deadline - Date\.now\(\)\)/, 'Chromium catalog recovery must inherit the remaining connection budget');
   console.log('Chromium offscreen lifecycle/timeout/stall regression tests OK');
 }
 

@@ -26,6 +26,8 @@ let offscreenGeneration = 0;
 let offscreenSession = null;
 let offscreenStation = null;
 let offscreenPlaying = false;
+let failNextPlay = false;
+let failNextToggle = false;
 
 const runtime = {
   onMessage: {
@@ -36,9 +38,11 @@ const runtime = {
     if (message.type === 'PLAY') {
       offscreenSession = message.sessionId;
       offscreenStation = message.station;
-      offscreenPlaying = true;
+      offscreenPlaying = !failNextPlay;
       offscreenGeneration += 1;
-      return { ok: true, station: offscreenStation, playing: true, sessionId: offscreenSession, generation: offscreenGeneration };
+      const ok = !failNextPlay;
+      failNextPlay = false;
+      return { ok, station: offscreenStation, playing: offscreenPlaying, sessionId: offscreenSession, generation: offscreenGeneration };
     }
     if (message.type === 'STOP') {
       if (delayedStop) return delayedStop.promise;
@@ -47,8 +51,13 @@ const runtime = {
       return { ok: true, station: offscreenStation, playing: false, sessionId: message.sessionId, generation: offscreenGeneration };
     }
     if (message.type === 'TOGGLE') {
-      offscreenPlaying = !offscreenPlaying;
       offscreenGeneration += 1;
+      if (failNextToggle) {
+        failNextToggle = false;
+        offscreenPlaying = false;
+        return { ok: false, station: offscreenStation, playing: false, sessionId: message.sessionId, generation: offscreenGeneration };
+      }
+      offscreenPlaying = !offscreenPlaying;
       return { ok: true, station: offscreenStation, playing: offscreenPlaying, sessionId: message.sessionId, generation: offscreenGeneration };
     }
     if (message.type === 'GET_STATE') {
@@ -158,6 +167,7 @@ async function main() {
   const newest = await playDuringClose;
   closeGate = null;
   assert.equal(stopped.stale, undefined, 'completed stop response may return the current snapshot without reviving old playback');
+  assert.equal(stopped.sessionId, null, 'completed Chromium stop must return a terminal worker snapshot');
   assert.equal(createCalls, 2, 'new play must recreate offscreen only after close completion');
   assert.equal(newest.station.name, 'Radio C');
   assert.equal(newest.playing, true, 'play issued during close must recover into active playback');
@@ -170,6 +180,21 @@ async function main() {
   assert.equal(stoppedState.sessionId, null, 'Chromium stopped state must expose a retired session');
   assert.equal(stoppedState.playing, false);
   assert.notEqual(finalSession, stoppedState.sessionId);
+
+  failNextPlay = true;
+  const failedPlay = await dispatch({ type: 'RB_PLAY', station: stationA });
+  assert.equal(failedPlay.playing, false);
+  assert.equal(failedPlay.sessionId, null, 'terminal Chromium play failure must retire the failed session');
+  assert.match(failedPlay.error || '', /nije dostupna/);
+
+  const replayAfterFailure = await dispatch({ type: 'RB_PLAY', station: stationB });
+  assert.equal(replayAfterFailure.playing, true, 'play after terminal failure must create a clean Chromium session');
+  assert.ok(replayAfterFailure.sessionId);
+
+  failNextToggle = true;
+  const failedToggle = await dispatch({ type: 'RB_TOGGLE' });
+  assert.equal(failedToggle.playing, false);
+  assert.equal(failedToggle.sessionId, null, 'terminal Chromium resume failure must retire the failed session');
 
   console.log('Chromium player close/session race regression tests OK');
 }

@@ -87,8 +87,17 @@ def main() -> int:
     require(errors, popup_css, "button:disabled", "extensions/shared/popup.css")
     require(errors, popup_css, "width: 44px", "extensions/shared/popup.css")
     require(errors, popup_css, ".station:focus-visible", "extensions/shared/popup.css")
+    require(errors, popup_css, ".stationPlay:hover:not(:disabled)", "extensions/shared/popup.css")
     require(errors, popup_css, "button:active:not(:disabled)", "extensions/shared/popup.css")
     require(errors, popup_css, ".emptyAction", "extensions/shared/popup.css")
+
+    obsolete_people_icon = ROOT / "apps/android/app/src/main/res/drawable/ic_people.xml"
+    if obsolete_people_icon.exists():
+        errors.append("Android resources: obsolete ic_people.xml must stay removed after profile/listener UI cleanup")
+
+    obsolete_colors = ROOT / "apps/android/app/src/main/res/values/colors.xml"
+    if obsolete_colors.exists():
+        errors.append("Android resources: unused legacy colors.xml must stay removed while no R.color/@color references exist")
 
     android = read("apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java")
     adapter = read("apps/android/app/src/main/java/net/radiobalkan/app/StationAdapter.java")
@@ -111,7 +120,16 @@ def main() -> int:
         "updatePlaybackControls()",
         "playerStop.setOnClickListener",
         "RadioPlayerService.ACTION_STOP",
+        "PlaybackLifecycle.uiCommand(!currentKey.isEmpty(), playing, playbackStopped)",
         "playerPrev.setOnClickListener",
+        "showRadioLibrary()",
+        "list.smoothScrollToPosition(1)",
+        "installBackHandler()",
+        "uninstallBackHandler()",
+        "unregisterOnBackInvokedCallback(backInvokedCallback)",
+        "OnBackInvokedDispatcher.PRIORITY_DEFAULT",
+        "compactPlayer ? 6 : 12",
+        "playerArtwork = null",
         "playerNext.setOnClickListener",
         "PlaybackLifecycle.adjacentIndex",
         "StreamResolver.isSafeHttp(s.homepage)",
@@ -119,6 +137,7 @@ def main() -> int:
         "setSearchVisible(",
         "@Override public void onBackPressed()",
         "hideSoftInputFromWindow",
+        '"Prikaz nije moguće osvježiti"',
     ):
         require(errors, android, needle, "Android MainActivity")
     for needle in (
@@ -127,6 +146,7 @@ def main() -> int:
         '"Očisti automatske izvore"',
         '"Promijeni izvor"',
         'navItem("○", "Profil", "profile")',
+        '"Prikaz je osvježen"',
     ):
         forbid(errors, android, needle, "Android MainActivity")
 
@@ -187,6 +207,14 @@ def main() -> int:
         'heroLabel = "▶  Nastavi"',
         'playLabel = "Ⅱ"',
         "Kind: hitPlayerStop",
+        "drawDisabledIconButton",
+        "canStop := currentIdx >= 0 && !stopped",
+        "case VK_SPACE:",
+        "case VK_LEFT:",
+        "case VK_RIGHT:",
+        "toggleCurrentPlayback()",
+        "playAdjacent(-1)",
+        "playAdjacent(1)",
         '"■"',
     ):
         require(errors, windows, needle, "Windows UI")

@@ -98,6 +98,15 @@ async function offscreen(message) {
   return chrome.runtime.sendMessage({ target: 'offscreen', ...message });
 }
 
+async function retireFailedSession(requestToken, requestedSession) {
+  if (requestToken !== commandGeneration || requestedSession !== currentSessionId) return false;
+  currentSessionId = null;
+  lastOffscreenGeneration = -1;
+  commitState({ playing: false }, true);
+  await closeOffscreen();
+  return true;
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || msg.target === 'offscreen') return;
   (async () => {
@@ -115,7 +124,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const actual = await offscreen({ type: 'PLAY', station: msg.station, sessionId: requestedSession });
         if (requestToken !== commandGeneration || requestedSession !== currentSessionId) return snapshot({ stale: true });
         acceptOffscreenState(actual, { notify: true });
-        if (!actual?.ok || !state.playing) return snapshot({ error: 'Stanica trenutačno nije dostupna' });
+        if (!actual?.ok || !state.playing) {
+          await retireFailedSession(requestToken, requestedSession);
+          return snapshot({ error: 'Stanica trenutačno nije dostupna' });
+        }
         return snapshot();
       }
 
@@ -131,7 +143,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const actual = await offscreen({ type: 'TOGGLE', sessionId: requestedSession });
         if (requestToken !== commandGeneration || requestedSession !== currentSessionId) return snapshot({ stale: true });
         acceptOffscreenState(actual, { notify: true });
-        if (!actual?.ok && !state.playing) return snapshot({ error: 'Reprodukcija trenutačno nije dostupna' });
+        if (!actual?.ok && !state.playing) {
+          await retireFailedSession(requestToken, requestedSession);
+          return snapshot({ error: 'Reprodukcija trenutačno nije dostupna' });
+        }
         return snapshot();
       }
 
@@ -139,9 +154,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         requestToken = ++commandGeneration;
         const requestedSession = currentSessionId;
         if (await hasOffscreen()) {
-          const actual = await offscreen({ type: 'STOP', sessionId: requestedSession });
+          await offscreen({ type: 'STOP', sessionId: requestedSession });
           if (requestToken === commandGeneration && requestedSession === currentSessionId) {
-            acceptOffscreenState(actual, { notify: true });
             await closeOffscreen();
           }
         }

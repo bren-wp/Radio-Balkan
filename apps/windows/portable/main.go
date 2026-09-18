@@ -137,7 +137,10 @@ const (
 	SW_SHOWNORMAL = 1
 	VK_RETURN     = 0x0D
 	VK_ESCAPE     = 0x1B
+	VK_SPACE      = 0x20
+	VK_LEFT       = 0x25
 	VK_UP         = 0x26
+	VK_RIGHT      = 0x27
 	VK_DOWN       = 0x28
 	VK_F5         = 0x74
 	VK_CONTROL    = 0x11
@@ -402,14 +405,6 @@ func isBalkanCode(code string) bool {
 	}
 	return false
 }
-func countryCodeByName(name string) string {
-	for _, c := range balkanCountries {
-		if c.Name == name {
-			return c.Code
-		}
-	}
-	return ""
-}
 func countryNameByCode(code string) string {
 	for _, c := range balkanCountries {
 		if c.Code == code {
@@ -465,17 +460,6 @@ func currentStationIndexLocked() int {
 		return app.current
 	}
 	return -1
-}
-
-func currentStationSnapshot() (RadioStation, string, int, bool) {
-	app.mu.RLock()
-	defer app.mu.RUnlock()
-	idx := currentStationIndexLocked()
-	if idx < 0 || idx >= len(app.stations) {
-		return RadioStation{}, "", -1, false
-	}
-	st := app.stations[idx]
-	return st, stationKey(st), idx, true
 }
 
 var (
@@ -581,12 +565,6 @@ func setStatus(v string) {
 	app.status = v
 	app.mu.Unlock()
 }
-func getStatus() string {
-	app.mu.RLock()
-	v := app.status
-	app.mu.RUnlock()
-	return v
-}
 func safeGo(name string, fn func()) {
 	if shuttingDown() {
 		return
@@ -611,6 +589,32 @@ func runtimeTestTrace(scope string) {
 	logError("runtime-test", errors.New(scope))
 }
 
+const (
+	maxAppLogBytes      int64 = 2 << 20
+	maxAppLogEntryRunes       = 16384
+)
+
+func boundedLogText(value string, maxRunes int) string {
+	value = strings.ReplaceAll(strings.ReplaceAll(value, "\r", " "), "\n", " ")
+	runes := []rune(value)
+	if len(runes) <= maxRunes {
+		return value
+	}
+	return string(runes[:maxRunes]) + "…"
+}
+
+func rotateAppLog(path string) {
+	info, err := os.Stat(path)
+	if err != nil || info.Size() <= maxAppLogBytes {
+		return
+	}
+	previous := path + ".1"
+	_ = os.Remove(previous)
+	if err := os.Rename(path, previous); err != nil {
+		_ = os.WriteFile(path, nil, 0644)
+	}
+}
+
 func logError(scope string, err error) {
 	if err == nil {
 		return
@@ -619,16 +623,17 @@ func logError(scope string, err error) {
 	defer logMu.Unlock()
 	_ = os.MkdirAll(filepath.Join(stateDir(), "logs"), 0755)
 	p := filepath.Join(stateDir(), "logs", "app.log")
-	if info, e := os.Stat(p); e == nil && info.Size() > 2<<20 {
-		_ = os.Remove(p + ".1")
-		_ = os.Rename(p, p+".1")
-	}
+	rotateAppLog(p)
 	f, e := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if e != nil {
 		return
 	}
 	defer f.Close()
-	_, _ = fmt.Fprintf(f, "%s [%s] %v\n", time.Now().Format(time.RFC3339), scope, err)
+	_, _ = fmt.Fprintf(f, "%s [%s] %s\n",
+		time.Now().Format(time.RFC3339),
+		boundedLogText(scope, 256),
+		boundedLogText(err.Error(), maxAppLogEntryRunes),
+	)
 }
 func safeHTTPURL(raw string) bool {
 	raw = strings.TrimSpace(raw)
@@ -1803,6 +1808,12 @@ func drawIconButton(hdc syscall.Handle, l, t, r, b int32, label string, accent b
 	text(hdc, label, l, t, r, b, tc, DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 }
 
+func drawDisabledIconButton(hdc syscall.Handle, l, t, r, b int32, label string) {
+	drawRounded(hdc, l, t, r, b, 13, color(12, 18, 26), color(34, 42, 52))
+	selectFont(hdc, app.hFontBold)
+	text(hdc, label, l, t, r, b, rgb(91, 100, 112), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+}
+
 func drawSelectBox(hdc syscall.Handle, l, t, r, b int32, label string, open bool) {
 	fill, border := color(17, 25, 35), color(43, 53, 66)
 	if open {
@@ -2436,6 +2447,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	np := ""
 	currentCountry := ""
 	playing := false
+	stopped := true
 	currentIdx := -1
 	var current RadioStation
 	app.mu.RLock()
@@ -2450,6 +2462,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 		}
 	}
 	playing = app.playing
+	stopped = app.audioStopped
 	app.mu.RUnlock()
 	app.stateMu.RLock()
 	vol := app.state.Volume
@@ -2505,8 +2518,13 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	selectFont(hdc, app.hFontTitle)
 	text(hdc, label, cx-28, t+10, cx+28, t+72, rgb(20, 21, 24), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	app.hits = append(app.hits, HitRegion{R: RECT{cx - 35, t + 7, cx + 35, t + 76}, Kind: hitPlayerPlay, Index: -1})
-	drawIconButton(hdc, cx+48, t+25, cx+88, t+65, "■", false)
-	app.hits = append(app.hits, HitRegion{R: RECT{cx + 44, t + 21, cx + 92, t + 69}, Kind: hitPlayerStop, Index: -1})
+	canStop := currentIdx >= 0 && !stopped
+	if canStop {
+		drawIconButton(hdc, cx+48, t+25, cx+88, t+65, "■", false)
+		app.hits = append(app.hits, HitRegion{R: RECT{cx + 44, t + 21, cx + 92, t + 69}, Kind: hitPlayerStop, Index: -1})
+	} else {
+		drawDisabledIconButton(hdc, cx+48, t+25, cx+88, t+65, "■")
+	}
 	selectFont(hdc, app.hFontBold)
 	text(hdc, "▶", cx+112, t+21, cx+150, t+59, rgb(193, 199, 207), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	app.hits = append(app.hits, HitRegion{R: RECT{cx + 108, t + 17, cx + 154, t + 63}, Kind: hitPlayerNext, Index: -1})
@@ -2728,23 +2746,6 @@ func drawButton(hdc syscall.Handle, l, t, r, b int32, label string, primary bool
 	selectFont(hdc, app.hFontSmall)
 	text(hdc, label, l+8, t, r-8, b, tc, DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 }
-func drawSmallButton(hdc syscall.Handle, l, t, r, b int32, label string, accent bool) {
-	drawButton(hdc, l, t, r, b, label, accent)
-}
-func drawPill(hdc syscall.Handle, l, t, r, b int32, label string, selected bool) {
-	fill := uint32(0x211a16)
-	border := uint32(0x3d2f27)
-	tc := rgb(181, 170, 162)
-	if selected {
-		fill = 0x39251a
-		border = 0x75411f
-		tc = rgb(255, 165, 94)
-	}
-	drawRounded(hdc, l, t, r, b, 18, fill, border)
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, label, l+12, t, r-12, b, tc, DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-}
-func textButtonWidth(s string) int { return 34 + len([]rune(s))*8 }
 func selectFont(hdc syscall.Handle, h syscall.Handle) {
 	procSelectObject.Call(uintptr(hdc), uintptr(h))
 }
@@ -2753,9 +2754,6 @@ func text(hdc syscall.Handle, s string, l, t, r, b int32, color uintptr, flags u
 	procSetBkMode.Call(uintptr(hdc), TRANSPARENT)
 	procSetTextColor.Call(uintptr(hdc), color)
 	procDrawText.Call(uintptr(hdc), uintptr(unsafe.Pointer(u16(s))), ^uintptr(0), uintptr(unsafe.Pointer(&rc)), uintptr(flags))
-}
-func textRect(hdc syscall.Handle, s string, rc RECT, color uintptr, flags uint32) {
-	text(hdc, s, rc.Left, rc.Top, rc.Right, rc.Bottom, color, flags)
 }
 
 func stationIndexFromHit(h HitRegion) int {
@@ -2824,8 +2822,15 @@ func handleKeyDown(key uint32) {
 	genreOpen := app.genreMenuOpen
 	app.mu.RUnlock()
 	if !countryOpen && !genreOpen {
-		if key == VK_F5 {
+		switch key {
+		case VK_F5:
 			safeGo("refresh-hotkey", refreshAll)
+		case VK_SPACE:
+			toggleCurrentPlayback()
+		case VK_LEFT:
+			playAdjacent(-1)
+		case VK_RIGHT:
+			playAdjacent(1)
 		}
 		return
 	}
@@ -3380,10 +3385,6 @@ func playbackWatchdog(idx int, stationID string) {
 		return
 	}
 }
-func ensureStream(idx int) (string, bool) {
-	return ensureStreamKey(idx, "")
-}
-
 func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 	app.mu.RLock()
 	if expectedKey != "" {
@@ -5102,7 +5103,6 @@ func rebuildGenres() {
 	}
 }
 
-func clampScroll() { app.mu.Lock(); defer app.mu.Unlock(); clampScrollLocked() }
 func clampScrollLocked() {
 	showPopular := app.tab == "all" && strings.TrimSpace(app.search) == "" && strings.TrimSpace(app.genre) == ""
 	gridTop := 128
@@ -5571,11 +5571,6 @@ func postGenres() {
 		procPostMessage.Call(uintptr(app.hwnd), WM_APP+2, 0, 0)
 	}
 }
-func postFilterUI() {
-	if app.hwnd != 0 && !shuttingDown() {
-		procPostMessage.Call(uintptr(app.hwnd), WM_APP+3, 0, 0)
-	}
-}
 func messageBox(hwnd syscall.Handle, title, msg string, flags uintptr) int {
 	r, _, _ := procMessageBox.Call(uintptr(hwnd), uintptr(unsafe.Pointer(u16(msg))), uintptr(unsafe.Pointer(u16(title))), flags|MB_OK)
 	return int(r)
@@ -5710,6 +5705,30 @@ func stateBaseDir() string {
 }
 func stateDir() string       { return filepath.Join(stateBaseDir(), "RadioBalkan") }
 func legacyStateDir() string { return filepath.Join(stateBaseDir(), "RadioHrvatska") }
+
+const (
+	maxStateFileBytes int64 = 2 << 20
+	maxCacheFileBytes int64 = 32 << 20
+)
+
+func readFileLimited(path string, maxBytes int64) ([]byte, error) {
+	if maxBytes <= 0 {
+		return nil, errors.New("neispravan limit datoteke")
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, fmt.Errorf("datoteka je prevelika: %d B", len(data))
+	}
+	return data, nil
+}
 func migrateLegacyDataDir() {
 	newDir, oldDir := stateDir(), legacyStateDir()
 	if newDir == oldDir {
@@ -5726,7 +5745,11 @@ func migrateLegacyDataDir() {
 	}
 	_ = os.MkdirAll(newDir, 0755)
 	for _, name := range []string{"state.json", "state.json.bak", "stations-cache.json", "stations-cache.json.bak"} {
-		b, err := os.ReadFile(filepath.Join(oldDir, name))
+		limit := maxCacheFileBytes
+		if strings.HasPrefix(name, "state.json") {
+			limit = maxStateFileBytes
+		}
+		b, err := readFileLimited(filepath.Join(oldDir, name), limit)
 		if err == nil {
 			_ = os.WriteFile(filepath.Join(newDir, name), b, 0644)
 		}
@@ -5758,8 +5781,11 @@ func writeFileDurable(path string, data []byte, perm os.FileMode) (err error) {
 func loadState() (PersistedState, bool) {
 	paths := []string{statePath(), statePath() + ".bak"}
 	for i, path := range paths {
-		b, err := os.ReadFile(path)
+		b, err := readFileLimited(path, maxStateFileBytes)
 		if err != nil {
+			if i == 0 && !errors.Is(err, os.ErrNotExist) {
+				logError("load-state", err)
+			}
 			continue
 		}
 		var st PersistedState
@@ -5894,7 +5920,7 @@ func loadCache() []RadioStation {
 	app.cacheFileMu.Lock()
 	defer app.cacheFileMu.Unlock()
 	for i, path := range []string{cachePath(), cacheBackupPath()} {
-		if info, statErr := os.Stat(path); statErr == nil && info.Size() > 32<<20 {
+		if info, statErr := os.Stat(path); statErr == nil && info.Size() > maxCacheFileBytes {
 			logError("load-cache", fmt.Errorf("spremljeni katalog je prevelik: %d B", info.Size()))
 			continue
 		}
@@ -5903,7 +5929,7 @@ func loadCache() []RadioStation {
 			continue
 		}
 		var c CacheFile
-		dec := json.NewDecoder(io.LimitReader(f, 32<<20))
+		dec := json.NewDecoder(io.LimitReader(f, maxCacheFileBytes))
 		err = dec.Decode(&c)
 		_ = f.Close()
 		if err != nil {
