@@ -118,8 +118,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 images.load(artworkStation.favicon, playerArtwork, null);
             }
             if (playerEqualizer != null) playerEqualizer.setActive(playing);
-            playerPlay.setText(playing ? "Ⅱ" : "▶");
             statusText.setText(status.isEmpty() ? "Spremno" : status);
+            updatePlaybackControls();
             if (adapter != null) adapter.setPlayback(currentKey, playing);
         }
     };
@@ -314,6 +314,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         playBg.setCornerRadius(dp(15));
         playBg.setStroke(dp(1), 0xFFFFC66F);
         heroPlay.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33111111), playBg, rounded(Color.WHITE, 0x00000000, 15)));
+        heroPlay.setEnabled(false);
+        heroPlay.setContentDescription("Odaberi stanicu za reprodukciju");
         heroPlay.setOnClickListener(v -> { if (featured != null) onPlay(featured); });
         LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(dp(176), dp(54));
         buttonLp.setMargins(0, dp(14), 0, 0);
@@ -364,7 +366,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(dp(60), dp(60));
         pp.setMargins(dp(9), 0, 0, 0);
         player.addView(playerPlay, pp);
-        playerPlay.setContentDescription("Pokreni ili pauziraj reprodukciju");
+        playerPlay.setEnabled(false);
+        playerPlay.setContentDescription("Odaberi stanicu za reprodukciju");
         playerPlay.setOnClickListener(v -> {
             if (currentKey.isEmpty() && featured != null) { onPlay(featured); return; }
             sendPlayerAction(playing ? RadioPlayerService.ACTION_PAUSE : RadioPlayerService.ACTION_RESUME);
@@ -433,6 +436,27 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         icon.setTextColor(color);
         text.setTextColor(color);
         text.setTypeface(selected ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+        item.setContentDescription(text.getText() + (selected ? ", odabrano" : ""));
+    }
+
+    private void updatePlaybackControls() {
+        if (heroPlay != null) {
+            boolean hasFeatured = featured != null;
+            boolean featuredCurrent = hasFeatured && featured.key().equals(currentKey);
+            heroPlay.setEnabled(hasFeatured);
+            String heroAction;
+            if (featuredCurrent && playing) heroAction = "Ⅱ   Pauziraj";
+            else if (featuredCurrent && !currentKey.isEmpty()) heroAction = "▶   Nastavi";
+            else heroAction = "▶   Slušaj uživo";
+            heroPlay.setText(heroAction);
+            heroPlay.setContentDescription(hasFeatured ? heroAction.replace("▶", "").replace("Ⅱ", "").trim() + " " + featured.name : "Odaberi stanicu za reprodukciju");
+        }
+        if (playerPlay != null) {
+            boolean available = !currentKey.isEmpty() || featured != null;
+            playerPlay.setEnabled(available);
+            playerPlay.setText(playing ? "Ⅱ" : "▶");
+            playerPlay.setContentDescription(available ? (playing ? "Pauziraj reprodukciju" : "Pokreni reprodukciju") : "Odaberi stanicu za reprodukciju");
+        }
     }
 
     private FrameLayout.LayoutParams bottomNavLayoutParams() {
@@ -646,8 +670,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                         heroName.setText(featured.name);
                         heroMeta.setText(featured.meta());
                         applyFlag(heroMeta, featured.countryCode);
-                        heroPlay.setEnabled(true);
                     }
+                    updatePlaybackControls();
                 });
             });
         } catch (RejectedExecutionException ignored) { }
@@ -805,7 +829,9 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         playerName.setText(s.name); playerMeta.setText(s.meta()); applyFlag(playerMeta, s.countryCode); statusText.setText("Povezujem…");
         if (playerArtwork != null) { playerArtwork.setImageResource(R.drawable.ic_radio_balkan); images.load(s.favicon, playerArtwork, null); }
         if (playerEqualizer != null) playerEqualizer.setActive(false);
-        playing = false; adapter.setPlayback(currentKey, false);
+        playing = false;
+        updatePlaybackControls();
+        adapter.setPlayback(currentKey, false);
         selectBottomNav("radio");
     }
 
