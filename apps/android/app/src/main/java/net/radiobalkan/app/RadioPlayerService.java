@@ -288,6 +288,7 @@ public final class RadioPlayerService extends Service {
     }
 
     private boolean prepareAsync(int gen, String stream) {
+        if (!StreamResolver.isSafeHttpForConnection(stream)) return false;
         final MediaPlayer next = new MediaPlayer();
         try {
             next.setAudioAttributes(audioAttributes());
@@ -664,7 +665,7 @@ public final class RadioPlayerService extends Service {
     }
 
     private String fetchIcyTitle(String raw) {
-        if (!StreamResolver.isSafeHttp(raw)) return "";
+        if (!StreamResolver.isSafeHttpForConnection(raw)) return "";
         HttpURLConnection c = null;
         try {
             c = (HttpURLConnection) new URL(raw).openConnection();

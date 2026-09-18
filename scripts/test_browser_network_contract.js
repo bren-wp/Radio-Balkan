@@ -23,6 +23,10 @@ assert.equal(RBNet.safeHttp('http://[::]/live'), false, 'IPv6 unspecified target
 assert.equal(RBNet.safeHttp('http://[::1]/live'), false, 'IPv6 loopback must be rejected');
 assert.equal(RBNet.safeHttp('http://[::ffff:127.0.0.1]/live'), false, 'IPv4-mapped IPv6 loopback must be rejected');
 assert.equal(RBNet.safeHttp('http://[::ffff:10.0.0.4]/live'), false, 'IPv4-mapped IPv6 private target must be rejected');
+assert.equal(RBNet.safeHttp('http://[fc00::1]/live'), false, 'IPv6 unique-local target must be rejected');
+assert.equal(RBNet.safeHttp('http://[fd12:3456::1]/live'), false, 'IPv6 unique-local fd00/8 target must be rejected');
+assert.equal(RBNet.safeHttp('http://[fe90::1]/live'), false, 'full IPv6 link-local fe80/10 range must be rejected');
+assert.equal(RBNet.safeHttp('http://[ff02::1]/live'), false, 'IPv6 multicast target must be rejected');
 assert.equal(RBNet.safeHttp('http://localhost./live'), false, 'trailing-dot localhost must be rejected');
 assert.equal(RBNet.safeHttp('https://metadata.google.internal./computeMetadata/v1/'), false, 'trailing-dot metadata host must be rejected');
 assert.equal(RBNet.safeHttp('http://radio.local./live'), false, 'trailing-dot local-domain target must be rejected');

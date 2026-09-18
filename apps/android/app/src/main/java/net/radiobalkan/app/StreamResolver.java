@@ -67,7 +67,7 @@ public final class StreamResolver {
     }
 
     private static String probe(String raw, int depth) {
-        if (depth > MAX_REDIRECTS || !isSafeHttp(raw)) return null;
+        if (depth > MAX_REDIRECTS || !isSafeHttpForConnection(raw)) return null;
         HttpURLConnection c = null;
         try {
             URL original = new URL(raw);
@@ -191,6 +191,7 @@ public final class StreamResolver {
             HttpURLConnection c = null;
             try {
                 URL u = new URL(base + "/json/stations/byuuid/" + stationUuid);
+                if (!isSafeHttpForConnection(u.toString())) continue;
                 c = (HttpURLConnection) u.openConnection();
                 c.setConnectTimeout(5000);
                 c.setReadTimeout(7000);
@@ -225,7 +226,7 @@ public final class StreamResolver {
 
     private static List<String> discoverFromHomepage(String homepage, int depth) {
         List<String> out = new ArrayList<>();
-        if (depth > MAX_REDIRECTS || !isSafeHttp(homepage)) return out;
+        if (depth > MAX_REDIRECTS || !isSafeHttpForConnection(homepage)) return out;
         HttpURLConnection c = null;
         try {
             URL requested = new URL(homepage);
@@ -315,6 +316,25 @@ public final class StreamResolver {
         String host = safe(raw).toLowerCase(Locale.ROOT);
         while (host.endsWith(".")) host = host.substring(0, host.length() - 1);
         return host;
+    }
+
+    static boolean isSafeHttpForConnection(String s) {
+        if (!isSafeHttp(s)) return false;
+        try {
+            URL u = new URL(s.trim());
+            InetAddress[] addresses = InetAddress.getAllByName(canonicalHost(u.getHost()));
+            return allAddressesSafe(addresses);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    static boolean allAddressesSafe(InetAddress[] addresses) {
+        if (addresses == null || addresses.length == 0) return false;
+        for (InetAddress address : addresses) {
+            if (isUnsafeAddress(address)) return false;
+        }
+        return true;
     }
 
     private static boolean isUnsafeAddress(InetAddress ip) {

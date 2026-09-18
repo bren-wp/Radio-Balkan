@@ -413,6 +413,7 @@ public final class RadioRepository {
         String current = raw;
         for (int hop = 0; hop <= MAX_REDIRECTS; hop++) {
             if (!isTrustedApiUrl(current)) throw new IllegalArgumentException("Nedopušten API URL");
+            if (!StreamResolver.isSafeHttpForConnection(current)) throw new IllegalArgumentException("Nesigurno API mrežno odredište");
             HttpURLConnection connection = (HttpURLConnection) new URL(current).openConnection();
             connection.setConnectTimeout(7000);
             connection.setReadTimeout(14000);

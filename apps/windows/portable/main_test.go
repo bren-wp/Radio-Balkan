@@ -2,13 +2,18 @@
 
 package main
 
-import "testing"
+import (
+	"net"
+	"testing"
+)
 
 func TestSafeHTTPURLRejectsPrivateAndCredentialedTargets(t *testing.T) {
 	tests := []string{
 		"",
 		"file:///C:/Windows/System32/drivers/etc/hosts",
 		"http://localhost:8080/live",
+		"http://localhost./live",
+		"http://radio.local./live",
 		"http://127.0.0.1/live",
 		"http://10.0.0.4/live",
 		"http://172.16.1.2/live",
@@ -16,6 +21,7 @@ func TestSafeHTTPURLRejectsPrivateAndCredentialedTargets(t *testing.T) {
 		"http://169.254.169.254/latest/meta-data/",
 		"http://100.64.0.1/live",
 		"https://metadata.google.internal/computeMetadata/v1/",
+		"https://metadata.google.internal./computeMetadata/v1/",
 		"https://user:pass@example.com/live",
 	}
 	for _, raw := range tests {
@@ -59,5 +65,32 @@ func TestValidateStateDropsUnsafeReplacementURLs(t *testing.T) {
 	}
 	if len(got.Backups["station"]) != 1 || got.Backups["station"][0] != "https://example.com/a" {
 		t.Fatalf("unexpected sanitized backups: %#v", got.Backups["station"])
+	}
+}
+
+
+func TestUnsafeNetworkIPRejectsLocalAndSpecialRanges(t *testing.T) {
+	rejected := []string{
+		"0.0.0.0",
+		"127.0.0.1",
+		"10.0.0.1",
+		"100.64.0.1",
+		"169.254.169.254",
+		"172.16.0.1",
+		"192.168.1.1",
+		"::",
+		"::1",
+		"fc00::1",
+		"fe90::1",
+		"ff02::1",
+		"::ffff:127.0.0.1",
+	}
+	for _, raw := range rejected {
+		if !unsafeNetworkIP(net.ParseIP(raw)) {
+			t.Fatalf("unsafeNetworkIP(%q) = false; want true", raw)
+		}
+	}
+	if unsafeNetworkIP(net.ParseIP("8.8.8.8")) {
+		t.Fatal("public IPv4 address was rejected")
 	}
 }

@@ -4,6 +4,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
+import java.net.InetAddress;
 
 public final class StreamResolverTest {
     @Test
@@ -44,6 +45,21 @@ public final class StreamResolverTest {
         assertTrue(StreamResolver.isHttp("http://example.com/live"));
         assertFalse(StreamResolver.isHttp("httpsx://example.com/live"));
         assertFalse(StreamResolver.isHttp("ftp://example.com/live"));
+    }
+
+    @Test
+    public void resolvedAddressSetRejectsAnyPrivateOrLocalTarget() throws Exception {
+        assertFalse(StreamResolver.allAddressesSafe(new InetAddress[] {
+                InetAddress.getByAddress(new byte[] {8, 8, 8, 8}),
+                InetAddress.getByAddress(new byte[] {127, 0, 0, 1})
+        }));
+        assertFalse(StreamResolver.allAddressesSafe(new InetAddress[] {
+                InetAddress.getByAddress(new byte[] {(byte) 169, (byte) 254, (byte) 169, (byte) 254})
+        }));
+        assertTrue(StreamResolver.allAddressesSafe(new InetAddress[] {
+                InetAddress.getByAddress(new byte[] {8, 8, 8, 8}),
+                InetAddress.getByAddress(new byte[] {1, 1, 1, 1})
+        }));
     }
 
     @Test

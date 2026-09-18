@@ -634,20 +634,80 @@ func safeHTTPURL(raw string) bool {
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return false
 	}
-	h := strings.TrimSpace(strings.ToLower(u.Hostname()))
-	if h == "" || h == "localhost" || strings.HasSuffix(h, ".localhost") || strings.HasSuffix(h, ".local") ||
-		h == "metadata.google.internal" || h == "instance-data.ec2.internal" || h == "metadata.azure.internal" {
+	h := canonicalNetworkHost(u.Hostname())
+	if unsafeNetworkHost(h) {
 		return false
 	}
-	if ip := net.ParseIP(h); ip != nil {
-		if ip.IsLoopback() || ip.IsUnspecified() || ip.IsPrivate() || ip.IsMulticast() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-			return false
-		}
-		if v4 := ip.To4(); v4 != nil && v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127 {
-			return false
-		}
+	if ip := net.ParseIP(h); ip != nil && unsafeNetworkIP(ip) {
+		return false
 	}
 	return true
+}
+
+func canonicalNetworkHost(host string) string {
+	return strings.TrimRight(strings.TrimSpace(strings.ToLower(host)), ".")
+}
+
+func unsafeNetworkHost(host string) bool {
+	host = canonicalNetworkHost(host)
+	return host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") || strings.HasSuffix(host, ".local") ||
+		host == "metadata.google.internal" || host == "instance-data.ec2.internal" || host == "metadata.azure.internal"
+}
+
+func unsafeNetworkIP(ip net.IP) bool {
+	if ip == nil || ip.IsLoopback() || ip.IsUnspecified() || ip.IsPrivate() || ip.IsMulticast() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+	if v4 := ip.To4(); v4 != nil && v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127 {
+		return true
+	}
+	return false
+}
+
+func safeDialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, fmt.Errorf("neispravna mrežna adresa: %w", err)
+	}
+	host = canonicalNetworkHost(host)
+	if unsafeNetworkHost(host) {
+		return nil, errors.New("odredište lokalne mreže nije dopušteno")
+	}
+
+	dialer := &net.Dialer{Timeout: 7 * time.Second, KeepAlive: 30 * time.Second}
+	if ip := net.ParseIP(host); ip != nil {
+		if unsafeNetworkIP(ip) {
+			return nil, errors.New("privatna ili lokalna IP adresa nije dopuštena")
+		}
+		return dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+	}
+
+	resolved, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	if len(resolved) == 0 {
+		return nil, errors.New("odredište nema DNS adresu")
+	}
+	for _, candidate := range resolved {
+		if unsafeNetworkIP(candidate.IP) {
+			return nil, errors.New("DNS odredište vodi na privatnu ili lokalnu IP adresu")
+		}
+	}
+
+	var lastErr error
+	for _, candidate := range resolved {
+		target := net.JoinHostPort(candidate.IP.String(), port)
+		conn, dialErr := dialer.DialContext(ctx, network, target)
+		if dialErr == nil {
+			return conn, nil
+		}
+		lastErr = dialErr
+	}
+	if lastErr == nil {
+		lastErr = errors.New("nije moguće uspostaviti mrežnu vezu")
+	}
+	return nil, lastErr
 }
 
 func isValidTab(tab string) bool {
@@ -823,7 +883,7 @@ func main() {
 		}
 	}()
 	migrateLegacyDataDir()
-	transport := &http.Transport{MaxIdleConns: 16, MaxIdleConnsPerHost: 4, IdleConnTimeout: 45 * time.Second, TLSHandshakeTimeout: 7 * time.Second, ResponseHeaderTimeout: 9 * time.Second, ForceAttemptHTTP2: true}
+	transport := &http.Transport{DialContext: safeDialContext, MaxIdleConns: 16, MaxIdleConnsPerHost: 4, IdleConnTimeout: 45 * time.Second, TLSHandshakeTimeout: 7 * time.Second, ResponseHeaderTimeout: 9 * time.Second, ForceAttemptHTTP2: true}
 	client := &http.Client{Timeout: 12 * time.Second, Transport: transport, CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 8 {
 			return errors.New("previše preusmjeravanja")
