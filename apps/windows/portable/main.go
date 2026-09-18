@@ -152,7 +152,7 @@ const (
 	WS_EX_DLGMODALFRAME            = 0x00000001
 )
 
-var appVersion = "0.0.23"
+var appVersion = "0.0.24"
 
 type WNDCLASS struct {
 	Style         uint32
@@ -2023,6 +2023,7 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 		text(hdc, "Žanrovi", mainL, 528, mainR-120, 556, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 		selectFont(hdc, app.hFontSmall)
 		text(hdc, "Prikaži sve  →", mainR-130, 528, mainR, 556, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
+		app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 528, mainR, 558}, Kind: hitGenreDropdown, Index: -1})
 		genres := []struct{ Label, Value string }{
 			{"Pop", "pop"}, {"Rock", "rock"}, {"Elektronička", "electronic"},
 			{"Jazz", "jazz"}, {"Klasična", "classical"}, {"Hip Hop", "hiphop"},
@@ -2504,9 +2505,11 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	selectFont(hdc, app.hFontTitle)
 	text(hdc, label, cx-28, t+10, cx+28, t+72, rgb(20, 21, 24), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	app.hits = append(app.hits, HitRegion{R: RECT{cx - 35, t + 7, cx + 35, t + 76}, Kind: hitPlayerPlay, Index: -1})
+	drawIconButton(hdc, cx+48, t+25, cx+88, t+65, "■", false)
+	app.hits = append(app.hits, HitRegion{R: RECT{cx + 44, t + 21, cx + 92, t + 69}, Kind: hitPlayerStop, Index: -1})
 	selectFont(hdc, app.hFontBold)
-	text(hdc, "▶", cx+72, t+21, cx+110, t+59, rgb(193, 199, 207), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	app.hits = append(app.hits, HitRegion{R: RECT{cx + 68, t + 17, cx + 114, t + 63}, Kind: hitPlayerNext, Index: -1})
+	text(hdc, "▶", cx+112, t+21, cx+150, t+59, rgb(193, 199, 207), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	app.hits = append(app.hits, HitRegion{R: RECT{cx + 108, t + 17, cx + 154, t + 63}, Kind: hitPlayerNext, Index: -1})
 	// Live line underneath transport.
 	lineL := cx - 150
 	lineR := cx + 150

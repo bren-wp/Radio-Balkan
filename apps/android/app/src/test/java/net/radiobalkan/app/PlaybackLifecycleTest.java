@@ -38,4 +38,14 @@ public final class PlaybackLifecycleTest {
         assertEquals(PlaybackLifecycle.UiCommand.RESUME,
                 PlaybackLifecycle.uiCommand(true, false, false));
     }
+
+    @Test public void adjacentNavigationWrapsAndHandlesMissingSelection() {
+        assertEquals(1, PlaybackLifecycle.adjacentIndex(3, 0, 1));
+        assertEquals(0, PlaybackLifecycle.adjacentIndex(3, 2, 1));
+        assertEquals(2, PlaybackLifecycle.adjacentIndex(3, 0, -1));
+        assertEquals(0, PlaybackLifecycle.adjacentIndex(3, -1, 1));
+        assertEquals(2, PlaybackLifecycle.adjacentIndex(3, -1, -1));
+        assertEquals(-1, PlaybackLifecycle.adjacentIndex(0, -1, 1));
+        assertEquals(-1, PlaybackLifecycle.adjacentIndex(3, 1, 0));
+    }
 }

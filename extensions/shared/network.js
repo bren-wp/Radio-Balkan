@@ -4,6 +4,16 @@ const RBNet = (() => {
   const FOREIGN_CODE = 'INT';
   const ALLOWED = new Set(['HR', 'BA', 'RS', 'SI', 'MK', 'AL', 'ME', FOREIGN_CODE]);
   const RADIO_BROWSER_SUFFIX = '.api.radio-browser.info';
+  const BALKAN = new Set(['HR', 'BA', 'RS', 'SI', 'MK', 'AL', 'ME']);
+  const RADIO_BROWSER_API_BASES = Object.freeze([
+    'https://de1.api.radio-browser.info',
+    'https://de2.api.radio-browser.info',
+    'https://at1.api.radio-browser.info',
+    'https://nl1.api.radio-browser.info'
+  ]);
+  const MAX_REFRESH_RESPONSE_BYTES = 512 * 1024;
+  const REFRESH_TIMEOUT_MS = 4000;
+  const REFRESH_TOTAL_TIMEOUT_MS = 9000;
 
   function countryCode(value) {
     return String(value || '').trim().toUpperCase();
@@ -67,5 +77,84 @@ const RBNet = (() => {
     return !!station && allowedCountry(station.countrycode) && candidateUrls(station).length > 0;
   }
 
-  return Object.freeze({ FOREIGN_CODE, allowedCountry, safeHttp, safeRadioBrowserBase, candidateUrls, validStation });
+  async function readJsonLimited(response, maxBytes) {
+    const declaredRaw = response?.headers?.get?.('content-length');
+    const declared = Number(declaredRaw);
+    if (declaredRaw && Number.isFinite(declared) && declared > maxBytes) throw new Error('API odgovor je prevelik');
+    if (!response?.body?.getReader) throw new Error('Streaming API odgovor nije dostupan');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const parts = [];
+    let total = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value?.byteLength || 0;
+        if (total > maxBytes) {
+          try { await reader.cancel(); } catch { }
+          throw new Error('API odgovor je prevelik');
+        }
+        parts.push(decoder.decode(value, { stream: true }));
+      }
+      parts.push(decoder.decode());
+    } finally {
+      try { reader.releaseLock?.(); } catch { }
+    }
+    return JSON.parse(parts.join(''));
+  }
+
+  async function fetchRefreshRows(base, uuid, timeoutMs) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
+    try {
+      const response = await fetch(
+        `${base}/json/stations/byuuid/${encodeURIComponent(uuid)}`,
+        { cache: 'no-store', redirect: 'error', signal: controller.signal }
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const rows = await readJsonLimited(response, MAX_REFRESH_RESPONSE_BYTES);
+      return Array.isArray(rows) ? rows : [];
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function refreshCandidateUrls(station) {
+    const expectedCountry = countryCode(station?.countrycode);
+    const sourceCountry = countryCode(station?.sourcecountrycode);
+    const uuid = String(station?.stationuuid || '').trim();
+    if (!allowedCountry(expectedCountry) || !uuid || uuid.length > 128 || !/^[a-z0-9._:-]+$/i.test(uuid)) return [];
+
+    const deadline = Date.now() + REFRESH_TOTAL_TIMEOUT_MS;
+    for (const base of RADIO_BROWSER_API_BASES) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
+      try {
+        const rows = await fetchRefreshRows(base, uuid, Math.min(REFRESH_TIMEOUT_MS, remaining));
+        const out = [];
+        for (const row of rows) {
+          const actualCountry = countryCode(row?.countrycode);
+          if (expectedCountry === FOREIGN_CODE) {
+            if (!actualCountry || BALKAN.has(actualCountry) || (sourceCountry && actualCountry !== sourceCountry)) continue;
+          } else if (actualCountry !== expectedCountry) {
+            continue;
+          }
+          for (const raw of [row?.url_resolved, row?.url]) {
+            const value = String(raw || '').trim();
+            if (safeHttp(value) && !out.includes(value)) out.push(value);
+            if (out.length >= 4) break;
+          }
+          if (out.length >= 4) break;
+        }
+        if (out.length) return out;
+      } catch { }
+    }
+    return [];
+  }
+
+  return Object.freeze({
+    FOREIGN_CODE, allowedCountry, safeHttp, safeRadioBrowserBase, candidateUrls,
+    validStation, refreshCandidateUrls
+  });
 })();

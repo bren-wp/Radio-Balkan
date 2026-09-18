@@ -12,6 +12,7 @@
   let visible = [];
   let current = null;
   let playing = false;
+  let stopped = true;
   let favs = {};
   let favoritesOnly = false;
   let searchTimer = 0;
@@ -159,9 +160,12 @@
     const hasRemoteStation = !!value.station;
     if (hasRemoteStation) current = value.station;
     playing = !!value.playing;
+    const hasSession = !!value.sessionId;
+    stopped = !playing && !hasSession;
     if (updateStatus) {
       if (playing) playerStatus = 'Sada svira';
-      else if (hasRemoteStation) playerStatus = 'Pauzirano';
+      else if (hasRemoteStation && hasSession) playerStatus = 'Pauzirano';
+      else if (hasRemoteStation) playerStatus = 'Zaustavljeno';
       else playerStatus = 'Spremno';
     }
     return true;
@@ -386,6 +390,7 @@
     if (activeCommandToken) return;
     if (!current && visible.length) return play(visible[0]);
     if (!current) return;
+    if (stopped) return play(current);
     const token = ++commandGeneration;
     activeCommandToken = token;
     playerStatus = playing ? 'Pauziram…' : 'Povezujem…';
@@ -400,6 +405,33 @@
     } catch {
       if (token !== commandGeneration) return;
       playerStatus = playing ? 'Sada svira' : 'Nedostupno';
+    } finally {
+      if (token === commandGeneration) {
+        activeCommandToken = 0;
+        updatePlayer();
+        syncStationPlaybackUi();
+      }
+    }
+  }
+
+  async function stopPlayback() {
+    if (activeCommandToken || !current) return;
+    const token = ++commandGeneration;
+    activeCommandToken = token;
+    playerStatus = 'Zaustavljam…';
+    updatePlayer();
+    syncStationPlaybackUi();
+    try {
+      const result = await ext.runtime.sendMessage({ type: 'RB_STOP' });
+      if (token !== commandGeneration) return;
+      await applyCommandResult(result, token);
+      if (token !== commandGeneration) return;
+      playing = false;
+      stopped = !result?.error;
+      playerStatus = result?.error ? 'Zaustavljanje nije uspjelo' : 'Zaustavljeno';
+    } catch {
+      if (token !== commandGeneration) return;
+      playerStatus = playing ? 'Sada svira' : 'Zaustavljanje nije uspjelo';
     } finally {
       if (token === commandGeneration) {
         activeCommandToken = 0;
@@ -437,9 +469,12 @@
     const key = station ? RB.key(station) : '';
     const favorite = !!(key && favs[key]);
     $('playerFav').textContent = favorite ? '♥' : '♡';
-    $('playerFav').disabled = !station;
+    $('playerFav').disabled = !station || commandBusy;
     $('playerFav').setAttribute('aria-pressed', String(favorite));
     $('playerFav').setAttribute('aria-label', favorite ? 'Ukloni iz omiljenih' : 'Dodaj u omiljene');
+    $('playerStop').disabled = !station || commandBusy || stopped;
+    $('playerStop').setAttribute('aria-busy', String(commandBusy));
+    $('playerStop').setAttribute('aria-label', commandBusy ? 'Radnja je u tijeku' : (stopped ? 'Reprodukcija je zaustavljena' : 'Zaustavi reprodukciju'));
   }
 
   list.addEventListener('click', event => {
@@ -477,6 +512,7 @@
   $('clearFilters').addEventListener('click', resetFilters);
   $('heroPlay').addEventListener('click', () => void toggle());
   $('playerToggle').addEventListener('click', () => void toggle());
+  $('playerStop').addEventListener('click', () => void stopPlayback());
   $('favoritesOnly').addEventListener('click', () => {
     favoritesOnly = !favoritesOnly;
     updateFavoritesFilterButton();

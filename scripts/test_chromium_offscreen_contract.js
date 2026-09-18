@@ -16,6 +16,8 @@ let listener = null;
 let playCalls = 0;
 let fastTimeout = false;
 const playPlans = [];
+const refreshPlans = [];
+let refreshCalls = 0;
 const instances = [];
 const reports = [];
 
@@ -81,8 +83,16 @@ const context = {
     }
   },
   RBNet: {
+    safeHttp(value) {
+      return /^https?:\/\//.test(String(value || ''));
+    },
     candidateUrls(station) {
       return Array.isArray(station?.streams) ? [...station.streams] : [];
+    },
+    async refreshCandidateUrls() {
+      refreshCalls += 1;
+      if (!refreshPlans.length) return [];
+      return await refreshPlans.shift();
     }
   }
 };
@@ -189,6 +199,40 @@ async function main() {
   assert.ok(playCalls > beforeStallRecovery, 'stall recovery must attempt another candidate');
 
   fastTimeout = false;
+
+  const beforeRefreshRecovery = playCalls;
+  const refreshBefore = refreshCalls;
+  playPlans.push({ then(resolve, reject) { reject(new Error('stale stream')); } });
+  refreshPlans.push(Promise.resolve(['https://example.com/d-fresh']));
+  const refreshed = await dispatch({
+    type: 'PLAY',
+    sessionId: 's4',
+    station: { stationuuid: 'd', name: 'Radio D', streams: ['https://example.com/d-stale'] }
+  });
+  assert.equal(refreshed.ok, true, 'candidate exhaustion must recover through a refreshed station URL');
+  assert.equal(refreshed.playing, true);
+  assert.equal(refreshed.station.url_resolved, 'https://example.com/d-fresh', 'refreshed Chromium stream must become the active session URL');
+  assert.equal(refreshCalls, refreshBefore + 1, 'one playback session may refresh the catalog at most once');
+  assert.equal(playCalls, beforeRefreshRecovery + 2, 'refresh recovery must retry only the newly discovered stream');
+
+  const refreshGate = deferred();
+  playPlans.push({ then(resolve, reject) { reject(new Error('stale stream')); } });
+  refreshPlans.push(refreshGate.promise);
+  const pendingRefreshPlay = dispatch({
+    type: 'PLAY',
+    sessionId: 's5',
+    station: { stationuuid: 'e', name: 'Radio E', streams: ['https://example.com/e-stale'] }
+  });
+  await flush();
+  const playsBeforeStopDuringRefresh = playCalls;
+  const stoppedDuringRefresh = await dispatch({ type: 'STOP', sessionId: 's5' });
+  refreshGate.resolve(['https://example.com/e-fresh']);
+  const staleRefreshResult = await pendingRefreshPlay;
+  await flush();
+  assert.equal(stoppedDuringRefresh.playing, false, 'stop during catalog refresh must remain terminal');
+  assert.equal(staleRefreshResult.stale, true, 'catalog refresh finishing after stop must be rejected as stale');
+  assert.equal(playCalls, playsBeforeStopDuringRefresh, 'stale refresh must not start a new audio instance after stop');
+
   assert.ok(reports.some(message => message.type === 'RB_OFFSCREEN_STATE'), 'offscreen player must continue reporting state');
   console.log('Chromium offscreen lifecycle/timeout/stall regression tests OK');
 }

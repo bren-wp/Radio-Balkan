@@ -79,7 +79,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private ImageView playerArtwork;
     private View searchBox;
     private EqualizerView playerEqualizer;
-    private Button heroPlay, playerPlay;
+    private Button heroPlay, playerPrev, playerPlay, playerStop, playerNext;
     private ListView list;
     private String country = "";
     private String genre = "";
@@ -347,18 +347,29 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         info.addView(statusText, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(17)));
         player.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
 
+        boolean compactPlayer = isCompactWidth();
         playerEqualizer = new EqualizerView(this);
-        playerEqualizer.setBarCount(isCompactWidth() ? 7 : 11);
-        player.addView(playerEqualizer, new LinearLayout.LayoutParams(dp(isCompactWidth() ? 58 : 86), dp(48)));
+        playerEqualizer.setBarCount(9);
+        if (!compactPlayer) {
+            player.addView(playerEqualizer, new LinearLayout.LayoutParams(dp(58), dp(48)));
+        }
+
+        LinearLayout transport = new LinearLayout(this);
+        transport.setGravity(Gravity.CENTER_VERTICAL);
+
+        playerPrev = playerButton("◀", false);
+        playerPrev.setContentDescription("Prethodna stanica");
+        playerPrev.setOnClickListener(v -> playAdjacent(-1));
+        transport.addView(playerPrev, new LinearLayout.LayoutParams(dp(40), dp(52)));
 
         playerPlay = playerButton("▶", true);
         GradientDrawable playBg = new GradientDrawable();
-        playBg.setColor(0xFF201A16); playBg.setCornerRadius(dp(34)); playBg.setStroke(dp(2), 0xFFFFB23F);
-        playerPlay.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), playBg, rounded(Color.WHITE, 0x00000000, 34)));
+        playBg.setColor(0xFF201A16); playBg.setCornerRadius(dp(30)); playBg.setStroke(dp(2), 0xFFFFB23F);
+        playerPlay.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), playBg, rounded(Color.WHITE, 0x00000000, 30)));
         playerPlay.setTextColor(0xFFFFF3DD);
-        LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(dp(60), dp(60));
-        pp.setMargins(dp(9), 0, 0, 0);
-        player.addView(playerPlay, pp);
+        LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(dp(52), dp(56));
+        pp.setMargins(dp(2), 0, dp(2), 0);
+        transport.addView(playerPlay, pp);
         playerPlay.setEnabled(false);
         playerPlay.setContentDescription("Odaberi stanicu za reprodukciju");
         playerPlay.setOnClickListener(v -> {
@@ -373,6 +384,22 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                     ? RadioPlayerService.ACTION_PAUSE
                     : RadioPlayerService.ACTION_RESUME);
         });
+
+        playerStop = playerButton("■", false);
+        playerStop.setContentDescription("Zaustavi reprodukciju");
+        playerStop.setOnClickListener(v -> {
+            if (currentKey.isEmpty() || playbackStopped) return;
+            statusText.setText("Zaustavljam…");
+            sendPlayerAction(RadioPlayerService.ACTION_STOP);
+        });
+        transport.addView(playerStop, new LinearLayout.LayoutParams(dp(40), dp(52)));
+
+        playerNext = playerButton("▶", false);
+        playerNext.setContentDescription("Sljedeća stanica");
+        playerNext.setOnClickListener(v -> playAdjacent(1));
+        transport.addView(playerNext, new LinearLayout.LayoutParams(dp(40), dp(52)));
+
+        player.addView(transport, new LinearLayout.LayoutParams(dp(compactPlayer ? 176 : 180), ViewGroup.LayoutParams.MATCH_PARENT));
 
         return player;
     }
@@ -409,7 +436,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             selectBottomNav(action);
             if ("all".equals(action)) { tab="all"; state.setTab(tab); applyFilterAsync(); list.smoothScrollToPosition(0); }
             else if ("favorites".equals(action)) { tab="favorites"; state.setTab(tab); applyFilterAsync(); }
-            else if ("radio".equals(action) && !currentKey.isEmpty()) { list.smoothScrollToPosition(0); }
+            else if ("radio".equals(action)) { tab="all"; state.setTab(tab); applyFilterAsync(); list.smoothScrollToPosition(0); }
         });
         updateBottomNavItem(action, item);
         return item;
@@ -458,6 +485,18 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             playerPlay.setEnabled(available);
             playerPlay.setText(playing ? "Ⅱ" : "▶");
             playerPlay.setContentDescription(available ? (playing ? "Pauziraj reprodukciju" : "Pokreni reprodukciju") : "Odaberi stanicu za reprodukciju");
+        }
+        int navigationCount = visibleStations.size();
+        if (navigationCount == 0) {
+            synchronized (dataLock) { navigationCount = allStations.size(); }
+        }
+        boolean canNavigate = navigationCount > 1;
+        if (playerPrev != null) playerPrev.setEnabled(canNavigate);
+        if (playerNext != null) playerNext.setEnabled(canNavigate);
+        if (playerStop != null) {
+            boolean canStop = !currentKey.isEmpty() && !playbackStopped;
+            playerStop.setEnabled(canStop);
+            playerStop.setContentDescription(canStop ? "Zaustavi reprodukciju" : "Reprodukcija je zaustavljena");
         }
     }
 
@@ -835,7 +874,27 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         playbackStopped = false;
         updatePlaybackControls();
         adapter.setPlayback(currentKey, false);
-        selectBottomNav("radio");
+    }
+
+    private void playAdjacent(int delta) {
+        if (delta == 0) return;
+        List<RadioStation> source = new ArrayList<>(visibleStations);
+        if (source.isEmpty()) {
+            synchronized (dataLock) { source = new ArrayList<>(allStations); }
+        }
+        if (source.isEmpty()) {
+            Toast.makeText(this, "Nema stanica za reprodukciju", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        int currentIndex = -1;
+        for (int i = 0; i < source.size(); i++) {
+            if (source.get(i).key().equals(currentKey)) {
+                currentIndex = i;
+                break;
+            }
+        }
+        int nextIndex = PlaybackLifecycle.adjacentIndex(source.size(), currentIndex, delta);
+        if (nextIndex >= 0 && nextIndex < source.size()) onPlay(source.get(nextIndex));
     }
 
     @Override public void onFavorite(RadioStation s) {

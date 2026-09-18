@@ -83,6 +83,7 @@ def main() -> None:
         "explicitStopCannotResumeAnOldServiceSession",
         "pausedOrRecoverablePlaybackCanResume",
         "stopThenPlayUsesFreshSessionInsteadOfResume",
+        "adjacentNavigationWrapsAndHandlesMissingSelection",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
@@ -150,6 +151,12 @@ def main() -> None:
         "/^f[cd][0-9a-f]{2}:/",
         "/^ff[0-9a-f]{2}:/",
         "!url.username && !url.password",
+        "MAX_REFRESH_RESPONSE_BYTES = 512 * 1024",
+        "REFRESH_TOTAL_TIMEOUT_MS = 9000",
+        "RADIO_BROWSER_API_BASES",
+        "async function refreshCandidateUrls(station)",
+        "redirect: 'error'",
+        "BALKAN.has(actualCountry)",
     )
     require(
         "scripts/test_browser_network_contract.js",
@@ -159,6 +166,10 @@ def main() -> None:
         "IPv6 unique-local target must be rejected",
         "full IPv6 link-local fe80/10 range must be rejected",
         "IPv6 multicast target must be rejected",
+        "UUID refresh must return only safe public streams",
+        "UUID refresh must reject a regional station returned under another country",
+        "foreign refresh must never remap a Balkan station into the INT group",
+        "oversized refresh responses must fail closed",
     )
     require(
         "extensions/platform/chromium/service_worker.js",
@@ -170,6 +181,7 @@ def main() -> None:
         "let currentSessionId = null;",
         "let lastOffscreenGeneration = -1;",
         "function newSessionId()",
+        "sessionId: currentSessionId",
         "function acceptOffscreenState(",
         "incomingGeneration < lastOffscreenGeneration",
         "requestToken !== commandGeneration",
@@ -198,6 +210,8 @@ def main() -> None:
         "async function playWithTimeout(instance)",
         "instance.onwaiting = () => scheduleStallRecovery(token, expectedSession, instance);",
         "instance.onstalled = () => scheduleStallRecovery(token, expectedSession, instance);",
+        "let refreshAttempted = false;",
+        "RBNet.refreshCandidateUrls(expectedStation)",
     )
     require(
         "extensions/platform/firefox/background-firefox.js",
@@ -221,6 +235,8 @@ def main() -> None:
         "instance.onwaiting = () => scheduleStallRecovery(token, expectedSession, instance);",
         "instance.onstalled = () => scheduleStallRecovery(token, expectedSession, instance);",
         "if (msg.type === 'RB_STOP')",
+        "let refreshAttempted = false;",
+        "RBNet.refreshCandidateUrls(expectedStation)",
         "currentSessionId = null;",
         "candidates = [];",
         "idx = 0;",
@@ -229,6 +245,7 @@ def main() -> None:
         "extensions/shared/popup.js",
         "let commandGeneration = 0;",
         "let activeCommandToken = 0;",
+        "let stopped = true;",
         "let stateEpoch = '';",
         "let lastRevision = -1;",
         "let stateSyncPromise = null;",
@@ -238,16 +255,21 @@ def main() -> None:
         "retiredEpochs.has(epoch)",
         "if (!allowEpochChange) return false;",
         "function synchronizePlayerState()",
+        "if (stopped) return play(current);",
         "ext.runtime.sendMessage({ type: 'RB_GET_STATE' })",
         "void synchronizePlayerState();",
         "if (revision < lastRevision) return false;",
         "if (token !== commandGeneration) return;",
         "message?.type !== 'RB_STATE' || activeCommandToken",
         "$('playerState').textContent = playerStatus;",
+        "async function stopPlayback()",
+        "ext.runtime.sendMessage({ type: 'RB_STOP' })",
+        "playerStop').setAttribute('aria-busy'",
     )
     require(
         "extensions/shared/popup.html",
         'id="playerState"',
+        'id="playerStop"',
         'aria-live="polite"',
     )
     require(
@@ -259,12 +281,17 @@ def main() -> None:
         "duplicate toggle clicks must be ignored while a command is in flight",
         "busy playback state must be announced accessibly",
         "player toggle must be re-enabled after command completion",
+        "duplicate stop clicks must be ignored while stop is in flight",
+        "completed stop command must render an explicit stopped state",
+        "player stop must stay disabled once playback is already stopped",
+        "main play control after stop must send a fresh RB_PLAY command",
     )
     require(
         "scripts/test_chromium_player_contract.js",
         "stale stop must not close the offscreen document used by a newer play",
         "new play must wait until the previous offscreen close completes",
         "play issued during close must recover into active playback",
+        "Chromium stopped state must expose a retired session",
     )
     require(
         "scripts/test_chromium_offscreen_contract.js",
@@ -275,6 +302,9 @@ def main() -> None:
         "stalled active audio must recover to a fallback candidate",
         "play after stop must create fresh Chromium playback",
         "replay after stop must use the newly requested Chromium session",
+        "candidate exhaustion must recover through a refreshed station URL",
+        "catalog refresh finishing after stop must be rejected as stale",
+        "refreshed Chromium stream must become the active session URL",
     )
     require(
         "scripts/test_firefox_player_contract.js",
@@ -288,6 +318,9 @@ def main() -> None:
         "Firefox stalled audio must recover to the next candidate",
         "play after stop must create fresh Firefox playback",
         "replay after stop must not reuse the retired Firefox session",
+        "Firefox candidate exhaustion must recover through a refreshed station URL",
+        "Firefox must reject a catalog refresh that finishes after stop",
+        "refreshed Firefox stream must become the active session URL",
     )
     forbid(
         "extensions/platform/chromium/offscreen.js",
@@ -371,6 +404,7 @@ def main() -> None:
         "defer runtime.UnlockOSThread()",
         "func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleAction",
         "playbackToggleReconnect",
+        "Kind: hitPlayerStop",
         "playStationByKey(currentKey, current)",
         "app.audioStopped = true",
         "audioSetVolume(v)",

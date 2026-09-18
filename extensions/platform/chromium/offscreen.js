@@ -9,6 +9,7 @@ let playing = false;
 let sessionId = null;
 let stallTimer = null;
 let stallTarget = null;
+let refreshAttempted = false;
 const PLAY_START_TIMEOUT_MS = 12_000;
 const STALL_RECOVERY_TIMEOUT_MS = 15_000;
 
@@ -149,28 +150,46 @@ async function resumeCurrent(expectedSession) {
 
 async function start(expectedSession) {
   const token = ++generation;
-  const expectedStation = station;
-  while (index < candidates.length && token === generation && sessionId === expectedSession) {
-    const candidate = candidates[index];
-    playing = false;
-    disposeAudio();
-    const instance = createAudio(token, expectedSession, candidate);
-    try {
-      await playWithTimeout(instance);
-      if (token !== generation || sessionId !== expectedSession || audio !== instance) {
-        return { ok: false, stale: true, station: expectedStation, playing: false, sessionId: expectedSession, generation: token };
+  let expectedStation = station;
+  while (token === generation && sessionId === expectedSession) {
+    while (index < candidates.length && token === generation && sessionId === expectedSession) {
+      const candidate = candidates[index];
+      playing = false;
+      disposeAudio();
+      const instance = createAudio(token, expectedSession, candidate);
+      try {
+        await playWithTimeout(instance);
+        if (token !== generation || sessionId !== expectedSession || audio !== instance) {
+          return { ok: false, stale: true, station: expectedStation, playing: false, sessionId: expectedSession, generation: token };
+        }
+        playing = true;
+        await report();
+        return { ok: true, station: expectedStation, playing: true, sessionId: expectedSession, generation: token };
+      } catch {
+        if (token !== generation || sessionId !== expectedSession || audio !== instance) {
+          return { ok: false, stale: true, station: expectedStation, playing: false, sessionId: expectedSession, generation: token };
+        }
+        disposeAudio(instance);
+        index += 1;
       }
-      playing = true;
-      await report();
-      return { ok: true, station: expectedStation, playing: true, sessionId: expectedSession, generation: token };
-    } catch {
-      if (token !== generation || sessionId !== expectedSession || audio !== instance) {
-        return { ok: false, stale: true, station: expectedStation, playing: false, sessionId: expectedSession, generation: token };
-      }
-      disposeAudio(instance);
-      index += 1;
     }
+
+    if (refreshAttempted) break;
+    refreshAttempted = true;
+    let refreshed = [];
+    try { refreshed = await RBNet.refreshCandidateUrls(expectedStation); } catch { }
+    if (token !== generation || sessionId !== expectedSession) {
+      return { ok: false, stale: true, station: expectedStation, playing: false, sessionId: expectedSession, generation: token };
+    }
+    const before = candidates.length;
+    for (const value of refreshed || []) {
+      if (RBNet.safeHttp(value) && !candidates.includes(value)) candidates.push(value);
+    }
+    if (candidates.length <= before) break;
+    expectedStation = { ...expectedStation, url_resolved: refreshed[0] };
+    station = expectedStation;
   }
+
   if (token === generation && sessionId === expectedSession) {
     resetAudio();
     await report();
@@ -190,6 +209,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     station = requestedStation;
     candidates = urls(station);
     index = 0;
+    refreshAttempted = false;
     if (!sessionId || !candidates.length) {
       void report();
       sendResponse({ ok: false, station: requestedStation, playing: false, sessionId, generation });
@@ -234,6 +254,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sessionId = null;
     candidates = [];
     index = 0;
+    refreshAttempted = false;
     void report();
     sendResponse(response);
     return;
