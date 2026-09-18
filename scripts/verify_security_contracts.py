@@ -39,6 +39,7 @@ def main() -> None:
         '@android.annotation.SuppressLint("UnspecifiedRegisterReceiverFlag")',
         "RadioPlayerService.INTERNAL_STATE_PERMISSION",
         "Context.RECEIVER_NOT_EXPORTED",
+        "ui.removeCallbacksAndMessages(null)",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/RadioRepository.java",
@@ -252,6 +253,8 @@ def main() -> None:
         "func writeFileDurable(",
         "return f.Sync()",
         "writeFileDurable(tmp, b, 0644)",
+        "if shuttingDown() {",
+        "func prepareShutdown()",
     )
     require(
         "apps/windows/portable/main_test.go",
