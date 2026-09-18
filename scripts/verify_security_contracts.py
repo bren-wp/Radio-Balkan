@@ -213,7 +213,9 @@ def main() -> None:
         "a foreign epoch must trigger authoritative RB_GET_STATE resync",
         "retired worker epoch cannot restore stale state",
         "stale command reply from a retired epoch cannot replace current station",
-        "older promise reply cannot override a newer command even with a higher revision",
+        "duplicate toggle clicks must be ignored while a command is in flight",
+        "busy playback state must be announced accessibly",
+        "player toggle must be re-enabled after command completion",
     )
     require(
         "scripts/test_chromium_player_contract.js",
