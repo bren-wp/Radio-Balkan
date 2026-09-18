@@ -16,8 +16,8 @@ android {
         applicationId = "net.radiobalkan.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "0.0.22"
+        versionCode = 23
+        versionName = "0.0.23"
     }
 
     signingConfigs {

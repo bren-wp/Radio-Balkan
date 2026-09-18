@@ -1,16 +1,15 @@
-# Radio Balkan browser ekstenzije 0.0.22
+# Radio Balkan browser ekstenzije 0.0.23
 
-Produkcijski source za Chrome, Edge, Opera i Firefox. Sve varijante dijele isti popup UI, katalog i sigurnosnu validaciju; razlikuje se playback sloj potreban za Chromium odnosno Firefox.
+Produkcijski source za Chrome, Edge, Opera i Firefox.
 
-## Produkcijski fokus u 0.0.22
+## Produkcijski fokus u 0.0.23
 
-- Chromium offscreen i Firefox player ograničavaju početni `audio.play()` pokušaj na 12 sekundi; kandidat koji ostane pending više ne blokira player beskonačno
-- `waiting` / `stalled` stanje ima 15-sekundni recovery koji, ako je session/generation još aktualan, oslobađa zaglavljeni audio i pokušava sljedeći siguran stream kandidat
-- novi izvršni regression testovi simuliraju hanging play promise, stalled stream, stale session i close/play race ponašanje
-- Chromium offscreen lifecycle i Firefox session ownership i dalje koriste generation/session zaštite kako stari async rezultat ne bi prepisao noviju reprodukciju
-- popup single-flight play/pause guard, recovery CTA-ovi, spremljene UI preference i keyboard accessibility ostaju aktivni
-- Radio Browser JSON response limiti, ograničen API discovery, privatni/lokalni network blocking i URL validacija ostaju nepromijenjeni
-- nema novih browser dozvola, remote codea, telemetry koda ni korisničkog rebrandinga
+- Chromium i Firefox regression testovi pokrivaju `Play → Pause → Resume → Stop → Play`
+- Pause/Resume zadržava istu audio instancu; Stop umirovljuje sesiju i Toggle je ne smije ponovno oživjeti
+- novi Play nakon Stop-a mora dobiti svježu session identifikaciju i ponovno pokrenuti playback
+- postojeći 12-sekundni `audio.play()` timeout i 15-sekundni `waiting/stalled` recovery ostaju session/generation-bound
+- stale async rezultat, close/play race i popup epoch/revision/command-ordering zaštite ostaju pod izvršnim testovima
+- nema novih browser dozvola, remote codea ni telemetry koda
 
 ## Build
 
@@ -19,4 +18,4 @@ cd extensions
 python tools/build_extensions.py
 ```
 
-Build generira Chrome, Edge, Opera i Firefox ZIP pakete i odbija version drift, promjenu kanonskog brenda, zabranjene dozvole ili regresiju ključnih playback/security ugovora.
+Build generira Chrome, Edge, Opera i Firefox ZIP pakete i odbija version drift, branding/permission regresije i ključne playback/security regresije.

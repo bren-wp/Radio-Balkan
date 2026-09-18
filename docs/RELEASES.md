@@ -1,5 +1,20 @@
 # Izdavanja
 
+## 0.0.23
+
+Izdanje 0.0.23 završava player-lifecycle i Win32 thread-affinity hardening nakon 0.0.22. Nisu dodane nove dozvole, analytics, telemetry, korisnički račun ni novi backend.
+
+- Windows CI nad lokalnim validnim WAV zapisom stvarno izvršava `PLAY → PAUSE → VOLUME → RESUME → STOP → PLAY → STOP`
+- Windows audio helper se nakon command timeouta ili stdin write greške potpuno odbacuje prije fallbacka, pa zakašnjeli ACK ne može kontaminirati sljedeću naredbu
+- `PLAY` ima 5-sekundni ACK budžet, a kontrolne naredbe 2 sekunde; čekanja ostaju ograničena
+- Windows Portable i Setup zaključavaju Win32 UI/message loop na isti OS thread
+- Chromium i Firefox testovi pokrivaju Pause/Resume, Stop koji umirovljuje sesiju, odbijanje Toggle-a nakon Stop-a i svježi Play nakon Stop-a
+- Android lifecycle testovi zaključavaju da eksplicitni Stop vodi na novi `PLAY`, ne na `RESUME` stare servisne sesije
+- postojeći Windows runtime soak, Android unit/lint/release build, browser stall/race testovi, security contracts, clean-worktree i checksum gateovi ostaju aktivni
+- verzija je sinkronizirana na `0.0.23`, uz Android `versionCode 23`
+
+Ovo izdanje zatvara potvrđene player state/ACK i Win32 message-loop rizike pronađene izvršnim testovima. Ne tvrdi da svaki third-party radio stream, OEM Android implementacija ili browser/Windows konfiguracija može biti apsolutno bez greške.
+
 ## 0.0.22
 
 Izdanje 0.0.22 fokusirano je na potvrđene startup, shutdown i playback rizike pronađene dubinskim runtime auditom. Nisu dodane nove dozvole, analytics, telemetry, korisnički račun ni novi backend.

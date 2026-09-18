@@ -11,6 +11,6 @@ Radio Balkan je projektiran bez korisničkog računa, behavioral trackinga, ogla
 
 Lokalni cache i preference služe samo funkcionalnosti i performansama aplikacije. Ne postoji kod koji ih šalje Brendigu ili oglašivačima.
 
-Search tekst u Android aplikaciji nije cloud-sinkroniziran niti se šalje kao korisnički profil; zatvaranje search prikaza čisti aktivni query. Browser recovery/empty-state kontrole iz 0.0.21 ne uvode nove spremljene podatke. Playback/startup hardening iz 0.0.22 također ne uvodi telemetry ni cloud profiliranje. Windows shutdown trace koji se koristi u regression testu aktivira se isključivo CI environment varijablom i zapisuje faze samo u postojeći lokalni dijagnostički log; ništa se ne šalje van uređaja.
+Search tekst u Android aplikaciji nije cloud-sinkroniziran niti se šalje kao korisnički profil; zatvaranje search prikaza čisti aktivni query. Browser recovery/empty-state kontrole iz 0.0.21 ne uvode nove spremljene podatke. Playback/startup i player-lifecycle hardening iz 0.0.23 također ne uvodi telemetry ni cloud profiliranje. Windows shutdown trace koji se koristi u regression testu aktivira se isključivo CI environment varijablom i zapisuje faze samo u postojeći lokalni dijagnostički log; ništa se ne šalje van uređaja.
 
 Browser ekstenzije koriste samo dozvole potrebne za player, katalog i lokalne preference. Android signing ključevi i release secrets nisu dio aplikacijskih korisničkih podataka i ne spremaju se u repozitorij.

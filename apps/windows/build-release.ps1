@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.0.22",
+    [string]$Version = "0.0.23",
     [string]$Output = (Join-Path $PSScriptRoot "dist")
 )
 
