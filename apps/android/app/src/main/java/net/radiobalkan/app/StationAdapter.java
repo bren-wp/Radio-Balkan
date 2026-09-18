@@ -83,8 +83,9 @@ public final class StationAdapter extends BaseAdapter {
         flag.setBounds(0, 0, dp(22), dp(14));
         row.meta.setCompoundDrawablePadding(dp(6));
         row.meta.setCompoundDrawables(flag, null, null, null);
-        row.listeners.setText(formatPopularity(s.votes));
+        row.listeners.setText(statusLine(s));
         row.play.setText(active && playing ? "Ⅱ" : "▶");
+        row.root.setSelected(active);
         row.root.setBackground(interactiveRounded(active ? 0xFF171C24 : 0xFF11171F, active ? 0xFFFFA52E : 0xFF303845, 18, 0x26FFFFFF));
 
         row.logo.setImageResource(R.drawable.ic_radio_balkan);
@@ -92,7 +93,7 @@ public final class StationAdapter extends BaseAdapter {
         String action = active && playing ? "Pauziraj " : "Slušaj ";
         row.play.setContentDescription(action + s.name);
         row.more.setContentDescription("Više opcija za " + s.name);
-        row.root.setContentDescription(s.name + ", " + countryAndGenre(s) + ", " + formatPopularity(s.votes));
+        row.root.setContentDescription(s.name + ", " + countryAndGenre(s) + ", " + statusLine(s) + (active ? ", trenutno odabrana" : ""));
         row.play.setOnClickListener(v -> actions.onPlay(s));
         row.more.setOnClickListener(v -> actions.onMore(s));
         row.root.setOnClickListener(v -> actions.onPlay(s));
@@ -161,6 +162,15 @@ public final class StationAdapter extends BaseAdapter {
             }
         }
         return "";
+    }
+
+    private static String statusLine(RadioStation s) {
+        String health;
+        if ("ok".equals(s.health)) health = s.replaced ? "Dostupno · zamjenski izvor" : "Dostupno";
+        else if ("checking".equals(s.health)) health = "Provjeravam dostupnost";
+        else if ("broken".equals(s.health)) health = "Trenutno nedostupno";
+        else health = "Dostupnost nije provjerena";
+        return health + "  •  " + formatPopularity(s.votes);
     }
 
     private static String formatPopularity(int votes) {
