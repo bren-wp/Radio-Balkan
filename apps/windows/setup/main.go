@@ -40,8 +40,17 @@ const (
 	WM_PAINT             = 0x000F
 	WM_ERASEBKGND        = 0x0014
 	WM_CLOSE             = 0x0010
+	WM_KEYDOWN           = 0x0100
 	WM_LBUTTONDOWN       = 0x0201
 	WM_APP               = 0x8000
+	VK_TAB               = 0x09
+	VK_RETURN            = 0x0D
+	VK_ESCAPE            = 0x1B
+	VK_SPACE             = 0x20
+	VK_LEFT              = 0x25
+	VK_UP                = 0x26
+	VK_RIGHT             = 0x27
+	VK_DOWN              = 0x28
 	IDC_ARROW            = 32512
 	DT_LEFT              = 0
 	DT_CENTER            = 1
@@ -90,6 +99,7 @@ type installerState struct {
 	hwnd                       syscall.Handle
 	desktop, runAfter, startup bool
 	installing, done           bool
+	focus                      int
 	status                     string
 	errorText                  string
 	progress                   int
@@ -175,8 +185,13 @@ func inside(x, y int32, r RECT) bool { return x >= r.Left && x < r.Right && y >=
 var desktopRect = RECT{52, 222, 76, 246}
 var runRect = RECT{52, 260, 76, 284}
 var startupRect = RECT{52, 298, 76, 322}
+var desktopHitRect = RECT{46, 214, 554, 253}
+var runHitRect = RECT{46, 252, 554, 291}
+var startupHitRect = RECT{46, 290, 554, 329}
 var installRect = RECT{342, 376, 558, 426}
 var cancelRect = RECT{230, 376, 330, 426}
+
+const installerFocusCount = 5
 
 func main() {
 	if len(os.Args) > 1 && strings.EqualFold(os.Args[1], "--uninstall") {
@@ -188,6 +203,7 @@ func main() {
 	st.desktop = true
 	st.runAfter = true
 	st.startup = false
+	st.focus = 4
 	st.status = "Spremno za instalaciju"
 	if fileExists(targetExe()) || fileExists(legacyTargetExe()) {
 		st.status = "Pronađena je postojeća verzija · spremno za ažuriranje"
@@ -241,6 +257,9 @@ func wndProcCore(hwnd syscall.Handle, message uint32, w, l uintptr) uintptr {
 		x := int32(int16(uint16(l & 0xffff)))
 		y := int32(int16(uint16((l >> 16) & 0xffff)))
 		click(x, y)
+		return 0
+	case WM_KEYDOWN:
+		handleKey(w)
 		return 0
 	case WM_APP + 1:
 		st.mu.Lock()
@@ -386,6 +405,7 @@ func paintClient(hdc syscall.Handle, cr RECT) {
 	st.mu.RLock()
 	desktop, runAfter, startup := st.desktop, st.runAfter, st.startup
 	installing, done := st.installing, st.done
+	focus := st.focus
 	status, progress := st.status, st.progress
 	st.mu.RUnlock()
 	fillRect.Call(uintptr(hdc), uintptr(unsafe.Pointer(&cr)), uintptr(st.bg))
@@ -399,15 +419,15 @@ func paintClient(hdc syscall.Handle, cr RECT) {
 	selectFont(hdc, st.font)
 	txt(hdc, "Radio uživo iz Hrvatske i regije · verzija "+appVersion, 108, 88, 550, 118, rgb(172, 159, 151), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 	txt(hdc, "Slušaj omiljene stanice iz Hrvatske, Bosne i Hercegovine, Srbije, Slovenije, Sjeverne Makedonije, Albanije i ostatka Balkana. Instalacija ne traži administratorska prava.", 54, 132, 548, 194, rgb(205, 196, 189), DT_LEFT|DT_WORDBREAK)
-	checkbox(hdc, desktopRect, desktop, "Kreiraj prečac na radnoj površini")
-	checkbox(hdc, runRect, runAfter, "Pokreni Radio Balkan nakon instalacije")
-	checkbox(hdc, startupRect, startup, "Pokreni Radio Balkan zajedno s Windowsom")
+	checkbox(hdc, desktopRect, desktop, "Kreiraj prečac na radnoj površini", !installing && focus == 0)
+	checkbox(hdc, runRect, runAfter, "Pokreni Radio Balkan nakon instalacije", !installing && focus == 1)
+	checkbox(hdc, startupRect, startup, "Pokreni Radio Balkan zajedno s Windowsom", !installing && focus == 2)
 	selectFont(hdc, st.font)
 	txt(hdc, "Lokacija: "+installDir(), 54, 336, 550, 358, rgb(133, 122, 115), DT_LEFT|DT_SINGLELINE)
 	if installing || done {
 		progressBar(hdc, RECT{54, 358, 548, 366}, progress)
 	}
-	button(hdc, cancelRect, "Odustani", false)
+	button(hdc, cancelRect, "Odustani", false, !installing && focus == 3)
 	label := "Instaliraj"
 	if fileExists(targetExe()) {
 		label = "Ažuriraj"
@@ -418,7 +438,7 @@ func paintClient(hdc syscall.Handle, cr RECT) {
 	if done {
 		label = "Završeno"
 	}
-	button(hdc, installRect, label, true)
+	button(hdc, installRect, label, true, !installing && focus == 4)
 	txt(hdc, status, 54, 434, 550, 462, rgb(184, 169, 158), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 }
 
@@ -447,7 +467,7 @@ func rounded(hdc syscall.Handle, l, t, r, b, rad int32, fill, border uint32) {
 	deleteObj.Call(uintptr(br))
 	deleteObj.Call(pen)
 }
-func button(hdc syscall.Handle, r RECT, label string, primary bool) {
+func button(hdc syscall.Handle, r RECT, label string, primary, focused bool) {
 	fill := color(43, 36, 32)
 	border := color(71, 57, 49)
 	c := rgb(231, 224, 219)
@@ -455,6 +475,9 @@ func button(hdc syscall.Handle, r RECT, label string, primary bool) {
 		fill = color(235, 83, 35)
 		border = color(235, 83, 35)
 		c = rgb(255, 255, 255)
+	}
+	if focused {
+		border = color(255, 177, 61)
 	}
 	rounded(hdc, r.Left, r.Top, r.Right, r.Bottom, 11, fill, border)
 	selectFont(hdc, st.bold)
@@ -473,8 +496,12 @@ func progressBar(hdc syscall.Handle, r RECT, pct int) {
 		rounded(hdc, r.Left+1, r.Top+1, r.Left+1+w, r.Bottom-1, 5, color(235, 83, 35), color(235, 83, 35))
 	}
 }
-func checkbox(hdc syscall.Handle, r RECT, on bool, label string) {
-	rounded(hdc, r.Left, r.Top, r.Right, r.Bottom, 6, color(43, 36, 32), color(90, 70, 59))
+func checkbox(hdc syscall.Handle, r RECT, on bool, label string, focused bool) {
+	border := color(90, 70, 59)
+	if focused {
+		border = color(255, 177, 61)
+	}
+	rounded(hdc, r.Left, r.Top, r.Right, r.Bottom, 6, color(43, 36, 32), border)
 	if on {
 		selectFont(hdc, st.bold)
 		txt(hdc, "✓", r.Left, r.Top-1, r.Right, r.Bottom+1, rgb(255, 151, 74), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
@@ -490,7 +517,72 @@ func txt(hdc syscall.Handle, s string, l, t, r, b int32, c uintptr, flags uint32
 	drawText.Call(uintptr(hdc), uintptr(unsafe.Pointer(u16(s))), ^uintptr(0), uintptr(unsafe.Pointer(&rc)), uintptr(flags))
 }
 
+func nextInstallerFocus(current, delta int) int {
+	if installerFocusCount <= 0 {
+		return 0
+	}
+	next := (current + delta) % installerFocusCount
+	if next < 0 {
+		next += installerFocusCount
+	}
+	return next
+}
+
+func setInstallerFocus(index int) {
+	st.mu.Lock()
+	if index < 0 {
+		index = 0
+	}
+	if index >= installerFocusCount {
+		index = installerFocusCount - 1
+	}
+	st.focus = index
+	st.mu.Unlock()
+	invalidate()
+}
+
+func handleKey(key uintptr) {
+	st.mu.RLock()
+	installing := st.installing
+	focus := st.focus
+	st.mu.RUnlock()
+	if installing {
+		return
+	}
+	switch key {
+	case VK_TAB, VK_RIGHT, VK_DOWN:
+		setInstallerFocus(nextInstallerFocus(focus, 1))
+	case VK_LEFT, VK_UP:
+		setInstallerFocus(nextInstallerFocus(focus, -1))
+	case VK_RETURN, VK_SPACE:
+		activateInstallerControl(focus)
+	case VK_ESCAPE:
+		postQuit.Call(0)
+	}
+}
+
 func click(x, y int32) {
+	index := -1
+	switch {
+	case inside(x, y, desktopHitRect):
+		index = 0
+	case inside(x, y, runHitRect):
+		index = 1
+	case inside(x, y, startupHitRect):
+		index = 2
+	case inside(x, y, cancelRect):
+		index = 3
+	case inside(x, y, installRect):
+		index = 4
+	}
+	if index < 0 {
+		return
+	}
+	setInstallerFocus(index)
+	activateInstallerControl(index)
+}
+
+func activateInstallerControl(index int) {
 	st.mu.RLock()
 	installing := st.installing
 	done := st.done
@@ -498,32 +590,25 @@ func click(x, y int32) {
 	if installing {
 		return
 	}
-	if inside(x, y, desktopRect) {
+	switch index {
+	case 0:
 		st.mu.Lock()
 		st.desktop = !st.desktop
 		st.mu.Unlock()
 		invalidate()
-		return
-	}
-	if inside(x, y, runRect) {
+	case 1:
 		st.mu.Lock()
 		st.runAfter = !st.runAfter
 		st.mu.Unlock()
 		invalidate()
-		return
-	}
-	if inside(x, y, startupRect) {
+	case 2:
 		st.mu.Lock()
 		st.startup = !st.startup
 		st.mu.Unlock()
 		invalidate()
-		return
-	}
-	if inside(x, y, cancelRect) {
+	case 3:
 		postQuit.Call(0)
-		return
-	}
-	if inside(x, y, installRect) {
+	case 4:
 		if done {
 			postQuit.Call(0)
 			return
@@ -544,6 +629,7 @@ func click(x, y int32) {
 		}()
 	}
 }
+
 func install() {
 	unlock, err := acquireInstallLock()
 	if err != nil {
