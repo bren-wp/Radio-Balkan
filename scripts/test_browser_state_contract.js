@@ -76,7 +76,7 @@ function deferred() {
 
 const ids = [
   'search', 'country', 'genre', 'stations', 'status', 'refresh', 'heroPlay',
-  'playerToggle', 'playerStop', 'favoritesOnly', 'clearFilters', 'playerFav', 'playerState',
+  'playerToggle', 'playerPrev', 'playerStop', 'playerNext', 'favoritesOnly', 'clearFilters', 'playerFav', 'playerState',
   'playerName', 'playerMeta', 'heroName', 'heroMeta', 'playerLogo'
 ];
 const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
@@ -220,6 +220,8 @@ async function main() {
   assert.equal(elements.playerName.textContent, 'Radio A', 'initial GET_STATE must select the active station');
   assert.equal(elements.playerState.textContent, 'Sada svira', 'initial playing state must be rendered');
   assert.equal(elements.playerToggle.disabled, false, 'player toggle must be enabled after a station is available');
+  assert.equal(elements.playerPrev.disabled, false, 'previous control must be enabled when multiple stations are available');
+  assert.equal(elements.playerNext.disabled, false, 'next control must be enabled when multiple stations are available');
   assert.equal(elements.playerStop.disabled, false, 'player stop must be enabled after a station is available');
   assert.equal(elements.playerFav.disabled, false, 'favorite control must be enabled after a station is available');
   assert.equal(elements.playerFav.attributes['aria-pressed'], 'false', 'favorite state must be announced accessibly');
@@ -317,8 +319,15 @@ async function main() {
   assert.equal(elements.playerStop.attributes['aria-busy'], 'false', 'stop busy state must clear after completion');
   assert.equal(elements.playerStop.attributes['aria-label'], 'Reprodukcija je zaustavljena', 'stopped control must expose its terminal state accessibly');
 
+  const adjacentCallsBefore = playCalls;
+  getState = { epoch: 'epoch-b', revision: 6, station: stationB, playing: true, sessionId: 'session-b-next' };
+  elements.playerNext.dispatch('click');
+  await flush();
+  assert.equal(playCalls, adjacentCallsBefore + 1, 'next control must start the adjacent station');
+  assert.equal(elements.playerPrev.disabled, false, 'previous control must remain available after adjacent playback');
+
   const playCallsBeforeStoppedReplay = playCalls;
-  getState = { epoch: 'epoch-b', revision: 6, station: stationB, playing: true, sessionId: 'session-b2' };
+  getState = { epoch: 'epoch-b', revision: 7, station: stationB, playing: true, sessionId: 'session-b2' };
   elements.playerToggle.dispatch('click');
   await flush();
   assert.equal(playCalls, playCallsBeforeStoppedReplay + 1, 'main play control after stop must send a fresh RB_PLAY command');

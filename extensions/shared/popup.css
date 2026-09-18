@@ -74,13 +74,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .emptyAction { min-width: 138px; height: 40px; margin-top: 14px; padding: 0 16px; border: 1px solid #76502d; border-radius: 12px; background: linear-gradient(180deg, #201a16, #17191d); color: #ffc15b; font-weight: 800; cursor: pointer; }
 .emptyAction:hover:not(:disabled) { border-color: #c17d32; background: #241c16; }
 .emptyAction:active:not(:disabled) { transform: translateY(1px) scale(.985); }
-.player { position: absolute; left: 0; right: 0; bottom: 0; height: 82px; display: grid; grid-template-columns: 52px minmax(0, 1fr) 42px 42px 48px; align-items: center; gap: 7px; padding: 9px 12px; border-top: 1px solid #694522; background: linear-gradient(90deg, #17110e, #0e141c 46%, #091017); box-shadow: 0 -12px 30px #0009; }
+.player { position: absolute; left: 0; right: 0; bottom: 0; height: 82px; display: grid; grid-template-columns: 52px minmax(0, 1fr) 42px minmax(168px, auto); align-items: center; gap: 7px; padding: 9px 12px; border-top: 1px solid #694522; background: linear-gradient(90deg, #17110e, #0e141c 46%, #091017); box-shadow: 0 -12px 30px #0009; }
 .player > img { width: 52px; height: 52px; border-radius: 11px; object-fit: cover; background: #202832; }
 .playerCopy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .playerCopy small { color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: .045em; text-transform: uppercase; }
 .playerCopy strong, .playerCopy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .playerCopy strong { font-size: 13.5px; }
 .playerCopy span { color: #a7b0bc; font-size: 10.5px; }
+.playerTransport { min-width: 168px; display: grid; grid-template-columns: 34px 34px 46px 34px; align-items: center; justify-content: end; gap: 5px; }
+.transportButton { width: 34px; height: 40px; border: 0; border-radius: 10px; background: transparent; color: #cbd2db; font-size: 15px; cursor: pointer; }
+.transportButton:hover:not(:disabled) { background: #ffffff0d; color: #fff; }
 .roundPlay { width: 46px; height: 46px; border: 1px solid #d08a31; border-radius: 50%; background: #251d15; color: #fff; font-size: 16px; cursor: pointer; }
 .roundPlay:hover:not(:disabled) { background: #342519; }
 button:disabled { cursor: default; opacity: .46; box-shadow: none; }

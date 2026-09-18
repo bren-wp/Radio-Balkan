@@ -263,13 +263,17 @@ def main() -> None:
         "message?.type !== 'RB_STATE' || activeCommandToken",
         "$('playerState').textContent = playerStatus;",
         "async function stopPlayback()",
+        "async function playAdjacent(delta)",
+        "navigationStations()",
         "ext.runtime.sendMessage({ type: 'RB_STOP' })",
         "playerStop').setAttribute('aria-busy'",
     )
     require(
         "extensions/shared/popup.html",
         'id="playerState"',
+        'id="playerPrev"',
         'id="playerStop"',
+        'id="playerNext"',
         'aria-live="polite"',
     )
     require(
@@ -284,6 +288,7 @@ def main() -> None:
         "duplicate stop clicks must be ignored while stop is in flight",
         "completed stop command must render an explicit stopped state",
         "player stop must stay disabled once playback is already stopped",
+        "next control must start the adjacent station",
         "main play control after stop must send a fresh RB_PLAY command",
     )
     require(
