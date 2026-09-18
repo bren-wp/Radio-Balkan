@@ -126,6 +126,7 @@ async function main() {
 
   const first = await dispatch({ type: 'RB_PLAY', station: stationA });
   assert.equal(first.station.name, 'Radio A');
+  assert.ok(first.sessionId, 'Chromium worker snapshot must expose the active playback session');
   assert.equal(first.playing, true);
   assert.equal(createCalls, 1, 'first playback must create one offscreen document');
 
@@ -163,6 +164,12 @@ async function main() {
   const finalState = await dispatch({ type: 'RB_GET_STATE' });
   assert.equal(finalState.station.name, 'Radio C');
   assert.equal(finalState.playing, true);
+  const finalSession = finalState.sessionId;
+  await dispatch({ type: 'RB_STOP' });
+  const stoppedState = await dispatch({ type: 'RB_GET_STATE' });
+  assert.equal(stoppedState.sessionId, null, 'Chromium stopped state must expose a retired session');
+  assert.equal(stoppedState.playing, false);
+  assert.notEqual(finalSession, stoppedState.sessionId);
 
   console.log('Chromium player close/session race regression tests OK');
 }

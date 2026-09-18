@@ -12,6 +12,7 @@
   let visible = [];
   let current = null;
   let playing = false;
+  let stopped = true;
   let favs = {};
   let favoritesOnly = false;
   let searchTimer = 0;
@@ -159,9 +160,12 @@
     const hasRemoteStation = !!value.station;
     if (hasRemoteStation) current = value.station;
     playing = !!value.playing;
+    const hasSession = !!value.sessionId;
+    stopped = !playing && !hasSession;
     if (updateStatus) {
       if (playing) playerStatus = 'Sada svira';
-      else if (hasRemoteStation) playerStatus = 'Pauzirano';
+      else if (hasRemoteStation && hasSession) playerStatus = 'Pauzirano';
+      else if (hasRemoteStation) playerStatus = 'Zaustavljeno';
       else playerStatus = 'Spremno';
     }
     return true;
@@ -386,6 +390,7 @@
     if (activeCommandToken) return;
     if (!current && visible.length) return play(visible[0]);
     if (!current) return;
+    if (stopped) return play(current);
     const token = ++commandGeneration;
     activeCommandToken = token;
     playerStatus = playing ? 'Pauziram…' : 'Povezujem…';
@@ -422,6 +427,7 @@
       await applyCommandResult(result, token);
       if (token !== commandGeneration) return;
       playing = false;
+      stopped = !result?.error;
       playerStatus = result?.error ? 'Zaustavljanje nije uspjelo' : 'Zaustavljeno';
     } catch {
       if (token !== commandGeneration) return;

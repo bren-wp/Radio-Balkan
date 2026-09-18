@@ -14,11 +14,11 @@ let lastOffscreenGeneration = -1;
 function validStation(station) { return RBNet.validStation(station); }
 
 function snapshot(extra = {}) {
-  return { ...state, ...extra };
+  return { ...state, sessionId: currentSessionId, ...extra };
 }
 
 function broadcastState() {
-  chrome.runtime.sendMessage({ type: 'RB_STATE', ...state }).catch(() => {});
+  chrome.runtime.sendMessage({ type: 'RB_STATE', ...snapshot() }).catch(() => {});
 }
 
 function commitState(patch, notify = false) {

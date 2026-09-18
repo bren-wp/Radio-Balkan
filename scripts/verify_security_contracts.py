@@ -180,6 +180,7 @@ def main() -> None:
         "let currentSessionId = null;",
         "let lastOffscreenGeneration = -1;",
         "function newSessionId()",
+        "sessionId: currentSessionId",
         "function acceptOffscreenState(",
         "incomingGeneration < lastOffscreenGeneration",
         "requestToken !== commandGeneration",
@@ -243,6 +244,7 @@ def main() -> None:
         "extensions/shared/popup.js",
         "let commandGeneration = 0;",
         "let activeCommandToken = 0;",
+        "let stopped = true;",
         "let stateEpoch = '';",
         "let lastRevision = -1;",
         "let stateSyncPromise = null;",
@@ -252,6 +254,7 @@ def main() -> None:
         "retiredEpochs.has(epoch)",
         "if (!allowEpochChange) return false;",
         "function synchronizePlayerState()",
+        "if (stopped) return play(current);",
         "ext.runtime.sendMessage({ type: 'RB_GET_STATE' })",
         "void synchronizePlayerState();",
         "if (revision < lastRevision) return false;",
@@ -279,12 +282,14 @@ def main() -> None:
         "player toggle must be re-enabled after command completion",
         "duplicate stop clicks must be ignored while stop is in flight",
         "completed stop command must render an explicit stopped state",
+        "main play control after stop must send a fresh RB_PLAY command",
     )
     require(
         "scripts/test_chromium_player_contract.js",
         "stale stop must not close the offscreen document used by a newer play",
         "new play must wait until the previous offscreen close completes",
         "play issued during close must recover into active playback",
+        "Chromium stopped state must expose a retired session",
     )
     require(
         "scripts/test_chromium_offscreen_contract.js",
