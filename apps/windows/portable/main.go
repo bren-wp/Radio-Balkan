@@ -604,6 +604,13 @@ func safeGo(name string, fn func()) {
 		fn()
 	}()
 }
+func runtimeTestTrace(scope string) {
+	if os.Getenv("RADIO_BALKAN_RUNTIME_TEST") != "1" {
+		return
+	}
+	logError("runtime-test", errors.New(scope))
+}
+
 func logError(scope string, err error) {
 	if err == nil {
 		return
@@ -1515,13 +1522,20 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 		showNextAlert()
 		return 0
 	case WM_CLOSE:
+		runtimeTestTrace("wm-close-enter")
 		captureWindowSize()
+		runtimeTestTrace("wm-close-before-shutdown")
 		prepareShutdown()
+		runtimeTestTrace("wm-close-after-shutdown")
 		procDestroyWindow.Call(uintptr(hwnd))
+		runtimeTestTrace("wm-close-after-destroy-window")
 		return 0
 	case WM_DESTROY:
+		runtimeTestTrace("wm-destroy-enter")
 		prepareShutdown()
+		runtimeTestTrace("wm-destroy-after-shutdown")
 		markCleanShutdown()
+		runtimeTestTrace("wm-destroy-before-post-quit")
 		procPostQuitMessage.Call(0)
 		return 0
 	}
@@ -5493,6 +5507,7 @@ func shuttingDown() bool {
 }
 
 func signalShutdown() {
+	runtimeTestTrace("signal-shutdown-enter")
 	app.closeOnce.Do(func() {
 		if app.cancel != nil {
 			app.cancel()
@@ -5500,6 +5515,7 @@ func signalShutdown() {
 		if app.done != nil {
 			close(app.done)
 		}
+		runtimeTestTrace("signal-shutdown-after-cancel")
 		app.saveMu.Lock()
 		if app.saveTimer != nil {
 			app.saveTimer.Stop()
@@ -5509,23 +5525,34 @@ func signalShutdown() {
 		// The search debounce callback checks shuttingDown() before touching UI
 		// state. Do not block the UI thread acquiring app.mu during shutdown.
 	})
+	runtimeTestTrace("signal-shutdown-exit")
 }
 
 func prepareShutdown() {
+	runtimeTestTrace("prepare-shutdown-enter")
 	app.shutdownOnce.Do(func() {
 		signalShutdown()
 		finished := make(chan struct{})
 		go func() {
-			defer close(finished)
+			runtimeTestTrace("cleanup-goroutine-enter")
+			defer func() {
+				runtimeTestTrace("cleanup-goroutine-exit")
+				close(finished)
+			}()
 			saveState()
+			runtimeTestTrace("cleanup-after-save-state")
 			audioShutdown()
+			runtimeTestTrace("cleanup-after-audio-shutdown")
 		}()
 		select {
 		case <-finished:
+			runtimeTestTrace("prepare-cleanup-finished")
 		case <-time.After(2500 * time.Millisecond):
 			logError("shutdown-timeout", errors.New("finalni state/audio cleanup prekoračio je 2.5 s"))
+			runtimeTestTrace("prepare-cleanup-timeout")
 		}
 	})
+	runtimeTestTrace("prepare-shutdown-exit")
 }
 
 func scheduleSearchFilter() {
