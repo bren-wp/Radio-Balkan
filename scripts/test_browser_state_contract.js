@@ -248,7 +248,7 @@ async function main() {
   assert.equal(elements.country.value, 'RS', 'selected country filter must survive a catalog refresh');
 
   const listRepaintsBeforeState = elements.stations.replaceChildrenCalls;
-  runtimeListener({ type: 'RB_STATE', epoch: 'epoch-a', revision: 2, station: stationA, playing: false });
+  runtimeListener({ type: 'RB_STATE', epoch: 'epoch-a', revision: 2, station: stationA, playing: false, sessionId: 'session-a' });
   await flush();
   assert.equal(elements.playerState.textContent, 'Pauzirano');
   assert.equal(elements.stations.replaceChildrenCalls, listRepaintsBeforeState, 'playback-only state updates must not rebuild the full station list');
