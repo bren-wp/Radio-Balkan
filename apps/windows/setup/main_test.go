@@ -2,7 +2,11 @@
 
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestNextInstallerFocusWraps(t *testing.T) {
 	tests := []struct {
@@ -34,5 +38,21 @@ func TestInstallerCheckboxHitTargetsIncludeLabels(t *testing.T) {
 	}
 	if inside(400, 350, startupHitRect) {
 		t.Fatal("startup hit target must not extend into install location text")
+	}
+}
+
+
+func TestWriteFileDurablePersistsInstallerPayload(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "RadioBalkan.exe.tmp")
+	want := []byte("MZ-radio-balkan-test")
+	if err := writeFileDurable(path, want, 0600); err != nil {
+		t.Fatalf("writeFileDurable() error = %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("payload = %q; want %q", got, want)
 	}
 }
