@@ -8,6 +8,7 @@ Produkcijski source za Chrome, Edge, Opera i Firefox. Sve varijante dijele isti 
 - `Očisti` vraća filtere jednim klikom
 - station kartice podržavaju Enter/Space, vidljivi focus state i `aria-current`
 - pressed, loading i reduced-motion stanja vizualno su dosljednija
+- aktivna play/pause komanda ima single-flight UI guard: isti ponovljeni klik ne šalje dupliciranu runtime komandu, a disabled/`aria-busy` state jasno prikazuje da je radnja u tijeku
 - ručni refresh prikazuje stvarni mrežni neuspjeh; cache se više ne prikazuje kao da je refresh uspio
 - Radio Browser JSON čita se streaming putem uz 512 KiB server-list i 8 MiB catalog limite
 - dinamički API discovery ograničen je na četiri nova hosta + četiri stabilna fallbacka
