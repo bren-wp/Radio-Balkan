@@ -40,6 +40,8 @@ def main() -> None:
         "RadioPlayerService.INTERNAL_STATE_PERMISSION",
         "Context.RECEIVER_NOT_EXPORTED",
         "ui.removeCallbacksAndMessages(null)",
+        "source.size() > 16",
+        "}, 8000);",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/RadioRepository.java",
@@ -296,6 +298,11 @@ def main() -> None:
         "func writeFileDurable(",
         "return f.Sync()",
         "writeFileDurable(tmp, b, 0644)",
+        "func scheduleStartupHealth(limit int)",
+        "time.NewTimer(8 * time.Second)",
+        "audioAck",
+        "func waitAudioAckLocked() error",
+        "audio engine nije odgovorio na vrijeme",
         "if shuttingDown() {",
         "func prepareShutdown()",
     )
@@ -329,6 +336,7 @@ def main() -> None:
         "https://user:pass@example.com/live",
         "TestValidateStateDropsUnsafeReplacementURLs",
         "TestWriteFileDurablePersistsCompleteContent",
+        "TestAudioEngineAcknowledgesCommand",
     )
 
     require(
