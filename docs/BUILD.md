@@ -21,7 +21,7 @@ cd apps/windows
 ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
 ```
 
-Skripta radi read-only `gofmt -d` provjeru, `go vet`, `go test`, gradi Portable, privremeno ugrađuje isti binary u Setup, linkerom postavlja produkcijsku verziju, uklanja privremeni embedded payload u `finally` bloku i generira SHA-256. Build namjerno ne prepisuje Go source datoteke.
+Skripta radi read-only Go formatting provjeru na LF-normaliziranoj privremenoj kopiji, pa Windows CRLF checkout ne stvara lažni drift. Stvarni `gofmt` drift ruši build bez prepisivanja sourcea. Nakon toga izvršava `go vet`, `go test`, gradi Portable, privremeno ugrađuje isti binary u Setup, linkerom postavlja produkcijsku verziju, uklanja privremeni embedded payload u `finally` bloku i generira SHA-256.
 
 ## Browser ekstenzije
 
