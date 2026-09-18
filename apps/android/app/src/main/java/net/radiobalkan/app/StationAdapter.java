@@ -1,9 +1,11 @@
 package net.radiobalkan.app;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -81,16 +83,16 @@ public final class StationAdapter extends BaseAdapter {
         flag.setBounds(0, 0, dp(22), dp(14));
         row.meta.setCompoundDrawablePadding(dp(6));
         row.meta.setCompoundDrawables(flag, null, null, null);
-        row.listeners.setText(formatListeners(s.votes));
+        row.listeners.setText(formatPopularity(s.votes));
         row.play.setText(active && playing ? "Ⅱ" : "▶");
-        row.root.setBackground(rounded(active ? 0xFF171C24 : 0xFF11171F, active ? 0xFFFFA52E : 0xFF303845, 18));
+        row.root.setBackground(interactiveRounded(active ? 0xFF171C24 : 0xFF11171F, active ? 0xFFFFA52E : 0xFF303845, 18, 0x26FFFFFF));
 
         row.logo.setImageResource(R.drawable.ic_radio_balkan);
         images.load(s.favicon, row.logo, null);
         String action = active && playing ? "Pauziraj " : "Slušaj ";
         row.play.setContentDescription(action + s.name);
         row.more.setContentDescription("Više opcija za " + s.name);
-        row.root.setContentDescription(s.name + ", " + countryAndGenre(s));
+        row.root.setContentDescription(s.name + ", " + countryAndGenre(s) + ", " + formatPopularity(s.votes));
         row.play.setOnClickListener(v -> actions.onPlay(s));
         row.more.setOnClickListener(v -> actions.onMore(s));
         row.root.setOnClickListener(v -> actions.onPlay(s));
@@ -128,12 +130,6 @@ public final class StationAdapter extends BaseAdapter {
         r.name = text(17, Color.WHITE, true);
         r.meta = text(12, 0xFFBEC4CD, false);
         r.listeners = text(11, 0xFF98A2AF, false);
-        android.graphics.drawable.Drawable people = context.getDrawable(R.drawable.ic_people);
-        if (people != null) {
-            people.setBounds(0, 0, dp(15), dp(15));
-            r.listeners.setCompoundDrawablePadding(dp(5));
-            r.listeners.setCompoundDrawables(people, null, null, null);
-        }
         info.addView(r.name, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(31)));
         info.addView(r.meta, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(26)));
         info.addView(r.listeners, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(23)));
@@ -167,13 +163,16 @@ public final class StationAdapter extends BaseAdapter {
         return "";
     }
 
-    private static String formatListeners(int votes) {
+    private static String formatPopularity(int votes) {
         int n = Math.max(0, votes);
+        String value;
         if (n >= 1000) {
             double k = n / 1000.0;
-            return k >= 10 ? String.format(Locale.ROOT, "%.0fK", k) : String.format(Locale.ROOT, "%.1fK", k);
+            value = k >= 10 ? String.format(Locale.ROOT, "%.0fK", k) : String.format(Locale.ROOT, "%.1fK", k);
+        } else {
+            value = String.valueOf(n);
         }
-        return String.valueOf(n);
+        return "Popularnost · " + value + " glasova";
     }
 
     private Button smallButton(String label, boolean accent, int textSize) {
@@ -184,7 +183,7 @@ public final class StationAdapter extends BaseAdapter {
         b.setTextColor(accent ? 0xFFF8F8FA : 0xFFCAD0D8);
         b.setPadding(0, 0, 0, 0);
         b.setMinWidth(0); b.setMinimumWidth(0); b.setMinHeight(0); b.setMinimumHeight(0);
-        b.setBackground(rounded(accent ? 0xFF25242A : 0x00000000, accent ? 0xFF81592C : 0x00000000, accent ? 28 : 12));
+        b.setBackground(interactiveRounded(accent ? 0xFF25242A : 0x00000000, accent ? 0xFF81592C : 0x00000000, accent ? 28 : 12, 0x30FFFFFF));
         return b;
     }
 
@@ -201,6 +200,12 @@ public final class StationAdapter extends BaseAdapter {
         g.setColor(fill); g.setCornerRadius(dp(radiusDp));
         if ((stroke >>> 24) != 0) g.setStroke(dp(1), stroke);
         return g;
+    }
+
+    private android.graphics.drawable.Drawable interactiveRounded(int fill, int stroke, int radiusDp, int rippleColor) {
+        GradientDrawable content = rounded(fill, stroke, radiusDp);
+        GradientDrawable mask = rounded(Color.WHITE, 0x00000000, radiusDp);
+        return new RippleDrawable(ColorStateList.valueOf(rippleColor), content, mask);
     }
 
     private int dp(int v) { return (int) (v * context.getResources().getDisplayMetrics().density + 0.5f); }
