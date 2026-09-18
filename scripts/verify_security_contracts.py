@@ -276,6 +276,12 @@ def main() -> None:
         '.Replace("`r`n", "`n")',
         "& gofmt -w $temp",
         "nije gofmt formatiran",
+        "Windows Portable go vet nije uspio.",
+        "Windows Portable go test nije uspio.",
+        "Windows Portable go build nije uspio.",
+        "Windows Setup go vet nije uspio.",
+        "Windows Setup go test nije uspio.",
+        "Windows Setup go build nije uspio.",
     )
     require(
         "apps/windows/portable/main.go",
@@ -303,6 +309,8 @@ def main() -> None:
         "audioAck",
         "func waitAudioAckLocked() error",
         "audio engine nije odgovorio na vrijeme",
+        "READY",
+        "audio engine startup timeout",
         "audioStopped",
         "if stopped {",
         "playStationByKey(currentKey, current)",
