@@ -7,7 +7,9 @@ Nativni Android klijent (`minSdk 26`, `targetSdk 36`) bez telemetry SDK-a i bez 
 - jasniji premium UI s ripple/pressed feedbackom na glavnim, navigation i station kontrolama
 - donja navigacija više ne prikazuje nepostojeći korisnički Profil; `Više` otvara stvarne aplikacijske opcije
 - filteri imaju jasni `Filtriraj` CTA, trenutno vidljiv selected state i `Poništi filtre`
-- Radio Browser `votes` prikazuju se točno kao `Popularnost · N glasova`, a ne kao trenutačni broj slušatelja
+- Radio Browser `votes` prikazuju se točno kao `Popularnost · N glasova`, a station red uz popularnost prikazuje i health status
+- hero i player CTA prate Slušaj/Nastavi/Pauziraj stanje, spremljeni tab usklađuje bottom-nav selected state, a accessibility opis prati stvarnu radnju
+- ručni catalog refresh je single-flight; neuspjeli start playback servisa ne ostavlja lažni aktivni key, a replacement-source povratak ostaje konzistentan
 - repository load je zaštićen od executor/shutdown racea i ne propušta `RejectedExecutionException` prema UI threadu
 - Activity pri destroyu čisti cijeli Handler queue, a repository, image loader i player imaju eksplicitne shutdown putanje
 - player zadržava prepare watchdog, fallback izvore, audio focus, MediaSession i foreground-service lifecycle zaštite
