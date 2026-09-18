@@ -76,7 +76,7 @@ function deferred() {
 
 const ids = [
   'search', 'country', 'genre', 'stations', 'status', 'refresh', 'heroPlay',
-  'playerToggle', 'favoritesOnly', 'playerFav', 'playerState',
+  'playerToggle', 'favoritesOnly', 'clearFilters', 'playerFav', 'playerState',
   'playerName', 'playerMeta', 'heroName', 'heroMeta', 'playerLogo'
 ];
 const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
@@ -179,6 +179,12 @@ const context = {
       return {};
     },
     async setFavorite() {
+      return {};
+    },
+    async uiPreferences() {
+      return {};
+    },
+    async setUiPreferences() {
       return {};
     }
   }
