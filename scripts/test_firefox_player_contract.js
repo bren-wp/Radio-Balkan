@@ -19,6 +19,8 @@ let messageListener = null;
 let playCalls = 0;
 let fastTimeout = false;
 const playPlans = [];
+const refreshPlans = [];
+let refreshCalls = 0;
 const reports = [];
 const instances = [];
 
@@ -89,8 +91,16 @@ const context = {
     }
   },
   RBNet: {
+    safeHttp(value) {
+      return /^https?:\/\//.test(String(value || ''));
+    },
     candidateUrls(station) {
       return Array.isArray(station?.streams) ? [...station.streams] : [];
+    },
+    async refreshCandidateUrls() {
+      refreshCalls += 1;
+      if (!refreshPlans.length) return [];
+      return await refreshPlans.shift();
     }
   }
 };
@@ -191,6 +201,36 @@ async function main() {
 
   fastTimeout = false;
   assert.ok(reports.some(message => message.type === 'RB_STATE'), 'player must report state updates to extension UI');
+
+  const beforeRefreshRecovery = playCalls;
+  const refreshBefore = refreshCalls;
+  playPlans.push({ then(resolve, reject) { reject(new Error('stale stream')); } });
+  refreshPlans.push(Promise.resolve(['https://example.com/d-fresh']));
+  const refreshed = await messageListener({
+    type: 'RB_PLAY',
+    station: { stationuuid: 'd', name: 'Radio D', countrycode: 'HR', streams: ['https://example.com/d-stale'] }
+  });
+  await flush();
+  assert.equal(refreshed.playing, true, 'Firefox candidate exhaustion must recover through a refreshed station URL');
+  assert.equal(refreshCalls, refreshBefore + 1, 'Firefox may refresh the catalog at most once per playback session');
+  assert.equal(playCalls, beforeRefreshRecovery + 2, 'Firefox refresh recovery must try only the new stream');
+
+  const refreshGate = deferred();
+  playPlans.push({ then(resolve, reject) { reject(new Error('stale stream')); } });
+  refreshPlans.push(refreshGate.promise);
+  const pendingRefreshPlay = messageListener({
+    type: 'RB_PLAY',
+    station: { stationuuid: 'e', name: 'Radio E', countrycode: 'HR', streams: ['https://example.com/e-stale'] }
+  });
+  await flush();
+  const playsBeforeStopDuringRefresh = playCalls;
+  const stoppedDuringRefresh = await messageListener({ type: 'RB_STOP' });
+  refreshGate.resolve(['https://example.com/e-fresh']);
+  const staleRefreshResult = await pendingRefreshPlay;
+  await flush();
+  assert.equal(stoppedDuringRefresh.playing, false, 'Firefox stop during catalog refresh must remain terminal');
+  assert.equal(staleRefreshResult.stale, true, 'Firefox must reject a catalog refresh that finishes after stop');
+  assert.equal(playCalls, playsBeforeStopDuringRefresh, 'Firefox stale refresh must not restart audio after stop');
 
   console.log('Firefox player lifecycle/timeout/stall/session regression tests OK');
 }

@@ -5,7 +5,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const context = { URL };
+const encoder = new TextEncoder();
+let fetchHandler = async () => { throw new Error('unexpected fetch'); };
+const context = {
+  URL, AbortController, TextDecoder, setTimeout, clearTimeout,
+  fetch(...args) { return fetchHandler(...args); }
+};
 context.globalThis = context;
 vm.createContext(context);
 
@@ -52,8 +57,87 @@ const catalogSource = fs.readFileSync(catalogPath, 'utf8');
 assert.match(catalogSource, /RBNet\.safeRadioBrowserBase/, 'catalog discovery must use the trusted Radio Browser origin validator');
 assert.match(catalogSource, /redirect:\s*'error'/, 'catalog API fetches must reject redirects instead of following a server-controlled hop');
 
+function responseJson(value, status = 200, declaredLength = '') {
+  const bytes = encoder.encode(JSON.stringify(value));
+  let sent = false;
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get(name) { return name.toLowerCase() === 'content-length' ? declaredLength : null; } },
+    body: {
+      getReader() {
+        return {
+          async read() {
+            if (sent) return { done: true, value: undefined };
+            sent = true;
+            return { done: false, value: bytes };
+          },
+          async cancel() {},
+          releaseLock() {}
+        };
+      }
+    }
+  };
+}
+
+async function testRefresh() {
+  const calls = [];
+  fetchHandler = async url => {
+    calls.push(String(url));
+    return responseJson([{
+      stationuuid: 'abc-123',
+      countrycode: 'HR',
+      url_resolved: 'https://fresh.example.com/live',
+      url: 'http://127.0.0.1/private'
+    }]);
+  };
+  const regional = await RBNet.refreshCandidateUrls({ stationuuid: 'abc-123', countrycode: 'HR' });
+  assert.deepEqual(Array.from(regional), ['https://fresh.example.com/live'], 'UUID refresh must return only safe public streams');
+  assert.match(calls[0], /\.api\.radio-browser\.info\/json\/stations\/byuuid\/abc-123$/, 'UUID refresh must use a fixed Radio Browser API host');
+
+  fetchHandler = async () => responseJson([{
+    stationuuid: 'abc-123',
+    countrycode: 'RS',
+    url_resolved: 'https://wrong-country.example.com/live'
+  }]);
+  const mismatched = await RBNet.refreshCandidateUrls({ stationuuid: 'abc-123', countrycode: 'HR' });
+  assert.deepEqual(Array.from(mismatched), [], 'UUID refresh must reject a regional station returned under another country');
+
+  fetchHandler = async () => responseJson([{
+    stationuuid: 'world-1',
+    countrycode: 'DE',
+    url_resolved: 'https://world.example.com/live'
+  }]);
+  const foreign = await RBNet.refreshCandidateUrls({ stationuuid: 'world-1', countrycode: 'INT', sourcecountrycode: 'DE' });
+  assert.deepEqual(Array.from(foreign), ['https://world.example.com/live'], 'curated foreign station may refresh only within its source country');
+
+  fetchHandler = async () => responseJson([{
+    stationuuid: 'world-1',
+    countrycode: 'HR',
+    url_resolved: 'https://regional.example.com/live'
+  }]);
+  const foreignRegional = await RBNet.refreshCandidateUrls({ stationuuid: 'world-1', countrycode: 'INT', sourcecountrycode: 'DE' });
+  assert.deepEqual(Array.from(foreignRegional), [], 'foreign refresh must never remap a Balkan station into the INT group');
+
+  let oversizedCalls = 0;
+  fetchHandler = async () => {
+    oversizedCalls += 1;
+    return responseJson([], 200, String(600 * 1024));
+  };
+  const oversized = await RBNet.refreshCandidateUrls({ stationuuid: 'abc-123', countrycode: 'HR' });
+  assert.deepEqual(Array.from(oversized), [], 'oversized refresh responses must fail closed');
+  assert.equal(oversizedCalls, 4, 'oversized refresh must try only the fixed bounded fallback set');
+
+  assert.deepEqual(Array.from(await RBNet.refreshCandidateUrls({ stationuuid: '../bad', countrycode: 'HR' })), [], 'invalid station UUID must never reach the API');
+}
+
 const popupPath = path.join(__dirname, '..', 'extensions', 'shared', 'popup.html');
 const popupSource = fs.readFileSync(popupPath, 'utf8');
 assert.match(popupSource, /id="playerLogo"[^>]*referrerpolicy="no-referrer"/, 'remote player artwork must not send a referrer');
 
-console.log('Browser network safety regression tests OK');
+testRefresh().then(() => {
+  console.log('Browser network safety regression tests OK');
+}).catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});

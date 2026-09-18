@@ -151,6 +151,11 @@ def main() -> None:
         "/^f[cd][0-9a-f]{2}:/",
         "/^ff[0-9a-f]{2}:/",
         "!url.username && !url.password",
+        "MAX_REFRESH_RESPONSE_BYTES = 512 * 1024",
+        "RADIO_BROWSER_API_BASES",
+        "async function refreshCandidateUrls(station)",
+        "redirect: 'error'",
+        "BALKAN.has(actualCountry)",
     )
     require(
         "scripts/test_browser_network_contract.js",
@@ -160,6 +165,10 @@ def main() -> None:
         "IPv6 unique-local target must be rejected",
         "full IPv6 link-local fe80/10 range must be rejected",
         "IPv6 multicast target must be rejected",
+        "UUID refresh must return only safe public streams",
+        "UUID refresh must reject a regional station returned under another country",
+        "foreign refresh must never remap a Balkan station into the INT group",
+        "oversized refresh responses must fail closed",
     )
     require(
         "extensions/platform/chromium/service_worker.js",
@@ -199,6 +208,8 @@ def main() -> None:
         "async function playWithTimeout(instance)",
         "instance.onwaiting = () => scheduleStallRecovery(token, expectedSession, instance);",
         "instance.onstalled = () => scheduleStallRecovery(token, expectedSession, instance);",
+        "let refreshAttempted = false;",
+        "RBNet.refreshCandidateUrls(expectedStation)",
     )
     require(
         "extensions/platform/firefox/background-firefox.js",
@@ -222,6 +233,8 @@ def main() -> None:
         "instance.onwaiting = () => scheduleStallRecovery(token, expectedSession, instance);",
         "instance.onstalled = () => scheduleStallRecovery(token, expectedSession, instance);",
         "if (msg.type === 'RB_STOP')",
+        "let refreshAttempted = false;",
+        "RBNet.refreshCandidateUrls(expectedStation)",
         "currentSessionId = null;",
         "candidates = [];",
         "idx = 0;",
@@ -282,6 +295,8 @@ def main() -> None:
         "stalled active audio must recover to a fallback candidate",
         "play after stop must create fresh Chromium playback",
         "replay after stop must use the newly requested Chromium session",
+        "candidate exhaustion must recover through a refreshed station URL",
+        "catalog refresh finishing after stop must be rejected as stale",
     )
     require(
         "scripts/test_firefox_player_contract.js",
@@ -295,6 +310,8 @@ def main() -> None:
         "Firefox stalled audio must recover to the next candidate",
         "play after stop must create fresh Firefox playback",
         "replay after stop must not reuse the retired Firefox session",
+        "Firefox candidate exhaustion must recover through a refreshed station URL",
+        "Firefox must reject a catalog refresh that finishes after stop",
     )
     forbid(
         "extensions/platform/chromium/offscreen.js",
