@@ -94,6 +94,10 @@ def main() -> int:
     if obsolete_people_icon.exists():
         errors.append("Android resources: obsolete ic_people.xml must stay removed after profile/listener UI cleanup")
 
+    obsolete_colors = ROOT / "apps/android/app/src/main/res/values/colors.xml"
+    if obsolete_colors.exists():
+        errors.append("Android resources: unused legacy colors.xml must stay removed while no R.color/@color references exist")
+
     android = read("apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java")
     adapter = read("apps/android/app/src/main/java/net/radiobalkan/app/StationAdapter.java")
     for needle in (
