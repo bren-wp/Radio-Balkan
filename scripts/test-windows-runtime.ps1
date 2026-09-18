@@ -17,10 +17,46 @@ public static class RadioBalkanSmokeNative {
 '@
 
 function Get-CrashDetails {
-  if (Test-Path -LiteralPath $logPath) {
-    return ((Get-Content -LiteralPath $logPath -Tail 120 -ErrorAction SilentlyContinue) -join [Environment]::NewLine)
+  if (-not (Test-Path -LiteralPath $logPath)) {
+    return '<no app.log was produced>'
   }
-  return '<no app.log was produced>'
+
+  $lines = @(Get-Content -LiteralPath $logPath -ErrorAction SilentlyContinue)
+  if ($lines.Count -eq 0) {
+    return '<app.log was empty>'
+  }
+
+  $trace = @($lines | Where-Object { $_ -match '\[runtime-test\]' } | Select-Object -Last 24)
+  $stackStart = -1
+  for ($i = $lines.Count - 1; $i -ge 0; $i--) {
+    if ($lines[$i] -match '\[runtime-test-stacks\]') {
+      $stackStart = $i
+      break
+    }
+  }
+
+  $stack = @()
+  if ($stackStart -ge 0) {
+    $stackEnd = [Math]::Min($lines.Count - 1, $stackStart + 240)
+    if ($stackEnd -eq $stackStart) {
+      $stack = @($lines[$stackStart])
+    } else {
+      $stack = @($lines[$stackStart..$stackEnd])
+    }
+  } else {
+    $stack = @($lines | Select-Object -Last 160)
+  }
+
+  $details = @('Recent runtime trace:')
+  if ($trace.Count -gt 0) {
+    $details += $trace
+  } else {
+    $details += '<no runtime trace markers>'
+  }
+  $details += ''
+  $details += 'Latest stalled stack:'
+  $details += $stack
+  return ($details -join [Environment]::NewLine)
 }
 
 $previousRuntimeTest = $env:RADIO_BALKAN_RUNTIME_TEST
