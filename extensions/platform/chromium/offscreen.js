@@ -12,6 +12,7 @@ let stallTarget = null;
 let refreshAttempted = false;
 const PLAY_START_TIMEOUT_MS = 12_000;
 const STALL_RECOVERY_TIMEOUT_MS = 15_000;
+const CONNECTION_ATTEMPT_BUDGET_MS = 36_000;
 
 function urls(value) { return RBNet.candidateUrls(value); }
 
@@ -53,13 +54,14 @@ function scheduleStallRecovery(token, expectedSession, instance) {
   }, STALL_RECOVERY_TIMEOUT_MS);
 }
 
-async function playWithTimeout(instance) {
+async function playWithTimeout(instance, timeoutMs = PLAY_START_TIMEOUT_MS) {
   let timeout = null;
+  const boundedTimeout = Math.max(1, Math.min(PLAY_START_TIMEOUT_MS, Number(timeoutMs) || PLAY_START_TIMEOUT_MS));
   try {
     await Promise.race([
       instance.play(),
       new Promise((_, reject) => {
-        timeout = setTimeout(() => reject(new Error('playback start timeout')), PLAY_START_TIMEOUT_MS);
+        timeout = setTimeout(() => reject(new Error('playback start timeout')), boundedTimeout);
       })
     ]);
   } finally {
@@ -148,17 +150,17 @@ async function resumeCurrent(expectedSession) {
   }
 }
 
-async function start(expectedSession) {
+async function start(expectedSession, deadline = Date.now() + CONNECTION_ATTEMPT_BUDGET_MS) {
   const token = ++generation;
   let expectedStation = station;
-  while (token === generation && sessionId === expectedSession) {
-    while (index < candidates.length && token === generation && sessionId === expectedSession) {
+  while (token === generation && sessionId === expectedSession && Date.now() < deadline) {
+    while (index < candidates.length && token === generation && sessionId === expectedSession && Date.now() < deadline) {
       const candidate = candidates[index];
       playing = false;
       disposeAudio();
       const instance = createAudio(token, expectedSession, candidate);
       try {
-        await playWithTimeout(instance);
+        await playWithTimeout(instance, deadline - Date.now());
         if (token !== generation || sessionId !== expectedSession || audio !== instance) {
           return { ok: false, stale: true, station: expectedStation, playing: false, sessionId: expectedSession, generation: token };
         }
@@ -174,10 +176,10 @@ async function start(expectedSession) {
       }
     }
 
-    if (refreshAttempted) break;
+    if (refreshAttempted || Date.now() >= deadline) break;
     refreshAttempted = true;
     let refreshed = [];
-    try { refreshed = await RBNet.refreshCandidateUrls(expectedStation); } catch { }
+    try { refreshed = await RBNet.refreshCandidateUrls(expectedStation, deadline - Date.now()); } catch { }
     if (token !== generation || sessionId !== expectedSession) {
       return { ok: false, stale: true, station: expectedStation, playing: false, sessionId: expectedSession, generation: token };
     }

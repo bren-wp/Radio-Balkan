@@ -120,13 +120,17 @@ const RBNet = (() => {
     }
   }
 
-  async function refreshCandidateUrls(station) {
+  async function refreshCandidateUrls(station, budgetMs = REFRESH_TOTAL_TIMEOUT_MS) {
     const expectedCountry = countryCode(station?.countrycode);
     const sourceCountry = countryCode(station?.sourcecountrycode);
     const uuid = String(station?.stationuuid || '').trim();
     if (!allowedCountry(expectedCountry) || !uuid || uuid.length > 128 || !/^[a-z0-9._:-]+$/i.test(uuid)) return [];
 
-    const deadline = Date.now() + REFRESH_TOTAL_TIMEOUT_MS;
+    const requestedBudget = Number(budgetMs);
+    const effectiveBudget = Number.isFinite(requestedBudget) && requestedBudget > 0
+      ? Math.min(REFRESH_TOTAL_TIMEOUT_MS, requestedBudget)
+      : REFRESH_TOTAL_TIMEOUT_MS;
+    const deadline = Date.now() + effectiveBudget;
     for (const base of RADIO_BROWSER_API_BASES) {
       const remaining = deadline - Date.now();
       if (remaining <= 0) break;

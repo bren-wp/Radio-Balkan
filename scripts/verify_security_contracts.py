@@ -154,7 +154,8 @@ def main() -> None:
         "MAX_REFRESH_RESPONSE_BYTES = 512 * 1024",
         "REFRESH_TOTAL_TIMEOUT_MS = 9000",
         "RADIO_BROWSER_API_BASES",
-        "async function refreshCandidateUrls(station)",
+        "async function refreshCandidateUrls(station, budgetMs = REFRESH_TOTAL_TIMEOUT_MS)",
+        "effectiveBudget",
         "redirect: 'error'",
         "BALKAN.has(actualCountry)",
     )
@@ -189,6 +190,7 @@ def main() -> None:
         "async function closeOffscreen()",
         "await waitForOffscreenClose();",
         "requestToken === commandGeneration && requestedSession === currentSessionId",
+        "async function retireFailedSession(requestToken, requestedSession)",
     )
     require(
         "extensions/platform/chromium/offscreen.js",
@@ -207,11 +209,12 @@ def main() -> None:
         "instance.onended = () => playbackFailed(token, expectedSession, instance);",
         "PLAY_START_TIMEOUT_MS = 12_000",
         "STALL_RECOVERY_TIMEOUT_MS = 15_000",
-        "async function playWithTimeout(instance)",
+        "CONNECTION_ATTEMPT_BUDGET_MS = 36_000",
+        "async function playWithTimeout(instance, timeoutMs = PLAY_START_TIMEOUT_MS)",
         "instance.onwaiting = () => scheduleStallRecovery(token, expectedSession, instance);",
         "instance.onstalled = () => scheduleStallRecovery(token, expectedSession, instance);",
         "let refreshAttempted = false;",
-        "RBNet.refreshCandidateUrls(expectedStation)",
+        "RBNet.refreshCandidateUrls(expectedStation, deadline - Date.now())",
     )
     require(
         "extensions/platform/firefox/background-firefox.js",
@@ -231,12 +234,14 @@ def main() -> None:
         "instance.onended = () => playbackFailed(token, expectedSession, instance);",
         "PLAY_START_TIMEOUT_MS = 12_000",
         "STALL_RECOVERY_TIMEOUT_MS = 15_000",
-        "async function playWithTimeout(instance)",
+        "CONNECTION_ATTEMPT_BUDGET_MS = 36_000",
+        "async function playWithTimeout(instance, timeoutMs = PLAY_START_TIMEOUT_MS)",
         "instance.onwaiting = () => scheduleStallRecovery(token, expectedSession, instance);",
         "instance.onstalled = () => scheduleStallRecovery(token, expectedSession, instance);",
         "if (msg.type === 'RB_STOP')",
         "let refreshAttempted = false;",
-        "RBNet.refreshCandidateUrls(expectedStation)",
+        "function retireFailedSession(expectedSession)",
+        "RBNet.refreshCandidateUrls(expectedStation, deadline - Date.now())",
         "currentSessionId = null;",
         "candidates = [];",
         "idx = 0;",
@@ -292,6 +297,8 @@ def main() -> None:
         "new play must wait until the previous offscreen close completes",
         "play issued during close must recover into active playback",
         "Chromium stopped state must expose a retired session",
+        "terminal Chromium play failure must retire the failed session",
+        "terminal Chromium resume failure must retire the failed session",
     )
     require(
         "scripts/test_chromium_offscreen_contract.js",
@@ -305,6 +312,7 @@ def main() -> None:
         "candidate exhaustion must recover through a refreshed station URL",
         "catalog refresh finishing after stop must be rejected as stale",
         "refreshed Chromium stream must become the active session URL",
+        "Chromium connection attempts must have a total budget",
     )
     require(
         "scripts/test_firefox_player_contract.js",
@@ -321,6 +329,8 @@ def main() -> None:
         "Firefox candidate exhaustion must recover through a refreshed station URL",
         "Firefox must reject a catalog refresh that finishes after stop",
         "refreshed Firefox stream must become the active session URL",
+        "terminal Firefox play failure must retire the failed session",
+        "Firefox connection attempts must have a total budget",
     )
     forbid(
         "extensions/platform/chromium/offscreen.js",

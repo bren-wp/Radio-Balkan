@@ -234,6 +234,9 @@ async function main() {
   assert.equal(playCalls, playsBeforeStopDuringRefresh, 'stale refresh must not start a new audio instance after stop');
 
   assert.ok(reports.some(message => message.type === 'RB_OFFSCREEN_STATE'), 'offscreen player must continue reporting state');
+  const offscreenSource = fs.readFileSync(playerPath, 'utf8');
+  assert.match(offscreenSource, /CONNECTION_ATTEMPT_BUDGET_MS\s*=\s*36_000/, 'Chromium connection attempts must have a total budget');
+  assert.match(offscreenSource, /refreshCandidateUrls\(expectedStation, deadline - Date\.now\(\)\)/, 'Chromium catalog recovery must inherit the remaining connection budget');
   console.log('Chromium offscreen lifecycle/timeout/stall regression tests OK');
 }
 

@@ -233,6 +233,30 @@ async function main() {
   assert.equal(staleRefreshResult.stale, true, 'Firefox must reject a catalog refresh that finishes after stop');
   assert.equal(playCalls, playsBeforeStopDuringRefresh, 'Firefox stale refresh must not restart audio after stop');
 
+  playPlans.push({ then(resolve, reject) { reject(new Error('terminal failure')); } });
+  refreshPlans.push(Promise.resolve([]));
+  const terminalFailure = await messageListener({
+    type: 'RB_PLAY',
+    station: { stationuuid: 'f', name: 'Radio F', countrycode: 'HR', streams: ['https://example.com/f-dead'] }
+  });
+  await flush();
+  assert.equal(terminalFailure.playing, false);
+  assert.equal(terminalFailure.sessionId, null, 'terminal Firefox play failure must retire the failed session');
+  assert.match(terminalFailure.error || '', /nije dostupna/);
+
+  playPlans.push(Promise.resolve());
+  const replayAfterFailure = await messageListener({
+    type: 'RB_PLAY',
+    station: { stationuuid: 'g', name: 'Radio G', countrycode: 'HR', streams: ['https://example.com/g'] }
+  });
+  await flush();
+  assert.equal(replayAfterFailure.playing, true, 'Firefox play after terminal failure must create a fresh session');
+  assert.ok(replayAfterFailure.sessionId);
+
+  const firefoxSource = fs.readFileSync(playerPath, 'utf8');
+  assert.match(firefoxSource, /CONNECTION_ATTEMPT_BUDGET_MS\s*=\s*36_000/, 'Firefox connection attempts must have a total budget');
+  assert.match(firefoxSource, /refreshCandidateUrls\(expectedStation, deadline - Date\.now\(\)\)/, 'Firefox catalog recovery must inherit the remaining connection budget');
+
   console.log('Firefox player lifecycle/timeout/stall/session regression tests OK');
 }
 
