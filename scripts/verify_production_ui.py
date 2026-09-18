@@ -177,6 +177,7 @@ def main() -> int:
         'drawSidebarLabel(hdc, "BRZI ODABIR", y)',
         '"Popularne", tab == "popular"',
         '"Jazz", genre == "jazz"',
+        'RECT{mainR - 150, 528, mainR, 558}, Kind: hitGenreDropdown',
         'action("Kopiraj", 54, hitLink)',
         'setStatus("Poveznica za reprodukciju je kopirana")',
         'Prazno polje vraća automatski odabir.',

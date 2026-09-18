@@ -2023,6 +2023,7 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 		text(hdc, "Žanrovi", mainL, 528, mainR-120, 556, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 		selectFont(hdc, app.hFontSmall)
 		text(hdc, "Prikaži sve  →", mainR-130, 528, mainR, 556, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
+		app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 528, mainR, 558}, Kind: hitGenreDropdown, Index: -1})
 		genres := []struct{ Label, Value string }{
 			{"Pop", "pop"}, {"Rock", "rock"}, {"Elektronička", "electronic"},
 			{"Jazz", "jazz"}, {"Klasična", "classical"}, {"Hip Hop", "hiphop"},
