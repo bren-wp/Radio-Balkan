@@ -110,6 +110,8 @@ def main() -> None:
         "oversized country response must be rejected",
         "oversized response must not be parsed into the catalog",
         "dynamic API discovery must be capped before stable fallbacks are tried",
+        "forced refresh must surface a real network failure",
+        "UI preferences must be sanitized and persisted",
     )
     require(
         "extensions/shared/network.js",
@@ -260,6 +262,11 @@ def main() -> None:
         "func prepareShutdown()",
     )
     require(
+        "apps/windows/setup/main_test.go",
+        "TestNextInstallerFocusWraps",
+        "TestInstallerCheckboxHitTargetsIncludeLabels",
+    )
+    require(
         "apps/windows/portable/main_test.go",
         "TestSafeHTTPURLRejectsPrivateAndCredentialedTargets",
         "http://127.0.0.1/live",
@@ -296,6 +303,7 @@ def main() -> None:
         "Post-bump validation failed with exit code",
         "README.md next bump example",
         "docs/BUILD.md next bump example",
+        'for relative in ("apps/windows/portable/main.go", "apps/windows/setup/main.go")',
         'parser.add_argument("--dry-run"',
     )
     require(
@@ -303,6 +311,7 @@ def main() -> None:
         "prepare must be read-only",
         "non-increasing version must be rejected",
         "failed validation must restore every original file",
+        'var appVersion = "1.2.4"',
         "Version tooling regression tests OK",
     )
     require(
@@ -310,6 +319,8 @@ def main() -> None:
         "current GitHub release link mismatch",
         "next bump example must be exactly",
         "USER_AGENT must derive from VERSION",
+        "portable source version mismatch",
+        "setup source version mismatch",
     )
     require(
         ".github/workflows/ci.yml",
