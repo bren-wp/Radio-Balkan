@@ -40,6 +40,7 @@ function response(body, ok = true, status = 200, extraHeaders = {}) {
 }
 
 let oversizedCountry = '';
+let networkOffline = false;
 const attemptedDynamicHosts = new Set();
 
 function station(index, code, lastcheckok = 1, url = `https://stream${index}.example.com/live`) {
@@ -70,6 +71,7 @@ async function mockFetch(raw) {
     return response(rows);
   }
   if (url.includes('/json/stations/search?countrycode=')) {
+    if (networkOffline) throw new Error('simulated offline catalog');
     const parsed = new URL(url);
     if (parsed.hostname.startsWith('dyn')) {
       attemptedDynamicHosts.add(parsed.hostname);
@@ -82,6 +84,7 @@ async function mockFetch(raw) {
     return response([station(1, code)]);
   }
   if (url.includes('/json/stations/search?hidebroken=true&order=votes&reverse=true&limit=500')) {
+    if (networkOffline) throw new Error('simulated offline catalog');
     const parsed = new URL(url);
     if (parsed.hostname.startsWith('dyn')) {
       attemptedDynamicHosts.add(parsed.hostname);
@@ -169,7 +172,17 @@ async function main() {
   assert.ok(!limitedRegional.some(item => item.countrycode === 'HR'), 'oversized response must not be parsed into the catalog');
   oversizedCountry = '';
 
-  console.log('Browser catalog foreign/top-50 and response-limit contracts OK');
+  await RB.setUiPreferences({ country: ' hr ', genre: 'POP', favoritesOnly: 1 });
+  const savedPreferences = JSON.parse(JSON.stringify(await RB.uiPreferences()));
+  assert.deepEqual(savedPreferences, { country: 'HR', genre: 'pop', favoritesOnly: true }, 'UI preferences must be sanitized and persisted');
+
+  networkOffline = true;
+  await assert.rejects(() => RB.load(true), /Radio Browser trenutačno nije dostupan/, 'forced refresh must surface a real network failure');
+  const cachedWhileOffline = await RB.load(false);
+  assert.ok(cachedWhileOffline.length > 0, 'normal load may still fall back to a fresh cached catalog while offline');
+  networkOffline = false;
+
+  console.log('Browser catalog, response-limit, refresh-state and UI preference contracts OK');
 }
 
 main().catch(error => {
