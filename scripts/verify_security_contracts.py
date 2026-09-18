@@ -162,7 +162,9 @@ def main() -> None:
         "let sessionId = null;",
         "function stateEnvelope(",
         "function disposeAudio(",
+        "function bindAudioHandlers(instance, token, expectedSession)",
         "function createAudio(token, expectedSession, candidate)",
+        "async function resumeCurrent(expectedSession)",
         "document.createElement('audio')",
         "sessionId !== expectedSession",
         "instance.onerror = () => playbackFailed(token, expectedSession, instance);",
@@ -182,7 +184,9 @@ def main() -> None:
         "let currentSessionId = null;",
         "function newSessionId()",
         "function commitState(",
+        "function bindAudioHandlers(instance, token, expectedSession)",
         "function createAudio(token, expectedSession, candidate)",
+        "async function resumeCurrent(expectedSession)",
         "document.createElement('audio')",
         "currentSessionId !== expectedSession",
         "instance.onerror = () => playbackFailed(token, expectedSession, instance);",
@@ -240,6 +244,9 @@ def main() -> None:
     )
     require(
         "scripts/test_chromium_offscreen_contract.js",
+        "pause must not recreate the audio element",
+        "resume must reuse the paused audio element",
+        "stop must retire the offscreen session",
         "a hanging first candidate must fall back to the next stream",
         "stalled active audio must recover to a fallback candidate",
     )
@@ -247,6 +254,8 @@ def main() -> None:
         "scripts/test_firefox_player_contract.js",
         "stop must terminate the Firefox playback session",
         "toggle after stop must not revive the stopped session",
+        "pause must not recreate the Firefox audio element",
+        "resume must reuse the paused Firefox audio element",
         "superseded play request must be marked stale",
         "slow old playback must not replace the newer station",
         "a hanging first candidate must recover to the next Firefox stream",
