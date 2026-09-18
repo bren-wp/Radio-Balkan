@@ -43,6 +43,8 @@ def main() -> None:
         "playbackStopped",
         "Context.RECEIVER_NOT_EXPORTED",
         "ui.removeCallbacksAndMessages(null)",
+        "uninstallBackHandler();",
+        "unregisterOnBackInvokedCallback(backInvokedCallback)",
         "source.size() > 16",
         "}, 8000);",
     )

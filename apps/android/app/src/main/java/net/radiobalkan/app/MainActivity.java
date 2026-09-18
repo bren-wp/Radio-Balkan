@@ -92,6 +92,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private RadioStation featured;
     private Runnable searchRunnable;
     private boolean receiverRegistered;
+    private android.window.OnBackInvokedCallback backInvokedCallback;
     private volatile boolean destroyed;
     private final Map<String, LinearLayout> bottomNavItems = new HashMap<>();
     private String navSelection = "radio";
@@ -1126,18 +1127,29 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         search.clearFocus();
         if (imm != null) imm.hideSoftInputFromWindow(search.getWindowToken(), 0);
         if (searchRunnable != null) ui.removeCallbacks(searchRunnable);
-        if (search.length() > 0) search.setText("");
-        if (searchRunnable != null) ui.removeCallbacks(searchRunnable);
         searchRunnable = null;
+        if (search.length() > 0) search.setText("");
         query = "";
         applyFilterAsync();
     }
 
     private void installBackHandler() {
         if (Build.VERSION.SDK_INT >= 33) {
+            backInvokedCallback = this::handleBackNavigation;
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                     android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
-                    this::handleBackNavigation);
+                    backInvokedCallback);
+        }
+    }
+
+    private void uninstallBackHandler() {
+        if (Build.VERSION.SDK_INT >= 33 && backInvokedCallback != null) {
+            try {
+                getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backInvokedCallback);
+            } catch (Throwable error) {
+                AppLog.e(this, "back-handler-unregister", error);
+            }
+            backInvokedCallback = null;
         }
     }
 
@@ -1233,6 +1245,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         healthGeneration.incrementAndGet(); filterGeneration.incrementAndGet(); catalogGeneration.incrementAndGet();
         ui.removeCallbacksAndMessages(null);
         searchRunnable = null;
+        uninstallBackHandler();
         if (receiverRegistered) { try { unregisterReceiver(playerReceiver); } catch (Throwable ignored) { } }
         if (repository != null) repository.shutdown();
         filterWorker.shutdownNow(); ioWorker.shutdownNow();

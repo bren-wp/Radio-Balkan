@@ -115,6 +115,8 @@ def main() -> int:
         "showRadioLibrary()",
         "list.smoothScrollToPosition(1)",
         "installBackHandler()",
+        "uninstallBackHandler()",
+        "unregisterOnBackInvokedCallback(backInvokedCallback)",
         "OnBackInvokedDispatcher.PRIORITY_DEFAULT",
         "compactPlayer ? 6 : 12",
         "playerArtwork = null",
