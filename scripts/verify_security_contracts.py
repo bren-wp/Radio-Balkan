@@ -100,6 +100,7 @@ def main() -> None:
     forbid(
         "extensions/shared/catalog.js",
         "await response.json()",
+        "await response.text()",
     )
     require(
         "scripts/test_browser_catalog_contract.js",
