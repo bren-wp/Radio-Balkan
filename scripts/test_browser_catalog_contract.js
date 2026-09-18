@@ -40,6 +40,7 @@ function response(body, ok = true, status = 200, extraHeaders = {}) {
 }
 
 let oversizedCountry = '';
+const attemptedDynamicHosts = new Set();
 
 function station(index, code, lastcheckok = 1, url = `https://stream${index}.example.com/live`) {
   return {
@@ -64,16 +65,28 @@ function station(index, code, lastcheckok = 1, url = `https://stream${index}.exa
 async function mockFetch(raw) {
   const url = String(raw);
   if (url === 'https://all.api.radio-browser.info/json/servers') {
-    return response([{ name: 'de1.api.radio-browser.info' }]);
+    const rows = Array.from({ length: 20 }, (_, i) => ({ name: `dyn${i}.api.radio-browser.info` }));
+    rows.push({ name: 'de1.api.radio-browser.info' });
+    return response(rows);
   }
   if (url.includes('/json/stations/search?countrycode=')) {
-    const code = new URL(url).searchParams.get('countrycode');
+    const parsed = new URL(url);
+    if (parsed.hostname.startsWith('dyn')) {
+      attemptedDynamicHosts.add(parsed.hostname);
+      throw new Error('simulated dynamic API failure');
+    }
+    const code = parsed.searchParams.get('countrycode');
     if (code === oversizedCountry) {
       return response([station(1, code)], true, 200, { 'content-length': 8 * 1024 * 1024 + 1 });
     }
     return response([station(1, code)]);
   }
   if (url.includes('/json/stations/search?hidebroken=true&order=votes&reverse=true&limit=500')) {
+    const parsed = new URL(url);
+    if (parsed.hostname.startsWith('dyn')) {
+      attemptedDynamicHosts.add(parsed.hostname);
+      throw new Error('simulated dynamic API failure');
+    }
     const foreign = [];
     for (let i = 0; i < 70; i += 1) foreign.push(station(i, i % 2 ? 'US' : 'GB'));
     foreign.push(station(500, 'HR'));
@@ -145,6 +158,7 @@ async function main() {
     assert.ok(foreign[i - 1].votes >= foreign[i].votes, 'foreign stations must remain sorted by popularity');
   }
   assert.ok(!foreign.some(item => String(item.url).includes('localhost')), 'unsafe local targets must be rejected');
+  assert.equal(attemptedDynamicHosts.size, 4, 'dynamic API discovery must be capped before stable fallbacks are tried');
 
   delete storage.rbCatalog;
   delete storage.rbCatalogAt;
