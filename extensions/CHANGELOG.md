@@ -7,6 +7,7 @@
 - dodan `Očisti` filter control i jasniji filter-state UX
 - station kartice dobile su keyboard Enter/Space aktivaciju, tabindex, `aria-current` i vidljivi focus state
 - pressed/busy/reduced-motion CSS stanja dodatno su ispolirana
+- aktivna play/pause komanda blokira isti duplicirani klik do završetka i izlaže disabled + `aria-busy` state; regression test zaključava single-flight ponašanje
 - forced refresh više ne vraća cache kao lažno uspješan mrežni refresh; korisnik dobiva točan failure status
 - dodani izvršni regression testovi za saved UI preferences i forced-refresh failure semantiku
 - bounded streaming JSON response, API discovery cap, session/generation/revision player zaštite i locked Radio Balkan brand ostaju aktivni
