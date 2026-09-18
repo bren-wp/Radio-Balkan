@@ -3938,6 +3938,27 @@ func healthCheckOne(key string) (result int) {
 
 func healthCheckAll() { healthCheckWithLimit(0, true) }
 
+func scheduleStartupHealth(limit int) {
+	if limit < 1 {
+		limit = 24
+	}
+	if app.safeMode || shuttingDown() {
+		return
+	}
+	safeGo("health-startup-delay", func() {
+		timer := time.NewTimer(8 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-app.done:
+			return
+		}
+		if !shuttingDown() {
+			healthCheckQuick(limit)
+		}
+	})
+}
+
 func healthCheckQuick(limit int) {
 	if limit < 1 {
 		limit = 48
