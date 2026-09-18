@@ -53,6 +53,9 @@ def main() -> None:
         "MAX_REDIRECTS = 4",
         "setInstanceFollowRedirects(false)",
         "return isSafeHttp(next) ? probe(next, depth + 1) : null;",
+        "isSafeHttpForConnection",
+        "InetAddress.getAllByName",
+        "allAddressesSafe",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/ImageLoader.java",
@@ -67,6 +70,7 @@ def main() -> None:
         "rejectsPrivateCredentialedAndMetadataTargets",
         "https://user:pass@example.com/live",
         "http://169.254.169.254/latest/meta-data/",
+        "resolvedAddressSetRejectsAnyPrivateOrLocalTarget",
     )
     forbid(
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
@@ -81,6 +85,9 @@ def main() -> None:
         "extensions/shared/network.js",
         "h === '::'",
         "h.startsWith('::ffff:')",
+        "/^fe[89ab][0-9a-f]:/",
+        "/^f[cd][0-9a-f]{2}:/",
+        "/^ff[0-9a-f]{2}:/",
         "!url.username && !url.password",
     )
     require(
@@ -88,6 +95,9 @@ def main() -> None:
         "IPv6 unspecified target must be rejected",
         "IPv4-mapped IPv6 loopback must be rejected",
         "IPv4-mapped IPv6 private target must be rejected",
+        "IPv6 unique-local target must be rejected",
+        "full IPv6 link-local fe80/10 range must be rejected",
+        "IPv6 multicast target must be rejected",
     )
     require(
         "extensions/platform/chromium/service_worker.js",
@@ -207,6 +217,10 @@ def main() -> None:
     require(
         "apps/windows/portable/main.go",
         "if u.User != nil {",
+        "DialContext: safeDialContext",
+        "net.DefaultResolver.LookupIPAddr",
+        "unsafeNetworkIP",
+        "strings.TrimRight",
     )
     require(
         "apps/windows/portable/main_test.go",
