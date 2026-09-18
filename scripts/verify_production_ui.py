@@ -87,6 +87,7 @@ def main() -> int:
     require(errors, popup_css, "button:disabled", "extensions/shared/popup.css")
     require(errors, popup_css, "width: 44px", "extensions/shared/popup.css")
     require(errors, popup_css, ".station:focus-visible", "extensions/shared/popup.css")
+    require(errors, popup_css, ".stationPlay:hover:not(:disabled)", "extensions/shared/popup.css")
     require(errors, popup_css, "button:active:not(:disabled)", "extensions/shared/popup.css")
     require(errors, popup_css, ".emptyAction", "extensions/shared/popup.css")
 
