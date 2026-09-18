@@ -385,6 +385,8 @@ def main() -> None:
     )
     require(
         "apps/windows/setup/main.go",
+        "runtime.LockOSThread()",
+        "defer runtime.UnlockOSThread()",
         "func writeFileDurable(",
         "return f.Sync()",
         "writeFileDurable(tmp, appBytes, 0755)",
