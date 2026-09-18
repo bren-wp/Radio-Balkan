@@ -103,10 +103,7 @@ function playbackFailed(token, expectedSession, instance) {
   void start(expectedSession);
 }
 
-function createAudio(token, expectedSession, candidate) {
-  const instance = document.createElement('audio');
-  instance.preload = 'none';
-  instance.src = candidate;
+function bindAudioHandlers(instance, token, expectedSession) {
   instance.onerror = () => playbackFailed(token, expectedSession, instance);
   instance.onended = () => playbackFailed(token, expectedSession, instance);
   instance.onplaying = () => {
@@ -121,8 +118,37 @@ function createAudio(token, expectedSession, candidate) {
   };
   instance.onwaiting = () => scheduleStallRecovery(token, expectedSession, instance);
   instance.onstalled = () => scheduleStallRecovery(token, expectedSession, instance);
+}
+
+function createAudio(token, expectedSession, candidate) {
+  const instance = document.createElement('audio');
+  instance.preload = 'none';
+  instance.src = candidate;
+  bindAudioHandlers(instance, token, expectedSession);
   audio = instance;
   return instance;
+}
+
+async function resumeCurrent(expectedSession) {
+  const instance = audio;
+  if (!instance || !instance.paused || currentSessionId !== expectedSession) return start(expectedSession);
+  const token = ++generation;
+  bindAudioHandlers(instance, token, expectedSession);
+  try {
+    await playWithTimeout(instance);
+    if (token !== generation || currentSessionId !== expectedSession || audio !== instance) {
+      return { ok: false, stale: true };
+    }
+    if (!state.playing) commitState({ playing: true });
+    return { ok: true };
+  } catch {
+    if (token !== generation || currentSessionId !== expectedSession || audio !== instance) {
+      return { ok: false, stale: true };
+    }
+    disposeAudio(instance);
+    state.playing = false;
+    return start(expectedSession);
+  }
 }
 
 async function start(expectedSession) {
@@ -183,7 +209,7 @@ api.runtime.onMessage.addListener(async msg => {
       return snapshot();
     }
     if (idx >= candidates.length) idx = 0;
-    const result = await start(requestedSession);
+    const result = await resumeCurrent(requestedSession);
     if (currentSessionId !== requestedSession) return snapshot({ stale: true });
     return result.ok ? snapshot() : snapshot({ error: 'Reprodukcija trenutačno nije dostupna' });
   }
