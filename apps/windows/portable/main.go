@@ -928,6 +928,7 @@ func main() {
 	}
 	safeGo("audio-warmup", warmAudioEngine)
 	safeGo("load-stations", loadStations)
+	scheduleCIRuntimeSmokeClose()
 	var msg MSG
 	for {
 		r, _, _ := procGetMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
@@ -954,6 +955,35 @@ func main() {
 		procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
 		procDispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
 	}
+}
+
+func scheduleCIRuntimeSmokeClose() {
+	if os.Getenv("RADIO_BALKAN_RUNTIME_TEST") != "1" {
+		return
+	}
+	enabled := false
+	for _, arg := range os.Args[1:] {
+		if arg == "--ci-runtime-smoke" {
+			enabled = true
+			break
+		}
+	}
+	if !enabled {
+		return
+	}
+	safeGo("ci-runtime-smoke-close", func() {
+		timer := time.NewTimer(15 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-app.done:
+			return
+		}
+		if app.hwnd != 0 && !shuttingDown() {
+			runtimeTestTrace("ci-smoke-post-wm-close")
+			procPostMessage.Call(uintptr(app.hwnd), WM_CLOSE, 0, 0)
+		}
+	})
 }
 
 func acquireSingleInstance() bool {
