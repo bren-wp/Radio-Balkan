@@ -297,6 +297,8 @@
       const action = active && playing ? 'Pauziraj' : 'Slušaj';
       button.textContent = active && playing ? 'Ⅱ' : '▶';
       button.title = action;
+      button.disabled = !!activeCommandToken && active;
+      button.setAttribute('aria-busy', String(!!activeCommandToken && active));
       button.setAttribute('aria-label', station ? `${action} ${station.name}` : action);
     }
   }
@@ -336,6 +338,7 @@
 
   async function play(station) {
     if (!station) return;
+    if (activeCommandToken && current && RB.key(current) === RB.key(station)) return;
     const token = ++commandGeneration;
     activeCommandToken = token;
     current = station;
@@ -363,6 +366,7 @@
   }
 
   async function toggle() {
+    if (activeCommandToken) return;
     if (!current && visible.length) return play(visible[0]);
     if (!current) return;
     const token = ++commandGeneration;
@@ -405,11 +409,14 @@
     playerLogo.onerror = null;
     playerLogo.src = station?.logo && RB.safeHttp(station.logo) ? station.logo : 'icon48.png';
     playerLogo.onerror = () => { playerLogo.onerror = null; playerLogo.src = 'icon48.png'; };
+    const commandBusy = !!activeCommandToken;
     $('playerToggle').textContent = playing ? 'Ⅱ' : '▶';
-    $('playerToggle').disabled = !station;
-    $('playerToggle').setAttribute('aria-label', playing ? 'Pauziraj' : 'Pokreni');
-    $('heroPlay').textContent = playing && station ? 'Ⅱ Pauziraj' : '▶ Slušaj';
-    $('heroPlay').disabled = !station && !visible.length;
+    $('playerToggle').disabled = !station || commandBusy;
+    $('playerToggle').setAttribute('aria-busy', String(commandBusy));
+    $('playerToggle').setAttribute('aria-label', commandBusy ? 'Radnja je u tijeku' : (playing ? 'Pauziraj' : 'Pokreni'));
+    $('heroPlay').textContent = commandBusy ? 'Pričekaj…' : (playing && station ? 'Ⅱ Pauziraj' : '▶ Slušaj');
+    $('heroPlay').disabled = commandBusy || (!station && !visible.length);
+    $('heroPlay').setAttribute('aria-busy', String(commandBusy));
     const key = station ? RB.key(station) : '';
     const favorite = !!(key && favs[key]);
     $('playerFav').textContent = favorite ? '♥' : '♡';
