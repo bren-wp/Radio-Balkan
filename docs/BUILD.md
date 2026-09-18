@@ -21,7 +21,7 @@ cd apps/windows
 ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
 ```
 
-Skripta radi read-only Go formatting provjeru na LF-normaliziranoj privremenoj kopiji, pa Windows CRLF checkout ne stvara lažni drift. Stvarni `gofmt` drift ruši build bez prepisivanja sourcea. Nakon toga izvršava `go vet`, `go test`, gradi Portable, privremeno ugrađuje isti binary u Setup, linkerom postavlja produkcijsku verziju, uklanja privremeni embedded payload u `finally` bloku i generira SHA-256. Od 0.0.22 svaki Portable/Setup `go vet`, `go test` i `go build` eksplicitno provjerava process exit code i odmah ruši build na grešci. Windows CI nakon builda pokreće i stvarni Portable runtime soak: prozor/proces mora ostati živ kroz startup/background fazu te se zatvoriti uredno nakon standardnog GUI close zahtjeva.
+Skripta radi read-only Go formatting provjeru na LF-normaliziranoj privremenoj kopiji, pa Windows CRLF checkout ne stvara lažni drift. Stvarni `gofmt` drift ruši build bez prepisivanja sourcea. Nakon toga izvršava `go vet`, `go test`, gradi Portable, privremeno ugrađuje isti binary u Setup, linkerom postavlja produkcijsku verziju, uklanja privremeni embedded payload u `finally` bloku i generira SHA-256. Od 0.0.22 svaki Portable/Setup `go vet`, `go test` i `go build` eksplicitno provjerava process exit code i odmah ruši build na grešci. Windows CI nakon builda pokreće i stvarni Portable runtime soak: prozor/proces mora ostati živ kroz startup/background fazu, a zatim CI-only in-process smoke način šalje `WM_CLOSE` vlastitom stvarnom Win32 prozoru i zahtijeva uredan završetak cijele shutdown putanje.
 
 ## Browser ekstenzije
 
