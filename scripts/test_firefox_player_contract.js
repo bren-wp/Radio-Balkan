@@ -115,6 +115,21 @@ async function main() {
   assert.equal(firstPlay.playing, true, 'play must enter the playing state');
   assert.ok(firstPlay.sessionId, 'play must create a session id');
 
+  const firstInstance = instances[instances.length - 1];
+  const instanceCountBeforePause = instances.length;
+  const paused = await messageListener({ type: 'RB_TOGGLE' });
+  await flush();
+  assert.equal(paused.playing, false, 'pause must leave Firefox playback paused');
+  assert.equal(instances.length, instanceCountBeforePause, 'pause must not recreate the Firefox audio element');
+
+  const playsBeforeResume = playCalls;
+  const resumed = await messageListener({ type: 'RB_TOGGLE' });
+  await flush();
+  assert.equal(resumed.playing, true, 'resume must restore Firefox playback');
+  assert.equal(instances.length, instanceCountBeforePause, 'resume must reuse the paused Firefox audio element');
+  assert.equal(instances[instances.length - 1], firstInstance, 'resume must preserve the active Firefox audio instance');
+  assert.equal(playCalls, playsBeforeResume + 1, 'resume must call play exactly once on the paused Firefox audio');
+
   const playsBeforeStop = playCalls;
   const stopped = await messageListener({ type: 'RB_STOP' });
   await flush();
@@ -169,7 +184,7 @@ async function main() {
   fastTimeout = false;
   assert.ok(reports.some(message => message.type === 'RB_STATE'), 'player must report state updates to extension UI');
 
-  console.log('Firefox player timeout/stall/session regression tests OK');
+  console.log('Firefox player lifecycle/timeout/stall/session regression tests OK');
 }
 
 main().catch(error => {
