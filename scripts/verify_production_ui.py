@@ -52,6 +52,7 @@ def main() -> int:
         'role="list"',
         'aria-pressed="false"',
         'id="playerToggle"',
+        'id="clearFilters"',
         'disabled>▶</button>',
         'Nije odabrano',
     ):
@@ -65,18 +66,25 @@ def main() -> int:
         "const previous = country.value",
         "country.value = RB.COUNTRIES.some",
         "Nije moguće osvježiti · prikazan je postojeći popis",
+        "function resetFilters()",
+        "function queueUiPreferencesSave()",
+        "row.tabIndex = 0",
+        "list.addEventListener('keydown'",
         "playerFav').setAttribute('aria-pressed'",
     ):
         require(errors, popup_js, needle, "extensions/shared/popup.js")
     forbid(errors, popup_js, "$('playerName').textContent = station ? station.name : 'Ništa'", "extensions/shared/popup.js")
     require(errors, popup_css, "button:disabled", "extensions/shared/popup.css")
     require(errors, popup_css, "width: 44px", "extensions/shared/popup.css")
+    require(errors, popup_css, ".station:focus-visible", "extensions/shared/popup.css")
+    require(errors, popup_css, "button:active:not(:disabled)", "extensions/shared/popup.css")
 
     android = read("apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java")
     adapter = read("apps/android/app/src/main/java/net/radiobalkan/app/StationAdapter.java")
     for needle in (
         '"Rezervni izvori"',
         '"Filtriraj stanice"',
+        '"Poništi filtre"',
         '"Provjeri prikazane stanice"',
         '"Kopiraj poveznicu za reprodukciju"',
         '"Odaberi drugi izvor"',
@@ -84,6 +92,9 @@ def main() -> int:
         'StreamResolver.isSafeHttp(value)',
         '"Provjera nije uspjela · " + s.name',
         '"source-check-" + s.key()',
+        'navItem("⋯", "Više", "more")',
+        'Button sort = chip("Filtriraj ⌄", false)',
+        "new RippleDrawable(",
     ):
         require(errors, android, needle, "Android MainActivity")
     for needle in (
@@ -91,6 +102,7 @@ def main() -> int:
         '"Kopiraj aktivni izvor"',
         '"Očisti automatske izvore"',
         '"Promijeni izvor"',
+        'navItem("○", "Profil", "profile")',
     ):
         forbid(errors, android, needle, "Android MainActivity")
 
@@ -109,8 +121,24 @@ def main() -> int:
         'root.setFocusable(true)',
         'root.addView(r.more',
         'dp(104)',
+        '"Popularnost · " + value + " glasova"',
+        "interactiveRounded(",
+
     ):
         require(errors, adapter, needle, "Android StationAdapter")
+
+    setup = read("apps/windows/setup/main.go")
+    for needle in (
+        "case WM_KEYDOWN:",
+        "handleKey(w)",
+        "desktopHitRect",
+        "runHitRect",
+        "startupHitRect",
+        "nextInstallerFocus",
+        "activateInstallerControl",
+        "focus == 4",
+    ):
+        require(errors, setup, needle, "Windows Setup UI")
 
     windows = read("apps/windows/portable/main.go")
     for needle in (
