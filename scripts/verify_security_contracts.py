@@ -280,9 +280,18 @@ def main() -> None:
         "func prepareShutdown()",
     )
     require(
+        "apps/windows/setup/main.go",
+        "func writeFileDurable(",
+        "return f.Sync()",
+        "writeFileDurable(tmp, appBytes, 0755)",
+        "writeFileDurable(uTmp, uninstallerBytes, 0755)",
+        "writeFileDurable(iconPath(), setupIconBytes, 0644)",
+    )
+    require(
         "apps/windows/setup/main_test.go",
         "TestNextInstallerFocusWraps",
         "TestInstallerCheckboxHitTargetsIncludeLabels",
+        "TestWriteFileDurablePersistsInstallerPayload",
     )
     require(
         "apps/windows/portable/main_test.go",
