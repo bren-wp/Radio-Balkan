@@ -2099,14 +2099,25 @@ func drawHomeHero(hdc syscall.Handle, l, t, r, b int32, idx int, st RadioStation
 	text(hdc, "Glazba koja povezuje regiju.", l+24, t+84, leftPanelR-16, t+110, rgb(205, 209, 215), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 	drawCountryFlag(hdc, l+24, t+122, l+48, t+137, st.CountryCode)
 	text(hdc, stationMeta(st), l+56, t+114, leftPanelR-16, t+144, rgb(185, 192, 201), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+	heroKey := stationKey(st)
+	app.mu.RLock()
+	heroCurrent := app.currentKey == heroKey
+	heroPlaying := heroCurrent && app.playing
+	app.mu.RUnlock()
 	heroFill := color(255, 176, 58)
-	if hovered(hitPlay, idx, stationKey(st)) {
+	if hovered(hitPlay, idx, heroKey) {
 		heroFill = color(255, 188, 78)
 	}
 	drawRounded(hdc, l+24, b-62, l+186, b-18, 13, heroFill, color(255, 198, 102))
 	selectFont(hdc, app.hFontBold)
-	text(hdc, "▶  Slušaj uživo", l+30, b-62, l+180, b-18, rgb(19, 20, 24), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	app.hits = append(app.hits, HitRegion{R: RECT{l + 24, b - 62, l + 186, b - 18}, Kind: hitPlay, Index: idx, Value: stationKey(st)})
+	heroLabel := "▶  Slušaj uživo"
+	if heroPlaying {
+		heroLabel = "Ⅱ  Pauziraj"
+	} else if heroCurrent {
+		heroLabel = "▶  Nastavi"
+	}
+	text(hdc, heroLabel, l+30, b-62, l+180, b-18, rgb(19, 20, 24), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	app.hits = append(app.hits, HitRegion{R: RECT{l + 24, b - 62, l + 186, b - 18}, Kind: hitPlay, Index: idx, Value: heroKey})
 
 	// Companion info/wave card.
 	drawRounded(hdc, featureR+gap, t, r, b, 16, color(22, 22, 23), color(63, 61, 61))
@@ -2277,7 +2288,8 @@ func firstTag(tags string) string {
 func drawStationCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStation) {
 	key := stationKey(s)
 	app.mu.RLock()
-	selected := app.currentKey != "" && stationKey(s) == app.currentKey
+	selected := app.currentKey != "" && key == app.currentKey
+	selectedPlaying := selected && app.playing
 	app.mu.RUnlock()
 	fill, border := color(17, 23, 31), color(47, 56, 68)
 	if selected {
@@ -2325,7 +2337,11 @@ func drawStationCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStati
 	app.hits = append(app.hits, HitRegion{R: RECT{r - 102, t + 16, r - 64, t + 54}, Kind: hitFavorite, Index: idx, Value: key})
 	drawCircle(hdc, r-54, t+13, r-12, t+55, color(38, 40, 46), color(111, 77, 41))
 	selectFont(hdc, app.hFontBold)
-	text(hdc, "▶", r-50, t+13, r-15, t+55, rgb(247, 248, 250), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	playLabel := "▶"
+	if selectedPlaying {
+		playLabel = "Ⅱ"
+	}
+	text(hdc, playLabel, r-50, t+13, r-15, t+55, rgb(247, 248, 250), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	app.hits = append(app.hits, HitRegion{R: RECT{r - 57, t + 10, r - 9, t + 58}, Kind: hitPlay, Index: idx, Value: key})
 }
 
@@ -3009,7 +3025,7 @@ func handleClick(x, y int32) {
 			invalidate()
 		case hitPlay:
 			if idx := stationIndexFromHit(h); idx >= 0 {
-				playStation(idx)
+				activateStation(idx)
 			}
 		case hitLink:
 			if idx := stationIndexFromHit(h); idx >= 0 {
@@ -3104,6 +3120,22 @@ func selectGenre(genre string) {
 	scheduleStateSave()
 	rebuildFilter()
 	invalidate()
+}
+
+func activateStation(idx int) {
+	app.mu.RLock()
+	if idx < 0 || idx >= len(app.stations) {
+		app.mu.RUnlock()
+		return
+	}
+	key := stationKey(app.stations[idx])
+	same := app.currentKey != "" && app.currentKey == key
+	app.mu.RUnlock()
+	if same {
+		toggleCurrentPlayback()
+		return
+	}
+	playStation(idx)
 }
 
 func playStationByKey(key string, fallback int) {
