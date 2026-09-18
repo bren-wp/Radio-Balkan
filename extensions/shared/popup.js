@@ -230,6 +230,7 @@
     );
     renderLimit = PAGE;
     render();
+    updatePlayer();
   }
 
   function stationCard(station) {

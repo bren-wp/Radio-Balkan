@@ -80,6 +80,7 @@ def main() -> int:
         "function stopPlayback()",
         "function playAdjacent(delta)",
         "navigationStations()",
+        "render();\n    updatePlayer();",
         "ext.runtime.sendMessage({ type: 'RB_STOP' })",
         "button.disabled = !!activeCommandToken && active",
         "function renderEmptyState(",

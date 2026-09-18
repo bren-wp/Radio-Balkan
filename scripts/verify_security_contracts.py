@@ -288,6 +288,9 @@ def main() -> None:
         "duplicate stop clicks must be ignored while stop is in flight",
         "completed stop command must render an explicit stopped state",
         "player stop must stay disabled once playback is already stopped",
+        "previous must disable when the active filter leaves only one station",
+        "next from Radio B must select the following visible station",
+        "previous from Radio B must select the preceding visible station",
         "next control must start the adjacent station",
         "main play control after stop must send a fresh RB_PLAY command",
     )
