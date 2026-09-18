@@ -15,6 +15,8 @@
   let favs = {};
   let favoritesOnly = false;
   let searchTimer = 0;
+  let preferenceTimer = 0;
+  let uiPreferencesReady = false;
   let renderLimit = PAGE;
   let playerStatus = 'Spremno';
   let commandGeneration = 0;
@@ -83,6 +85,48 @@
     refresh.setAttribute('aria-busy', String(!!busy));
     list.setAttribute('aria-busy', String(!!busy));
     if (message) status.textContent = message;
+  }
+
+  function updateFavoritesFilterButton() {
+    const button = $('favoritesOnly');
+    button.textContent = favoritesOnly ? '♥ Prikaži sve' : '♡ Omiljene';
+    button.setAttribute('aria-pressed', String(favoritesOnly));
+  }
+
+  function queueUiPreferencesSave() {
+    if (!uiPreferencesReady) return;
+    clearTimeout(preferenceTimer);
+    preferenceTimer = setTimeout(() => {
+      void RB.setUiPreferences({
+        country: country.value,
+        genre: genre?.value || '',
+        favoritesOnly
+      }).catch(() => {});
+    }, 120);
+  }
+
+  function restoreUiPreferences(value) {
+    if (uiPreferencesReady) return;
+    const prefs = value && typeof value === 'object' ? value : {};
+    const requestedCountry = String(prefs.country || '').toUpperCase();
+    const requestedGenre = String(prefs.genre || '').toLowerCase();
+    if (requestedCountry && [...country.options].some(option => option.value === requestedCountry)) country.value = requestedCountry;
+    if (genre && GENRE_LABELS.has(requestedGenre)) genre.value = requestedGenre;
+    favoritesOnly = !!prefs.favoritesOnly;
+    updateFavoritesFilterButton();
+    uiPreferencesReady = true;
+  }
+
+  function resetFilters() {
+    clearTimeout(searchTimer);
+    search.value = '';
+    country.value = '';
+    if (genre) genre.value = '';
+    favoritesOnly = false;
+    updateFavoritesFilterButton();
+    queueUiPreferencesSave();
+    apply();
+    search.focus();
   }
 
   function rememberRetiredEpoch(epoch) {
@@ -190,7 +234,9 @@
     const row = document.createElement('article');
     row.className = `station${active ? ' active' : ''}`;
     row.dataset.key = key;
+    row.tabIndex = 0;
     row.setAttribute('role', 'listitem');
+    row.setAttribute('aria-current', active ? 'true' : 'false');
     row.setAttribute('aria-label', `${station.name}, ${stationMeta(station)}`);
 
     const logoBox = document.createElement('div');
@@ -244,6 +290,7 @@
     for (const row of nodes) {
       const active = !!currentKey && row.dataset.key === currentKey;
       row.classList?.toggle('active', active);
+      row.setAttribute?.('aria-current', active ? 'true' : 'false');
       const button = typeof row.querySelector === 'function' ? row.querySelector('.stationPlay') : null;
       if (!button) continue;
       const station = visible.find(item => RB.key(item) === row.dataset.key);
@@ -277,6 +324,7 @@
     const activeGenre = genre?.value ? GENRE_LABELS.get(genre.value) : '';
     const context = [activeArea, activeGenre].filter(Boolean).join(' · ');
     status.textContent = `${count} od ${visible.length} prikazano${context ? ` · ${context}` : ''}`;
+    $('clearFilters').hidden = !(search.value || country.value || genre?.value || favoritesOnly);
   }
 
   function focusStationAt(index) {
@@ -385,20 +433,30 @@
     void play(station);
   });
 
+  list.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    if (event.target.closest('button')) return;
+    const row = event.target.closest('.station');
+    if (!row) return;
+    event.preventDefault();
+    const station = visible.find(item => RB.key(item) === row.dataset.key);
+    void play(station);
+  });
+
   search.addEventListener('input', () => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(apply, 130);
   });
-  country.addEventListener('change', apply);
-  genre?.addEventListener('change', apply);
+  country.addEventListener('change', () => { apply(); queueUiPreferencesSave(); });
+  genre?.addEventListener('change', () => { apply(); queueUiPreferencesSave(); });
   refresh.addEventListener('click', () => void load(true));
+  $('clearFilters').addEventListener('click', resetFilters);
   $('heroPlay').addEventListener('click', () => void toggle());
   $('playerToggle').addEventListener('click', () => void toggle());
   $('favoritesOnly').addEventListener('click', () => {
     favoritesOnly = !favoritesOnly;
-    const button = $('favoritesOnly');
-    button.textContent = favoritesOnly ? '♥ Prikaži sve' : '♡ Omiljene';
-    button.setAttribute('aria-pressed', String(favoritesOnly));
+    updateFavoritesFilterButton();
+    queueUiPreferencesSave();
     apply();
   });
   $('playerFav').addEventListener('click', async () => {
@@ -430,10 +488,13 @@
     const hadCatalog = all.length > 0;
     setBusy(true, force ? 'Osvježavam katalog…' : 'Učitavam provjerene radio postaje…');
     try {
+      const preferencesPromise = uiPreferencesReady ? Promise.resolve(null) : RB.uiPreferences().catch(() => ({}));
       const loaded = await RB.load(force);
       all = loaded;
       favs = await RB.favorites();
       fillCountries();
+      const preferences = await preferencesPromise;
+      if (!uiPreferencesReady) restoreUiPreferences(preferences);
       if (!current && all.length) current = all[0];
       apply();
       const readToken = commandGeneration;
