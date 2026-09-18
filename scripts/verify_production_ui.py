@@ -122,6 +122,8 @@ def main() -> int:
         "playerPrev.setEnabled(false)",
         "playerStop.setEnabled(false)",
         "playerNext.setEnabled(false)",
+        "} else if (playerArtwork != null) {",
+        "playerArtwork.setImageResource(R.drawable.ic_radio_balkan)",
         "playerPrev.setOnClickListener",
         "playerNext.setOnClickListener",
         "PlaybackLifecycle.adjacentIndex",

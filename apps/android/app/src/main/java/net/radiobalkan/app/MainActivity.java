@@ -118,6 +118,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             if (playerArtwork != null && artworkStation != null) {
                 playerArtwork.setImageResource(R.drawable.ic_radio_balkan);
                 images.load(artworkStation.favicon, playerArtwork, null);
+            } else if (playerArtwork != null) {
+                playerArtwork.setImageResource(R.drawable.ic_radio_balkan);
             }
             if (playerEqualizer != null) playerEqualizer.setActive(playing);
             statusText.setText(status.isEmpty() ? "Spremno" : status);
