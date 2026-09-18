@@ -13,7 +13,6 @@ using System;
 using System.Runtime.InteropServices;
 public static class RadioBalkanSmokeNative {
   [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
-  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint msg, UIntPtr wParam, IntPtr lParam);
 }
 '@
 
@@ -58,7 +57,11 @@ try {
     }
   }
 
-  [RadioBalkanSmokeNative]::PostMessage([IntPtr]$p.MainWindowHandle, 0x0010, [UIntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+  $p.Refresh()
+  if (-not $p.CloseMainWindow()) {
+    $details = Get-CrashDetails
+    throw ("Radio Balkan main window rejected the close request.`n{0}" -f $details)
+  }
   if (-not $p.WaitForExit(8000)) {
     $details = Get-CrashDetails
     throw ("Radio Balkan did not exit cleanly after WM_CLOSE.`n{0}" -f $details)
