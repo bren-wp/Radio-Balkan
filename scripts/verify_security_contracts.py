@@ -303,6 +303,11 @@ def main() -> None:
         "audioAck",
         "func waitAudioAckLocked() error",
         "audio engine nije odgovorio na vrijeme",
+        "audioStopped",
+        "if stopped {",
+        "playStationByKey(currentKey, current)",
+        "app.audioStopped = true",
+        "audioSetVolume(v)",
         "if shuttingDown() {",
         "func prepareShutdown()",
     )
@@ -312,6 +317,10 @@ def main() -> None:
         "Radio Balkan exited during the",
         "PostMessage",
         "WM_CLOSE",
+    )
+    forbid(
+        "apps/windows/portable/main.go",
+        "if playing {\n\t\taudioSetVolume(v)",
     )
     require(
         "apps/windows/setup/main.go",
