@@ -120,6 +120,7 @@ def main() -> int:
         "updatePlaybackControls()",
         "playerStop.setOnClickListener",
         "RadioPlayerService.ACTION_STOP",
+        "PlaybackLifecycle.uiCommand(!currentKey.isEmpty(), playing, playbackStopped)",
         "playerPrev.setOnClickListener",
         "showRadioLibrary()",
         "list.smoothScrollToPosition(1)",

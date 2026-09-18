@@ -70,6 +70,8 @@ def main() -> None:
         "explicitlyStopped = true;",
         "explicitlyStopped = false;",
         "i.putExtra(EXTRA_STOPPED, stopped);",
+        'status = "Stanica trenutno nije dostupna";',
+        "explicitlyStopped = true;",
         "stopForeground(STOP_FOREGROUND_DETACH);",
         "stopForeground(STOP_FOREGROUND_REMOVE);",
     )

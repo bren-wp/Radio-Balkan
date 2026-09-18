@@ -291,6 +291,7 @@ public final class RadioPlayerService extends Service {
             if (unavailable) {
                 status = "Stanica trenutno nije dostupna";
                 playing = false;
+                explicitlyStopped = true;
                 updateMediaSessionLocked();
                 round = reconnectRound;
             } else {
