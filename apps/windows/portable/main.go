@@ -5529,6 +5529,9 @@ func scheduleStateSave() {
 				logError("state-save-timer", fmt.Errorf("panic: %v", r))
 			}
 		}()
+		if shuttingDown() {
+			return
+		}
 		saveState()
 	})
 	app.saveMu.Unlock()
