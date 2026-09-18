@@ -116,6 +116,7 @@ let runtimeListener = null;
 let getState = { epoch: 'epoch-a', revision: 1, station: stationA, playing: true };
 let toggleResult = null;
 let getStateCalls = 0;
+let toggleCalls = 0;
 const toggleQueue = [];
 
 function copy(value) {
@@ -134,6 +135,7 @@ const runtime = {
       return copy(getState);
     }
     if (message?.type === 'RB_TOGGLE') {
+      toggleCalls += 1;
       if (toggleQueue.length) return await toggleQueue.shift().promise;
       return copy(toggleResult || getState);
     }
@@ -271,17 +273,19 @@ async function main() {
   assert.equal(elements.playerState.textContent, 'Sada svira', 'authoritative resync must win over stale command status');
 
   toggleResult = null;
-  const olderToggle = deferred();
-  const newerToggle = deferred();
-  toggleQueue.push(olderToggle, newerToggle);
+  const pendingToggle = deferred();
+  toggleQueue.push(pendingToggle);
+  const callsBeforeBusyToggle = toggleCalls;
   elements.playerToggle.dispatch('click');
   elements.playerToggle.dispatch('click');
-  newerToggle.resolve({ epoch: 'epoch-b', revision: 4, station: stationB, playing: false });
+  assert.equal(toggleCalls, callsBeforeBusyToggle + 1, 'duplicate toggle clicks must be ignored while a command is in flight');
+  assert.equal(elements.playerToggle.disabled, true, 'player toggle must be disabled while a command is in flight');
+  assert.equal(elements.playerToggle.attributes['aria-busy'], 'true', 'busy playback state must be announced accessibly');
+  pendingToggle.resolve({ epoch: 'epoch-b', revision: 4, station: stationB, playing: false });
   await flush();
-  assert.equal(elements.playerState.textContent, 'Pauzirano', 'newer command result must update the player');
-  olderToggle.resolve({ epoch: 'epoch-b', revision: 5, station: stationB, playing: true });
-  await flush();
-  assert.equal(elements.playerState.textContent, 'Pauzirano', 'older promise reply cannot override a newer command even with a higher revision');
+  assert.equal(elements.playerState.textContent, 'Pauzirano', 'completed toggle command must update the player');
+  assert.equal(elements.playerToggle.disabled, false, 'player toggle must be re-enabled after command completion');
+  assert.equal(elements.playerToggle.attributes['aria-busy'], 'false', 'busy state must clear after command completion');
   assert.equal(elements.playerName.textContent, 'Radio B');
 
   console.log('Browser popup state and UI regression tests OK');
