@@ -270,7 +270,6 @@ public final class RadioPlayerService extends Service {
             homepage = currentHomepage;
             key = currentKey;
             country = currentCountry;
-            stopped = explicitlyStopped;
         }
         StreamResolver.Resolution repaired = StreamResolver.repair(Collections.emptyList(), uuid, homepage, country);
         if (repaired != null && StreamResolver.isSafeHttp(repaired.url)) {
@@ -649,6 +648,7 @@ public final class RadioPlayerService extends Service {
             resolved = currentResolved;
             nowPlaying = currentNowPlaying;
             country = currentCountry;
+            stopped = explicitlyStopped;
         }
         Intent i = new Intent(ACTION_STATE).setPackage(getPackageName());
         i.putExtra(EXTRA_KEY, key);
