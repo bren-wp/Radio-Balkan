@@ -972,7 +972,7 @@ func scheduleCIRuntimeSmokeClose() {
 		return
 	}
 	safeGo("ci-runtime-smoke-close", func() {
-		timer := time.NewTimer(15 * time.Second)
+		timer := time.NewTimer(18 * time.Second)
 		defer timer.Stop()
 		select {
 		case <-timer.C:
