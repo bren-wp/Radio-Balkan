@@ -1384,9 +1384,11 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 	switch msg {
 	case WM_GETMINMAXINFO:
 		if lParam != 0 {
-			info := (*MINMAXINFO)(unsafe.Pointer(lParam))
+			var info MINMAXINFO
+			procCopyMemory.Call(uintptr(unsafe.Pointer(&info)), lParam, unsafe.Sizeof(info))
 			info.PtMinTrackSize.X = 1100
 			info.PtMinTrackSize.Y = 720
+			procCopyMemory.Call(lParam, uintptr(unsafe.Pointer(&info)), unsafe.Sizeof(info))
 		}
 		return 0
 	case WM_CREATE:
