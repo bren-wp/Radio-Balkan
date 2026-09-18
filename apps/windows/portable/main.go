@@ -318,6 +318,7 @@ type App struct {
 	current                                  int
 	currentKey                               string
 	playing                                  bool
+	audioStopped                             bool
 	audioMu                                  sync.Mutex
 	audioCmd                                 *exec.Cmd
 	audioIn                                  io.WriteCloser
@@ -2831,7 +2832,7 @@ func handleKeyDown(key uint32) {
 
 func toggleCurrentPlayback() {
 	app.mu.RLock()
-	current, playing := currentStationIndexLocked(), app.playing
+	current, playing, stopped := currentStationIndexLocked(), app.playing, app.audioStopped
 	currentKey := app.currentKey
 	if currentKey == "" && current >= 0 && current < len(app.stations) {
 		currentKey = stationKey(app.stations[current])
@@ -2852,6 +2853,10 @@ func toggleCurrentPlayback() {
 		invalidate()
 		return
 	}
+	if stopped {
+		playStationByKey(currentKey, current)
+		return
+	}
 	if err := audioResume(); err != nil {
 		logError("audio-resume", err)
 		playStationByKey(currentKey, current)
@@ -2867,6 +2872,7 @@ func toggleCurrentPlayback() {
 	st := app.stations[current]
 	key := stationKey(st)
 	app.playing = true
+	app.audioStopped = false
 	app.nowPlayingStation = key
 	app.metadataSeq++
 	seq := app.metadataSeq
@@ -2884,6 +2890,7 @@ func stopCurrentPlayback() {
 	audioStop()
 	app.mu.Lock()
 	app.playing = false
+	app.audioStopped = true
 	app.metadataSeq++
 	app.playSeq++
 	app.nowPlaying = ""
@@ -3215,6 +3222,7 @@ func playStation(idx int) {
 		app.current = idx
 		app.currentKey = key
 		app.playing = true
+		app.audioStopped = false
 		app.audioRecovering = false
 		app.nowPlaying = ""
 		app.nowPlayingStation = key
@@ -3524,12 +3532,7 @@ func adjustVolume(delta int) {
 	}
 	v := app.state.Volume
 	app.stateMu.Unlock()
-	app.mu.RLock()
-	playing := app.playing
-	app.mu.RUnlock()
-	if playing {
-		audioSetVolume(v)
-	}
+	audioSetVolume(v)
 	scheduleStateSave()
 	setStatus(fmt.Sprintf("Glasnoća %d%%", v))
 	invalidate()
