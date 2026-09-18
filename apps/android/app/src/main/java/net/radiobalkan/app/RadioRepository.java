@@ -31,6 +31,7 @@ import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 
 public final class RadioRepository {
     public interface Listener {
@@ -81,30 +82,35 @@ public final class RadioRepository {
     }
 
     public void load(Listener listener) {
-        worker.execute(() -> {
-            List<RadioStation> cached = loadCache();
-            if (closed) return;
-            if (!cached.isEmpty()) safeCached(listener, cached);
-            try {
-                List<RadioStation> online = mergeMissingGroups(fetchAll(), cached);
-                if (countRegional(online) < PRODUCTION_MIN_REGIONAL && !cached.isEmpty()) {
-                    List<RadioStation> combined = new ArrayList<>(online);
-                    combined.addAll(cached);
-                    online = mergeMissingGroups(combined, cached);
-                }
+        if (closed) return;
+        try {
+            worker.execute(() -> {
+                List<RadioStation> cached = loadCache();
                 if (closed) return;
-                if (!online.isEmpty()) {
-                    saveCache(online);
-                    safeLoaded(listener, online);
-                } else if (cached.isEmpty()) {
-                    safeError(listener, new IllegalStateException("Popis radio stanica trenutačno nije dostupan"), false);
+                if (!cached.isEmpty()) safeCached(listener, cached);
+                try {
+                    List<RadioStation> online = mergeMissingGroups(fetchAll(), cached);
+                    if (countRegional(online) < PRODUCTION_MIN_REGIONAL && !cached.isEmpty()) {
+                        List<RadioStation> combined = new ArrayList<>(online);
+                        combined.addAll(cached);
+                        online = mergeMissingGroups(combined, cached);
+                    }
+                    if (closed) return;
+                    if (!online.isEmpty()) {
+                        saveCache(online);
+                        safeLoaded(listener, online);
+                    } else if (cached.isEmpty()) {
+                        safeError(listener, new IllegalStateException("Popis radio stanica trenutačno nije dostupan"), false);
+                    }
+                } catch (Throwable t) {
+                    if (closed) return;
+                    AppLog.e(context, "catalog", t);
+                    safeError(listener, t, !cached.isEmpty());
                 }
-            } catch (Throwable t) {
-                if (closed) return;
-                AppLog.e(context, "catalog", t);
-                safeError(listener, t, !cached.isEmpty());
-            }
-        });
+            });
+        } catch (RejectedExecutionException ignored) {
+            if (!closed) safeError(listener, new IllegalStateException("Katalog se trenutačno ne može učitati"), false);
+        }
     }
 
     public void shutdown() {
