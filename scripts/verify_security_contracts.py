@@ -307,6 +307,8 @@ def main() -> None:
         "func runtimeTestTrace(scope string)",
         "func scheduleCIRuntimeSmokeClose()",
         'runtimeTestTrace("ci-smoke-post-wm-close")',
+        '"runtime-test-stacks"',
+        "runtime.Stack(buf, true)",
         'runtimeTestTrace("wm-close-enter")',
         'runtimeTestTrace("wm-destroy-before-post-quit")',
         "func writeFileDurable(",
