@@ -124,6 +124,31 @@ async function main() {
   assert.equal(first.ok, true);
   assert.equal(first.playing, true);
 
+  const firstInstance = instances[instances.length - 1];
+  const instanceCountBeforePause = instances.length;
+  const paused = await dispatch({ type: 'TOGGLE', sessionId: 's1' });
+  assert.equal(paused.ok, true);
+  assert.equal(paused.playing, false, 'pause must leave Chromium playback paused');
+  assert.equal(instances.length, instanceCountBeforePause, 'pause must not recreate the audio element');
+
+  const playsBeforeResume = playCalls;
+  const resumed = await dispatch({ type: 'TOGGLE', sessionId: 's1' });
+  assert.equal(resumed.ok, true);
+  assert.equal(resumed.playing, true, 'resume must restore Chromium playback');
+  assert.equal(instances.length, instanceCountBeforePause, 'resume must reuse the paused audio element');
+  assert.equal(instances[instances.length - 1], firstInstance, 'resume must preserve the active audio instance');
+  assert.equal(playCalls, playsBeforeResume + 1, 'resume must call play exactly once on the paused audio');
+
+  const stopped = await dispatch({ type: 'STOP', sessionId: 's1' });
+  assert.equal(stopped.ok, true);
+  assert.equal(stopped.playing, false, 'stop must clear Chromium playback');
+  const playsBeforeStoppedToggle = playCalls;
+  const afterStopToggle = await dispatch({ type: 'TOGGLE', sessionId: 's1' });
+  assert.equal(afterStopToggle.ok, false, 'toggle after stop must reject the retired Chromium session');
+  assert.equal(afterStopToggle.playing, false);
+  assert.equal(afterStopToggle.sessionId, null, 'stop must retire the offscreen session');
+  assert.equal(playCalls, playsBeforeStoppedToggle, 'toggle after stop must not create a playback attempt');
+
   const hanging = deferred();
   playPlans.push(hanging.promise, Promise.resolve());
   fastTimeout = true;
@@ -156,7 +181,7 @@ async function main() {
 
   fastTimeout = false;
   assert.ok(reports.some(message => message.type === 'RB_OFFSCREEN_STATE'), 'offscreen player must continue reporting state');
-  console.log('Chromium offscreen playback timeout/stall regression tests OK');
+  console.log('Chromium offscreen lifecycle/timeout/stall regression tests OK');
 }
 
 main().catch(error => {

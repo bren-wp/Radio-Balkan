@@ -88,6 +88,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private String currentKey = "";
     private String currentCountryCode = "";
     private boolean playing;
+    private boolean playbackStopped = true;
     private RadioStation featured;
     private Runnable searchRunnable;
     private boolean receiverRegistered;
@@ -100,6 +101,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             if (!RadioPlayerService.ACTION_STATE.equals(intent.getAction()) || destroyed) return;
             currentKey = safe(intent.getStringExtra(RadioPlayerService.EXTRA_KEY));
             playing = intent.getBooleanExtra(RadioPlayerService.EXTRA_PLAYING, false);
+            playbackStopped = intent.getBooleanExtra(RadioPlayerService.EXTRA_STOPPED, false);
             String name = safe(intent.getStringExtra(RadioPlayerService.EXTRA_NAME));
             String meta = safe(intent.getStringExtra(RadioPlayerService.EXTRA_META));
             currentCountryCode = safe(intent.getStringExtra(RadioPlayerService.EXTRA_COUNTRY));
@@ -360,8 +362,16 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         playerPlay.setEnabled(false);
         playerPlay.setContentDescription("Odaberi stanicu za reprodukciju");
         playerPlay.setOnClickListener(v -> {
-            if (currentKey.isEmpty() && featured != null) { onPlay(featured); return; }
-            sendPlayerAction(playing ? RadioPlayerService.ACTION_PAUSE : RadioPlayerService.ACTION_RESUME);
+            PlaybackLifecycle.UiCommand command = PlaybackLifecycle.uiCommand(!currentKey.isEmpty(), playing, playbackStopped);
+            if (command == PlaybackLifecycle.UiCommand.PLAY) {
+                RadioStation current = stationByKey(currentKey);
+                if (current != null) { onPlay(current); return; }
+                if (featured != null) { onPlay(featured); return; }
+                return;
+            }
+            sendPlayerAction(command == PlaybackLifecycle.UiCommand.PAUSE
+                    ? RadioPlayerService.ACTION_PAUSE
+                    : RadioPlayerService.ACTION_RESUME);
         });
 
         return player;
@@ -437,6 +447,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             heroPlay.setEnabled(hasFeatured);
             String heroAction;
             if (featuredCurrent && playing) heroAction = "Ⅱ   Pauziraj";
+            else if (featuredCurrent && playbackStopped) heroAction = "▶   Pokreni";
             else if (featuredCurrent && !currentKey.isEmpty()) heroAction = "▶   Nastavi";
             else heroAction = "▶   Slušaj uživo";
             heroPlay.setText(heroAction);
@@ -801,8 +812,11 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         hideKeyboard();
         requestNotificationPermission();
         String key = s.key();
-        if (key.equals(currentKey)) {
-            sendPlayerAction(playing ? RadioPlayerService.ACTION_PAUSE : RadioPlayerService.ACTION_RESUME);
+        PlaybackLifecycle.UiCommand command = PlaybackLifecycle.uiCommand(key.equals(currentKey), playing, playbackStopped);
+        if (command != PlaybackLifecycle.UiCommand.PLAY) {
+            sendPlayerAction(command == PlaybackLifecycle.UiCommand.PAUSE
+                    ? RadioPlayerService.ACTION_PAUSE
+                    : RadioPlayerService.ACTION_RESUME);
             return;
         }
         Intent i = new Intent(this, RadioPlayerService.class).setAction(RadioPlayerService.ACTION_PLAY);
@@ -818,6 +832,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         if (playerArtwork != null) { playerArtwork.setImageResource(R.drawable.ic_radio_balkan); images.load(s.favicon, playerArtwork, null); }
         if (playerEqualizer != null) playerEqualizer.setActive(false);
         playing = false;
+        playbackStopped = false;
         updatePlaybackControls();
         adapter.setPlayback(currentKey, false);
         selectBottomNav("radio");

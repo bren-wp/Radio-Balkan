@@ -126,11 +126,36 @@ func TestWriteFileDurablePersistsCompleteContent(t *testing.T) {
 }
 
 
-func TestAudioEngineAcknowledgesCommand(t *testing.T) {
+func TestPlaybackToggleDecisionLifecycle(t *testing.T) {
+	tests := []struct {
+		name     string
+		current  int
+		playing  bool
+		stopped  bool
+		expected playbackToggleAction
+	}{
+		{name: "no station", current: -1, expected: playbackToggleNone},
+		{name: "playing pauses", current: 0, playing: true, expected: playbackTogglePause},
+		{name: "paused resumes", current: 0, expected: playbackToggleResume},
+		{name: "stopped reconnects", current: 0, stopped: true, expected: playbackToggleReconnect},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := decidePlaybackToggle(tc.current, tc.playing, tc.stopped); got != tc.expected {
+				t.Fatalf("decidePlaybackToggle(%d, %v, %v) = %d; want %d", tc.current, tc.playing, tc.stopped, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestAudioEngineCommandLifecycle(t *testing.T) {
 	app = App{done: make(chan struct{})}
 	defer audioShutdown()
 
-	if err := audioSend("VOLUME 0.25"); err != nil {
-		t.Fatalf("audio engine command acknowledgement failed: %v", err)
+	commands := []string{"VOLUME 0.25", "PAUSE", "RESUME", "STOP", "VOLUME 0.50"}
+	for _, command := range commands {
+		if err := audioSend(command); err != nil {
+			t.Fatalf("audio engine command %q acknowledgement failed: %v", command, err)
+		}
 	}
 }

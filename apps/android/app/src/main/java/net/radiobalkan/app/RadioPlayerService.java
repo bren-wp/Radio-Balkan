@@ -54,6 +54,7 @@ public final class RadioPlayerService extends Service {
     public static final String EXTRA_STATUS = "status";
     public static final String EXTRA_NOW_PLAYING = "now_playing";
     public static final String EXTRA_VOLUME = "volume";
+    public static final String EXTRA_STOPPED = "stopped";
     private static final int NOTIFICATION_ID = 42;
     private static final String CHANNEL_ID = "radio_playback";
 
@@ -75,6 +76,7 @@ public final class RadioPlayerService extends Service {
     private int generation;
     private boolean playing;
     private boolean pausedByFocus;
+    private boolean explicitlyStopped = true;
     private String currentKey = "";
     private String currentName = "Radio Balkan";
     private String currentMeta = "";
@@ -216,6 +218,7 @@ public final class RadioPlayerService extends Service {
             reconnectRound = 0;
             playing = false;
             pausedByFocus = false;
+            explicitlyStopped = false;
             status = "Povezujem…";
         }
         state.setLastStation(key, currentName, meta);
@@ -441,8 +444,8 @@ public final class RadioPlayerService extends Service {
         final int gen;
         synchronized (lock) {
             gen = generation;
+            if (!PlaybackLifecycle.canResume(explicitlyStopped, player != null, !currentCandidates.isEmpty())) return;
             if (player == null) {
-                if (currentCandidates.isEmpty()) return;
                 currentCandidate = Math.min(currentCandidate, Math.max(0, currentCandidates.size() - 1));
                 status = "Ponovno povezujem…";
                 executeWorker(() -> tryCurrentCandidate(gen));
@@ -503,6 +506,7 @@ public final class RadioPlayerService extends Service {
             generation++;
             playing = false;
             pausedByFocus = false;
+            explicitlyStopped = true;
             currentResolved = "";
             currentNowPlaying = "";
             metadataGeneration++;
@@ -635,6 +639,7 @@ public final class RadioPlayerService extends Service {
         final String resolved;
         final String nowPlaying;
         final String country;
+        final boolean stopped;
         synchronized (lock) {
             status = newStatus;
             key = currentKey;
@@ -643,6 +648,7 @@ public final class RadioPlayerService extends Service {
             resolved = currentResolved;
             nowPlaying = currentNowPlaying;
             country = currentCountry;
+            stopped = explicitlyStopped;
         }
         Intent i = new Intent(ACTION_STATE).setPackage(getPackageName());
         i.putExtra(EXTRA_KEY, key);
@@ -650,6 +656,7 @@ public final class RadioPlayerService extends Service {
         i.putExtra(EXTRA_META, meta);
         i.putExtra(EXTRA_COUNTRY, country);
         i.putExtra(EXTRA_PLAYING, isPlaying);
+        i.putExtra(EXTRA_STOPPED, stopped);
         i.putExtra(EXTRA_STATUS, newStatus);
         i.putExtra(EXTRA_URL, resolved);
         i.putExtra(EXTRA_NOW_PLAYING, nowPlaying);

@@ -871,6 +871,12 @@ func acquireStationRepair(id string) func() {
 }
 
 func main() {
+	// A Win32 window and its message queue belong to the OS thread that creates them.
+	// Keep createMainWindow, GetMessage and WndProc dispatch on one Windows thread;
+	// otherwise Go may migrate this goroutine and leave the UI waiting on the wrong queue.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	// Keep the desktop app responsive without allowing background catalog/network work
 	// to monopolize every CPU core or grow the heap without a practical ceiling.
 	if n := runtime.NumCPU(); n > 4 {
@@ -2885,6 +2891,28 @@ func handleKeyDown(key uint32) {
 	}
 }
 
+type playbackToggleAction uint8
+
+const (
+	playbackToggleNone playbackToggleAction = iota
+	playbackTogglePause
+	playbackToggleResume
+	playbackToggleReconnect
+)
+
+func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleAction {
+	if current < 0 {
+		return playbackToggleNone
+	}
+	if playing {
+		return playbackTogglePause
+	}
+	if stopped {
+		return playbackToggleReconnect
+	}
+	return playbackToggleResume
+}
+
 func toggleCurrentPlayback() {
 	app.mu.RLock()
 	current, playing, stopped := currentStationIndexLocked(), app.playing, app.audioStopped
@@ -2893,10 +2921,11 @@ func toggleCurrentPlayback() {
 		currentKey = stationKey(app.stations[current])
 	}
 	app.mu.RUnlock()
-	if current < 0 {
+	action := decidePlaybackToggle(current, playing, stopped)
+	if action == playbackToggleNone {
 		return
 	}
-	if playing {
+	if action == playbackTogglePause {
 		if err := audioPause(); err != nil {
 			logError("audio-pause", err)
 		}
@@ -2908,7 +2937,7 @@ func toggleCurrentPlayback() {
 		invalidate()
 		return
 	}
-	if stopped {
+	if action == playbackToggleReconnect {
 		playStationByKey(currentKey, current)
 		return
 	}

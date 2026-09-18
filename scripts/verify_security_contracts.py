@@ -38,6 +38,9 @@ def main() -> None:
         "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
         '@android.annotation.SuppressLint("UnspecifiedRegisterReceiverFlag")',
         "RadioPlayerService.INTERNAL_STATE_PERMISSION",
+        "RadioPlayerService.EXTRA_STOPPED",
+        "PlaybackLifecycle.uiCommand",
+        "playbackStopped",
         "Context.RECEIVER_NOT_EXPORTED",
         "ui.removeCallbacksAndMessages(null)",
         "source.size() > 16",
@@ -59,6 +62,26 @@ def main() -> None:
         "if (!updateForeground(false, \"Povezujem…\"))",
         "private boolean updateForeground(",
         "audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)",
+        'EXTRA_STOPPED = "stopped"',
+        "private boolean explicitlyStopped = true;",
+        "PlaybackLifecycle.canResume",
+        "explicitlyStopped = true;",
+        "explicitlyStopped = false;",
+        "i.putExtra(EXTRA_STOPPED, stopped);",
+    )
+    require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/PlaybackLifecycle.java",
+        "enum UiCommand { PLAY, PAUSE, RESUME }",
+        "static UiCommand uiCommand",
+        "static boolean canResume",
+        "if (!sameStation || explicitlyStopped) return UiCommand.PLAY;",
+        "return !explicitlyStopped && (hasPlayer || hasCandidates);",
+    )
+    require(
+        "apps/android/app/src/test/java/net/radiobalkan/app/PlaybackLifecycleTest.java",
+        "uiCommandDistinguishesPauseResumeAndRestart",
+        "explicitStopCannotResumeAnOldServiceSession",
+        "pausedOrRecoverablePlaybackCanResume",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
@@ -162,7 +185,9 @@ def main() -> None:
         "let sessionId = null;",
         "function stateEnvelope(",
         "function disposeAudio(",
+        "function bindAudioHandlers(instance, token, expectedSession)",
         "function createAudio(token, expectedSession, candidate)",
+        "async function resumeCurrent(expectedSession)",
         "document.createElement('audio')",
         "sessionId !== expectedSession",
         "instance.onerror = () => playbackFailed(token, expectedSession, instance);",
@@ -182,7 +207,9 @@ def main() -> None:
         "let currentSessionId = null;",
         "function newSessionId()",
         "function commitState(",
+        "function bindAudioHandlers(instance, token, expectedSession)",
         "function createAudio(token, expectedSession, candidate)",
+        "async function resumeCurrent(expectedSession)",
         "document.createElement('audio')",
         "currentSessionId !== expectedSession",
         "instance.onerror = () => playbackFailed(token, expectedSession, instance);",
@@ -240,6 +267,9 @@ def main() -> None:
     )
     require(
         "scripts/test_chromium_offscreen_contract.js",
+        "pause must not recreate the audio element",
+        "resume must reuse the paused audio element",
+        "stop must retire the offscreen session",
         "a hanging first candidate must fall back to the next stream",
         "stalled active audio must recover to a fallback candidate",
     )
@@ -247,6 +277,8 @@ def main() -> None:
         "scripts/test_firefox_player_contract.js",
         "stop must terminate the Firefox playback session",
         "toggle after stop must not revive the stopped session",
+        "pause must not recreate the Firefox audio element",
+        "resume must reuse the paused Firefox audio element",
         "superseded play request must be marked stale",
         "slow old playback must not replace the newer station",
         "a hanging first candidate must recover to the next Firefox stream",
@@ -325,7 +357,10 @@ def main() -> None:
         'safeGo("audio-warmup", warmAudioEngine)',
         "audio engine startup timeout",
         "audioStopped",
-        "if stopped {",
+        "runtime.LockOSThread()",
+        "defer runtime.UnlockOSThread()",
+        "func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleAction",
+        "playbackToggleReconnect",
         "playStationByKey(currentKey, current)",
         "app.audioStopped = true",
         "audioSetVolume(v)",
@@ -339,6 +374,10 @@ def main() -> None:
         "--ci-runtime-smoke",
         "RADIO_BALKAN_RUNTIME_TEST",
         "did not complete its CI self-close",
+        "Recent runtime trace:",
+        "Latest stalled stack:",
+        "runtime-test-stacks",
+        "Select-Object -Last 24",
     )
     forbid(
         "apps/windows/portable/main.go",
@@ -367,7 +406,10 @@ def main() -> None:
         "https://user:pass@example.com/live",
         "TestValidateStateDropsUnsafeReplacementURLs",
         "TestWriteFileDurablePersistsCompleteContent",
-        "TestAudioEngineAcknowledgesCommand",
+        "TestPlaybackToggleDecisionLifecycle",
+        "stopped reconnects",
+        "TestAudioEngineCommandLifecycle",
+        "\"PAUSE\", \"RESUME\", \"STOP\"",
     )
 
     require(
