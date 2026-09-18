@@ -18,7 +18,8 @@ function Test-GoFormatting([string]$Path) {
         throw "gofmt provjera nije uspjela za $Path"
     }
     if ($diff.Trim()) {
-        Write-Warning "$Path nije potpuno gofmt formatiran; build ne mijenja source datoteku."
+        Write-Host $diff
+        throw "$Path nije gofmt formatiran. Formatiraj source prije produkcijskog builda."
     }
 }
 
