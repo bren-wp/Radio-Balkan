@@ -326,8 +326,8 @@ def main() -> None:
         "scripts/test-windows-runtime.ps1",
         "Radio Balkan runtime smoke OK",
         "Radio Balkan exited during the",
-        "PostMessage",
-        "WM_CLOSE",
+        "CloseMainWindow()",
+        "main window rejected the close request",
     )
     forbid(
         "apps/windows/portable/main.go",
