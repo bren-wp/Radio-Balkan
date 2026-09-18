@@ -9,6 +9,11 @@
 - browse/filter UI koristi jasni `Filtriraj` CTA, live selected chip state i `Poništi filtre`
 - Radio Browser votes više se ne predstavljaju kao live listener count; prikazuju se kao `Popularnost · N glasova`
 - repository load hvata executor/shutdown race i ne propušta `RejectedExecutionException` prema UI threadu
+- spremljeni tab i bottom-navigation selected state usklađeni su nakon cold starta
+- hero/player kontrole prikazuju stvarni Slušaj/Nastavi/Pauziraj state i dinamičan accessibility opis
+- ručni refresh je single-flight; neuspjeli foreground-service start ne ostavlja lažni current station state
+- station red uz popularnost prikazuje health status, a vanjski homepage link mora proći `isSafeHttp` provjeru
+- povratak automatskog izvora više ne može ostaviti spremljeni ručni replacement u konfliktu s prikazanim aktivnim URL-om
 - postojeći Handler, repository, image loader i player cleanup te URL/DNS/redirect hardening ostaju aktivni
 - versionCode podignut na 20 i versionName na 0.0.20
 
