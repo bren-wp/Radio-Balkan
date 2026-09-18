@@ -201,7 +201,7 @@ def main() -> int:
         'playLabel = "Ⅱ"',
         "Kind: hitPlayerStop",
         "canStopPlayback(currentIdx, stopped)",
-        "canNavigate := navigationCount > 1",
+        "canNavigate = canNavigateStations(len(app.stations), len(app.filtered))",
         "if canNavigate {",
         '"■"',
     ):

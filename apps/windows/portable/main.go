@@ -2438,7 +2438,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	playing := false
 	stopped := true
 	currentIdx := -1
-	navigationCount := 0
+	canNavigate := false
 	var current RadioStation
 	app.mu.RLock()
 	if idx := currentStationIndexLocked(); idx >= 0 && idx < len(app.stations) {
@@ -2453,10 +2453,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	}
 	playing = app.playing
 	stopped = app.audioStopped
-	navigationCount = len(app.stations)
-	if len(app.filtered) > 0 {
-		navigationCount = len(app.filtered)
-	}
+	canNavigate = canNavigateStations(len(app.stations), len(app.filtered))
 	app.mu.RUnlock()
 	app.stateMu.RLock()
 	vol := app.state.Volume
@@ -2501,7 +2498,6 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 
 	// Center transport controls.
 	cx := cr.Right / 2
-	canNavigate := navigationCount > 1
 	canStop := canStopPlayback(currentIdx, stopped)
 	selectFont(hdc, app.hFontBold)
 	prevColor := rgb(193, 199, 207)
