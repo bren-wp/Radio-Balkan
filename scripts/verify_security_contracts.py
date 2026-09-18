@@ -305,6 +305,8 @@ def main() -> None:
         "shutdown-timeout",
         "Do not block the UI thread acquiring app.mu during shutdown.",
         "func runtimeTestTrace(scope string)",
+        "func scheduleCIRuntimeSmokeClose()",
+        'runtimeTestTrace("ci-smoke-post-wm-close")',
         'runtimeTestTrace("wm-close-enter")',
         'runtimeTestTrace("wm-destroy-before-post-quit")',
         "func writeFileDurable(",
@@ -332,9 +334,9 @@ def main() -> None:
         "scripts/test-windows-runtime.ps1",
         "Radio Balkan runtime smoke OK",
         "Radio Balkan exited during the",
-        "CloseMainWindow()",
+        "--ci-runtime-smoke",
         "RADIO_BALKAN_RUNTIME_TEST",
-        "main window rejected the close request",
+        "did not complete its CI self-close",
     )
     forbid(
         "apps/windows/portable/main.go",
