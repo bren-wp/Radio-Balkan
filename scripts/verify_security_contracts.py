@@ -410,6 +410,8 @@ def main() -> None:
         "func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleAction",
         "playbackToggleReconnect",
         "Kind: hitPlayerStop",
+        "canStop := currentStationIndexLocked() >= 0 && !app.audioStopped",
+        "navigationCount < 2",
         "playStationByKey(currentKey, current)",
         "app.audioStopped = true",
         "audioSetVolume(v)",

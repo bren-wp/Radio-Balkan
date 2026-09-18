@@ -191,6 +191,9 @@ def main() -> int:
         'heroLabel = "▶  Nastavi"',
         'playLabel = "Ⅱ"',
         "Kind: hitPlayerStop",
+        "canStop := currentIdx >= 0 && !stopped",
+        "canNavigate := navigationCount > 1",
+        "if canNavigate {",
         '"■"',
     ):
         require(errors, windows, needle, "Windows UI")
