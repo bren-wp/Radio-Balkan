@@ -23,6 +23,8 @@ function Get-CrashDetails {
   return '<no app.log was produced>'
 }
 
+$previousRuntimeTest = $env:RADIO_BALKAN_RUNTIME_TEST
+$env:RADIO_BALKAN_RUNTIME_TEST = '1'
 $p = Start-Process -FilePath $resolvedExe -PassThru
 try {
   $window = [IntPtr]::Zero
@@ -75,4 +77,5 @@ try {
   if ($p -and -not $p.HasExited) {
     Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
   }
+  $env:RADIO_BALKAN_RUNTIME_TEST = $previousRuntimeTest
 }
