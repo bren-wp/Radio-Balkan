@@ -3,8 +3,8 @@
 Radio Balkan tretira URL-ove streamova i logotipa kao nepouzdani mrežni ulaz.
 
 - Browser ekstenzije centralno blokiraju privatne, loopback, link-local, CGNAT i druge lokalne ciljeve te održavaju eksplicitno player stanje u strict-mode runtimeu. Radio Browser JSON odgovori čitaju se streaming putem s byte-limitima, a dinamički API discovery ima ograničen fan-out.
-- Chromium offscreen player koristi single-flight kreiranje dokumenta i generacijske tokene kako zastarjeli asinkroni pokušaji ne bi mijenjali novije stanje reprodukcije.
-- Android validira stream kandidate i ograničava veličinu mrežnih odgovora i slika. DNS preflight odbija privatne/lokalne rezultate prije aplikacijskih mrežnih veza, a repository executor shutdown race ne propagira runtime iznimku prema UI threadu.
+- Chromium offscreen player koristi single-flight kreiranje dokumenta i generacijske tokene kako zastarjeli asinkroni pokušaji ne bi mijenjali novije stanje reprodukcije. Popup dodatno ne šalje isti play/pause zahtjev ponovno dok je prethodna komanda aktivna.
+- Android validira stream kandidate i ograničava veličinu mrežnih odgovora i slika. Katalogom dobiven vanjski homepage link prolazi `isSafeHttp` provjeru prije predaje sustavnom browseru. DNS preflight odbija privatne/lokalne rezultate prije aplikacijskih mrežnih veza, a repository executor shutdown race ne propagira runtime iznimku prema UI threadu.
 - Android player-state broadcast ostaje interni kanal: na novijim Android verzijama receiver je `RECEIVER_NOT_EXPORTED`, a na podržanim starijim verzijama kanal je zaštićen aplikacijskom `signature` permission dozvolom.
 - Pre-Android 13 receiver registracija koristi isti `signature` permission. Usko scoped `UnspecifiedRegisterReceiverFlag` lint suppression postoji samo zato što Android Lint ne inferira zaštitu custom signature permissiona kroz stariji overload; nije zamjena za sigurnosnu kontrolu.
 - Windows blokira loopback, private, link-local, CGNAT i poznate metadata ciljeve te odbija URL-ove s ugrađenim korisničkim podacima (`user:password@host`).
