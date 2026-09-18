@@ -372,6 +372,10 @@ def main() -> None:
         "--ci-runtime-smoke",
         "RADIO_BALKAN_RUNTIME_TEST",
         "did not complete its CI self-close",
+        "Recent runtime trace:",
+        "Latest stalled stack:",
+        "runtime-test-stacks",
+        "Select-Object -Last 24",
     )
     forbid(
         "apps/windows/portable/main.go",
