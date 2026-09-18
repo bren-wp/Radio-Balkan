@@ -13,6 +13,8 @@ Izdanje 0.0.20 fokusirano je na premium, jasniji i dostupniji UI/UX na svim klij
 - Android `RadioRepository.load()` sigurno podnosi executor/shutdown race i ne propušta `RejectedExecutionException` prema UI threadu
 - Windows Setup dobiva keyboard kontrolu preko Tab/strelica/Enter/Space/Escape, proširene checkbox label hit-targete i vidljivi fokus
 - Windows Portable i Setup source fallback `appVersion` vrijednosti uvedene su u centralni transactional version-bump/check contract; release linker injection ostaje dodatni autoritativni sloj
+- Windows build formatting guard sada normalizira line ending samo u privremenoj kopiji, odbija stvarni `gofmt` drift i više ne prijavljuje cijelu datoteku kao promijenjenu samo zbog Windows CRLF checkouta
+- `WM_GETMINMAXINFO` više ne pretvara callback `lParam` izravno u `unsafe.Pointer`; struktura se kopira kroz postojeći `RtlMoveMemory` wrapper, čime je uklonjena vet opomena uz isto minimal-window ponašanje
 - dodani su Windows Setup regression testovi za focus wrap i click-target geometriju
 - production UI, security i version contract verifieri prošireni su na nove UX/lifecycle/version invariants
 - README, platform README/changelogovi, arhitektura, sigurnost, privatnost, build i contribution dokumentacija usklađeni su s produkcijskim stanjem
