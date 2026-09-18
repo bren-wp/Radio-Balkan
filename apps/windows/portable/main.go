@@ -5490,21 +5490,28 @@ func signalShutdown() {
 		app.saveMu.Lock()
 		if app.saveTimer != nil {
 			app.saveTimer.Stop()
+			app.saveTimer = nil
 		}
 		app.saveMu.Unlock()
-		app.mu.Lock()
-		if app.searchTimer != nil {
-			app.searchTimer.Stop()
-		}
-		app.mu.Unlock()
+		// The search debounce callback checks shuttingDown() before touching UI
+		// state. Do not block the UI thread acquiring app.mu during shutdown.
 	})
 }
 
 func prepareShutdown() {
 	app.shutdownOnce.Do(func() {
 		signalShutdown()
-		saveState()
-		audioShutdown()
+		finished := make(chan struct{})
+		go func() {
+			defer close(finished)
+			saveState()
+			audioShutdown()
+		}()
+		select {
+		case <-finished:
+		case <-time.After(2500 * time.Millisecond):
+			logError("shutdown-timeout", errors.New("finalni state/audio cleanup prekoračio je 2.5 s"))
+		}
 	})
 }
 
