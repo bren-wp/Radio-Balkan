@@ -88,6 +88,25 @@ def main() -> None:
     )
 
     require(
+        "extensions/shared/catalog.js",
+        "MAX_SERVER_RESPONSE_BYTES = 512 * 1024",
+        "MAX_CATALOG_RESPONSE_BYTES = 8 * 1024 * 1024",
+        "async function readJsonLimited(response, maxBytes)",
+        "response.body?.getReader",
+        "total > maxBytes",
+        "readJsonLimited(response, MAX_SERVER_RESPONSE_BYTES)",
+        "readJsonLimited(response, MAX_CATALOG_RESPONSE_BYTES)",
+    )
+    forbid(
+        "extensions/shared/catalog.js",
+        "await response.json()",
+    )
+    require(
+        "scripts/test_browser_catalog_contract.js",
+        "oversized country response must be rejected",
+        "oversized response must not be parsed into the catalog",
+    )
+    require(
         "extensions/shared/network.js",
         "h === '::'",
         "h.startsWith('::ffff:')",
@@ -227,6 +246,11 @@ def main() -> None:
         "net.DefaultResolver.LookupIPAddr",
         "unsafeNetworkIP",
         "strings.TrimRight",
+        "shutdownOnce",
+        "func prepareShutdown()",
+        "func writeFileDurable(",
+        "return f.Sync()",
+        "writeFileDurable(tmp, b, 0644)",
     )
     require(
         "apps/windows/portable/main_test.go",
@@ -236,6 +260,7 @@ def main() -> None:
         "http://192.168.1.10/live",
         "https://user:pass@example.com/live",
         "TestValidateStateDropsUnsafeReplacementURLs",
+        "TestWriteFileDurablePersistsCompleteContent",
     )
 
     require(
