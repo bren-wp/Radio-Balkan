@@ -92,6 +92,8 @@ def main() -> None:
         "extensions/shared/catalog.js",
         "MAX_SERVER_RESPONSE_BYTES = 512 * 1024",
         "MAX_CATALOG_RESPONSE_BYTES = 8 * 1024 * 1024",
+        "MAX_DISCOVERED_API_BASES = 4",
+        "MAX_API_BASES = 8",
         "async function readJsonLimited(response, maxBytes)",
         "response.body?.getReader",
         "total > maxBytes",
@@ -107,6 +109,7 @@ def main() -> None:
         "scripts/test_browser_catalog_contract.js",
         "oversized country response must be rejected",
         "oversized response must not be parsed into the catalog",
+        "dynamic API discovery must be capped before stable fallbacks are tried",
     )
     require(
         "extensions/shared/network.js",
