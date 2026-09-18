@@ -134,7 +134,7 @@ def main() -> int:
         '"Provjeravam dostupnost"',
         '"Trenutno nedostupno"',
         'row.root.setSelected(active)',
-        '"trenutno odabrana"',
+        '", trenutno odabrana"',
         "interactiveRounded(",
 
     ):
