@@ -871,6 +871,12 @@ func acquireStationRepair(id string) func() {
 }
 
 func main() {
+	// A Win32 window and its message queue belong to the OS thread that creates them.
+	// Keep createMainWindow, GetMessage and WndProc dispatch on one Windows thread;
+	// otherwise Go may migrate this goroutine and leave the UI waiting on the wrong queue.
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	// Keep the desktop app responsive without allowing background catalog/network work
 	// to monopolize every CPU core or grow the heap without a practical ceiling.
 	if n := runtime.NumCPU(); n > 4 {
