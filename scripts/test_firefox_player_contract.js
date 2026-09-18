@@ -212,6 +212,7 @@ async function main() {
   });
   await flush();
   assert.equal(refreshed.playing, true, 'Firefox candidate exhaustion must recover through a refreshed station URL');
+  assert.equal(refreshed.station.url_resolved, 'https://example.com/d-fresh', 'refreshed Firefox stream must become the active session URL');
   assert.equal(refreshCalls, refreshBefore + 1, 'Firefox may refresh the catalog at most once per playback session');
   assert.equal(playCalls, beforeRefreshRecovery + 2, 'Firefox refresh recovery must try only the new stream');
 

@@ -12,7 +12,8 @@ const RBNet = (() => {
     'https://nl1.api.radio-browser.info'
   ]);
   const MAX_REFRESH_RESPONSE_BYTES = 512 * 1024;
-  const REFRESH_TIMEOUT_MS = 7000;
+  const REFRESH_TIMEOUT_MS = 4000;
+  const REFRESH_TOTAL_TIMEOUT_MS = 9000;
 
   function countryCode(value) {
     return String(value || '').trim().toUpperCase();
@@ -103,9 +104,9 @@ const RBNet = (() => {
     return JSON.parse(parts.join(''));
   }
 
-  async function fetchRefreshRows(base, uuid) {
+  async function fetchRefreshRows(base, uuid, timeoutMs) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REFRESH_TIMEOUT_MS);
+    const timer = setTimeout(() => controller.abort(), Math.max(1, timeoutMs));
     try {
       const response = await fetch(
         `${base}/json/stations/byuuid/${encodeURIComponent(uuid)}`,
@@ -125,9 +126,12 @@ const RBNet = (() => {
     const uuid = String(station?.stationuuid || '').trim();
     if (!allowedCountry(expectedCountry) || !uuid || uuid.length > 128 || !/^[a-z0-9._:-]+$/i.test(uuid)) return [];
 
+    const deadline = Date.now() + REFRESH_TOTAL_TIMEOUT_MS;
     for (const base of RADIO_BROWSER_API_BASES) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) break;
       try {
-        const rows = await fetchRefreshRows(base, uuid);
+        const rows = await fetchRefreshRows(base, uuid, Math.min(REFRESH_TIMEOUT_MS, remaining));
         const out = [];
         for (const row of rows) {
           const actualCountry = countryCode(row?.countrycode);

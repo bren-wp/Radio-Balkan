@@ -211,6 +211,7 @@ async function main() {
   });
   assert.equal(refreshed.ok, true, 'candidate exhaustion must recover through a refreshed station URL');
   assert.equal(refreshed.playing, true);
+  assert.equal(refreshed.station.url_resolved, 'https://example.com/d-fresh', 'refreshed Chromium stream must become the active session URL');
   assert.equal(refreshCalls, refreshBefore + 1, 'one playback session may refresh the catalog at most once');
   assert.equal(playCalls, beforeRefreshRecovery + 2, 'refresh recovery must retry only the newly discovered stream');
 

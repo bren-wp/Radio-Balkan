@@ -154,7 +154,7 @@ async function resumeCurrent(expectedSession) {
 
 async function start(expectedSession) {
   const token = ++generation;
-  const expectedStation = state.station;
+  let expectedStation = state.station;
   while (token === generation && currentSessionId === expectedSession) {
     while (idx < candidates.length && token === generation && currentSessionId === expectedSession) {
       const candidate = candidates[idx];
@@ -187,6 +187,8 @@ async function start(expectedSession) {
       if (RBNet.safeHttp(value) && !candidates.includes(value)) candidates.push(value);
     }
     if (candidates.length <= before) break;
+    expectedStation = { ...expectedStation, url_resolved: refreshed[0] };
+    state.station = expectedStation;
   }
 
   if (token === generation && currentSessionId === expectedSession) {

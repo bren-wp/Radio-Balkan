@@ -152,6 +152,7 @@ def main() -> None:
         "/^ff[0-9a-f]{2}:/",
         "!url.username && !url.password",
         "MAX_REFRESH_RESPONSE_BYTES = 512 * 1024",
+        "REFRESH_TOTAL_TIMEOUT_MS = 9000",
         "RADIO_BROWSER_API_BASES",
         "async function refreshCandidateUrls(station)",
         "redirect: 'error'",
@@ -303,6 +304,7 @@ def main() -> None:
         "replay after stop must use the newly requested Chromium session",
         "candidate exhaustion must recover through a refreshed station URL",
         "catalog refresh finishing after stop must be rejected as stale",
+        "refreshed Chromium stream must become the active session URL",
     )
     require(
         "scripts/test_firefox_player_contract.js",
@@ -318,6 +320,7 @@ def main() -> None:
         "replay after stop must not reuse the retired Firefox session",
         "Firefox candidate exhaustion must recover through a refreshed station URL",
         "Firefox must reject a catalog refresh that finishes after stop",
+        "refreshed Firefox stream must become the active session URL",
     )
     forbid(
         "extensions/platform/chromium/offscreen.js",
