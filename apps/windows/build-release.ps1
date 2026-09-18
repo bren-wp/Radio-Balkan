@@ -40,8 +40,11 @@ Push-Location (Join-Path $PSScriptRoot "portable")
 try {
     Test-GoFormatting "main.go"
     go vet ./...
+    if ($LASTEXITCODE -ne 0) { throw "Windows Portable go vet nije uspio." }
     go test ./...
+    if ($LASTEXITCODE -ne 0) { throw "Windows Portable go test nije uspio." }
     go build -trimpath -buildvcs=false -ldflags "-s -w -H=windowsgui -X main.appVersion=$Version" -o $portable .
+    if ($LASTEXITCODE -ne 0) { throw "Windows Portable go build nije uspio." }
 } finally {
     Pop-Location
 }
@@ -52,8 +55,11 @@ Push-Location (Join-Path $PSScriptRoot "setup")
 try {
     Test-GoFormatting "main.go"
     go vet ./...
+    if ($LASTEXITCODE -ne 0) { throw "Windows Setup go vet nije uspio." }
     go test ./...
+    if ($LASTEXITCODE -ne 0) { throw "Windows Setup go test nije uspio." }
     go build -trimpath -buildvcs=false -ldflags "-s -w -H=windowsgui -X main.appVersion=$Version" -o $setup .
+    if ($LASTEXITCODE -ne 0) { throw "Windows Setup go build nije uspio." }
 } finally {
     Pop-Location
     Remove-Item -Force -ErrorAction SilentlyContinue $embeddedPortable
