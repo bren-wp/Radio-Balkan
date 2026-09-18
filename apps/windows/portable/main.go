@@ -5343,20 +5343,48 @@ func startAudioEngineLocked() error {
 	}(cmd)
 	return nil
 }
-func waitAudioAckLocked() error {
+func resetAudioEngineLocked() {
+	in := app.audioIn
+	cmd := app.audioCmd
+	app.audioIn = nil
+	app.audioCmd = nil
+	app.audioAck = nil
+	if in != nil {
+		_ = in.Close()
+	}
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+	}
+}
+
+func audioCommandTimeout(line string) time.Duration {
+	if strings.HasPrefix(line, "PLAY ") {
+		return 5 * time.Second
+	}
+	return 2 * time.Second
+}
+
+func waitAudioAckLocked(timeout time.Duration) error {
 	if app.audioAck == nil {
 		return errors.New("audio engine nema kanal potvrde")
+	}
+	if timeout <= 0 {
+		timeout = 2 * time.Second
 	}
 	select {
 	case reply, ok := <-app.audioAck:
 		if !ok {
+			resetAudioEngineLocked()
 			return errors.New("audio engine je prekinut")
 		}
 		if reply != "OK" {
 			return errors.New("audio engine nije prihvatio naredbu")
 		}
 		return nil
-	case <-time.After(1500 * time.Millisecond):
+	case <-time.After(timeout):
+		// A late ACK must never be consumed by the next command. Discard the
+		// entire helper process/channel before the caller falls back or retries.
+		resetAudioEngineLocked()
 		return errors.New("audio engine nije odgovorio na vrijeme")
 	case <-app.done:
 		return context.Canceled
@@ -5373,9 +5401,10 @@ func audioSend(line string) error {
 		return errors.New("audio engine nije dostupan")
 	}
 	if _, err := io.WriteString(app.audioIn, line+"\n"); err != nil {
+		resetAudioEngineLocked()
 		return err
 	}
-	return waitAudioAckLocked()
+	return waitAudioAckLocked(audioCommandTimeout(line))
 }
 func audioSendExisting(line string) error {
 	app.audioMu.Lock()
@@ -5384,9 +5413,10 @@ func audioSendExisting(line string) error {
 		return errors.New("audio engine nije pokrenut")
 	}
 	if _, err := io.WriteString(app.audioIn, line+"\n"); err != nil {
+		resetAudioEngineLocked()
 		return err
 	}
-	return waitAudioAckLocked()
+	return waitAudioAckLocked(audioCommandTimeout(line))
 }
 func warmAudioEngine() {
 	if shuttingDown() {
@@ -5402,19 +5432,11 @@ func warmAudioEngine() {
 
 func audioShutdown() {
 	app.audioMu.Lock()
-	in := app.audioIn
-	cmd := app.audioCmd
-	app.audioIn = nil
-	app.audioCmd = nil
-	app.audioAck = nil
+	if app.audioIn != nil {
+		_, _ = io.WriteString(app.audioIn, "STOP\n")
+	}
+	resetAudioEngineLocked()
 	app.audioMu.Unlock()
-	if in != nil {
-		_, _ = io.WriteString(in, "STOP\n")
-		_ = in.Close()
-	}
-	if cmd != nil && cmd.Process != nil {
-		_ = cmd.Process.Kill()
-	}
 	audioStopMCI()
 }
 
