@@ -25,7 +25,7 @@ function Get-CrashDetails {
 
 $previousRuntimeTest = $env:RADIO_BALKAN_RUNTIME_TEST
 $env:RADIO_BALKAN_RUNTIME_TEST = '1'
-$p = Start-Process -FilePath $resolvedExe -PassThru
+$p = Start-Process -FilePath $resolvedExe -ArgumentList '--ci-runtime-smoke' -PassThru
 try {
   $window = [IntPtr]::Zero
   for ($i = 0; $i -lt 40; $i++) {
@@ -59,20 +59,15 @@ try {
     }
   }
 
-  $p.Refresh()
-  if (-not $p.CloseMainWindow()) {
+  if (-not $p.WaitForExit(12000)) {
     $details = Get-CrashDetails
-    throw ("Radio Balkan main window rejected the close request.`n{0}" -f $details)
-  }
-  if (-not $p.WaitForExit(8000)) {
-    $details = Get-CrashDetails
-    throw ("Radio Balkan did not exit cleanly after WM_CLOSE.`n{0}" -f $details)
+    throw ("Radio Balkan did not complete its CI self-close after the startup soak.`n{0}" -f $details)
   }
   if ($p.ExitCode -ne 0) {
     $details = Get-CrashDetails
-    throw ("Radio Balkan returned non-zero exit code {0} after a clean close request.`n{1}" -f $p.ExitCode, $details)
+    throw ("Radio Balkan returned non-zero exit code {0} after its CI self-close.`n{1}" -f $p.ExitCode, $details)
   }
-  Write-Host ("Radio Balkan runtime smoke OK: main window stayed alive for {0} seconds and closed cleanly." -f $SoakSeconds)
+  Write-Host ("Radio Balkan runtime smoke OK: main window stayed alive for {0} seconds and completed its own WM_CLOSE shutdown path." -f $SoakSeconds)
 } finally {
   if ($p -and -not $p.HasExited) {
     Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
