@@ -148,6 +148,7 @@ async function main() {
   const beforeStallRecovery = playCalls;
   assert.equal(typeof active.onstalled, 'function');
   active.onstalled();
+  await new Promise(resolve => realSetTimeout(resolve, 20));
   await flush();
   const afterStall = await dispatch({ type: 'GET_STATE', sessionId: 's3' });
   assert.equal(afterStall.playing, true, 'stalled active audio must recover to a fallback candidate');
