@@ -98,4 +98,6 @@ button:disabled { cursor: default; opacity: .46; box-shadow: none; }
   .hero p { max-width: 205px; }
   .primaryButton { min-width: 92px; padding: 0 10px; }
   .brandCopy span { font-size: 9.5px; }
+  .player { grid-template-columns: minmax(0, 1fr) 42px minmax(168px, auto); }
+  .player > img { display: none; }
 }

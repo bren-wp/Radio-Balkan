@@ -93,6 +93,9 @@ def main() -> int:
     require(errors, popup_css, ".station:focus-visible", "extensions/shared/popup.css")
     require(errors, popup_css, "button:active:not(:disabled)", "extensions/shared/popup.css")
     require(errors, popup_css, ".emptyAction", "extensions/shared/popup.css")
+    require(errors, popup_css, "@media (max-width: 380px)", "extensions/shared/popup.css")
+    require(errors, popup_css, ".player > img { display: none; }", "extensions/shared/popup.css")
+    require(errors, popup_css, "grid-template-columns: minmax(0, 1fr) 42px minmax(168px, auto)", "extensions/shared/popup.css")
 
     android = read("apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java")
     adapter = read("apps/android/app/src/main/java/net/radiobalkan/app/StationAdapter.java")
