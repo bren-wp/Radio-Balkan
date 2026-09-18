@@ -54,6 +54,7 @@ jobs:
           node --check scripts/test_browser_catalog_contract.js
           node --check scripts/test_browser_state_contract.js
           node --check scripts/test_chromium_player_contract.js
+          node --check scripts/test_chromium_offscreen_contract.js
           node --check scripts/test_firefox_player_contract.js
       - name: Test browser network safety contract
         run: node scripts/test_browser_network_contract.js
@@ -63,7 +64,9 @@ jobs:
         run: node scripts/test_browser_state_contract.js
       - name: Test Chromium player close/session contract
         run: node scripts/test_chromium_player_contract.js
-      - name: Test Firefox player session contract
+      - name: Test Chromium offscreen timeout/stall contract
+        run: node scripts/test_chromium_offscreen_contract.js
+      - name: Test Firefox player timeout/stall/session contract
         run: node scripts/test_firefox_player_contract.js
       - name: Build extensions
         working-directory: extensions
