@@ -35,6 +35,8 @@ def main() -> int:
 
     checks = {
         "apps/windows/build-release.ps1": (rf'\$Version\s*=\s*"{escaped}"', "version mismatch"),
+        "apps/windows/portable/main.go": (rf'var appVersion\s*=\s*"{escaped}"', "portable source version mismatch"),
+        "apps/windows/setup/main.go": (rf'var appVersion\s*=\s*"{escaped}"', "setup source version mismatch"),
         "apps/android/app/build.gradle.kts": (rf'versionName\s*=\s*"{escaped}"', "versionName mismatch"),
         "apps/android/app/src/main/java/net/radiobalkan/app/AppInfo.java": (rf'VERSION\s*=\s*"{escaped}"', "AppInfo version mismatch"),
         "README.md": (rf'alt="version {escaped}"', "version badge alt mismatch"),
