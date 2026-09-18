@@ -334,7 +334,8 @@ def main() -> None:
         'safeGo("audio-warmup", warmAudioEngine)',
         "audio engine startup timeout",
         "audioStopped",
-        "if stopped {",
+        "func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleAction",
+        "playbackToggleReconnect",
         "playStationByKey(currentKey, current)",
         "app.audioStopped = true",
         "audioSetVolume(v)",
@@ -376,7 +377,10 @@ def main() -> None:
         "https://user:pass@example.com/live",
         "TestValidateStateDropsUnsafeReplacementURLs",
         "TestWriteFileDurablePersistsCompleteContent",
-        "TestAudioEngineAcknowledgesCommand",
+        "TestPlaybackToggleDecisionLifecycle",
+        "stopped reconnects",
+        "TestAudioEngineCommandLifecycle",
+        "\"PAUSE\", \"RESUME\", \"STOP\"",
     )
 
     require(
