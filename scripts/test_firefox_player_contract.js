@@ -142,6 +142,14 @@ async function main() {
   assert.equal(afterStopToggle.sessionId, null, 'toggle after stop must remain outside a playback session');
   assert.equal(playCalls, playsBeforeStop, 'toggle after stop must not create a new audio playback attempt');
 
+  const restarted = await messageListener({ type: 'RB_PLAY', station: stationA });
+  await flush();
+  assert.equal(restarted.playing, true, 'play after stop must create fresh Firefox playback');
+  assert.ok(restarted.sessionId, 'replay after stop must have a Firefox session');
+  assert.notEqual(restarted.sessionId, firstPlay.sessionId, 'replay after stop must not reuse the retired Firefox session');
+  await messageListener({ type: 'RB_STOP' });
+  await flush();
+
   const slowPlay = deferred();
   playPlans.push(slowPlay.promise, Promise.resolve());
   const oldRequest = messageListener({ type: 'RB_PLAY', station: stationA });
