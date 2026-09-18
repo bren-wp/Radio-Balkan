@@ -72,7 +72,6 @@ def main() -> None:
         "i.putExtra(EXTRA_STOPPED, stopped);",
         'status = "Stanica trenutno nije dostupna";',
         "explicitlyStopped = true;",
-        "stopForeground(STOP_FOREGROUND_DETACH);",
         "stopForeground(STOP_FOREGROUND_REMOVE);",
     )
     require(
@@ -140,6 +139,7 @@ def main() -> None:
         "apps/android/app/src/main/java/net/radiobalkan/app/RadioPlayerService.java",
         "stopForeground(true)",
         "stopForeground(false)",
+        "STOP_FOREGROUND_DETACH",
     )
     forbid(
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",

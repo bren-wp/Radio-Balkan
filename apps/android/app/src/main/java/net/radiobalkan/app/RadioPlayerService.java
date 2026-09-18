@@ -303,7 +303,7 @@ public final class RadioPlayerService extends Service {
         }
         if (unavailable) {
             notifyState("Stanica trenutno nije dostupna", false);
-            stopForeground(STOP_FOREGROUND_DETACH);
+            stopForeground(STOP_FOREGROUND_REMOVE);
             abandonAudioFocus();
             return;
         }
