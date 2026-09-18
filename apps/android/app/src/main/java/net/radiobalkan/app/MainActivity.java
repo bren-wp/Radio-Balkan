@@ -965,7 +965,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     @Override protected void onDestroy() {
         destroyed = true;
         healthGeneration.incrementAndGet(); filterGeneration.incrementAndGet(); catalogGeneration.incrementAndGet();
-        if (searchRunnable != null) ui.removeCallbacks(searchRunnable);
+        ui.removeCallbacksAndMessages(null);
+        searchRunnable = null;
         if (receiverRegistered) { try { unregisterReceiver(playerReceiver); } catch (Throwable ignored) { } }
         if (repository != null) repository.shutdown();
         filterWorker.shutdownNow(); ioWorker.shutdownNow();
