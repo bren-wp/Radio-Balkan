@@ -247,6 +247,22 @@ def main() -> None:
     )
 
     require(
+        "apps/windows/build-release.ps1",
+        "[IO.File]::ReadAllText",
+        '.Replace("`r`n", "`n")',
+        "& gofmt -w $temp",
+        "nije gofmt formatiran",
+    )
+    require(
+        "apps/windows/portable/main.go",
+        "procCopyMemory.Call(uintptr(unsafe.Pointer(&info)), lParam, unsafe.Sizeof(info))",
+        "procCopyMemory.Call(lParam, uintptr(unsafe.Pointer(&info)), unsafe.Sizeof(info))",
+    )
+    forbid(
+        "apps/windows/portable/main.go",
+        "(*MINMAXINFO)(unsafe.Pointer(lParam))",
+    )
+    require(
         "apps/windows/portable/main.go",
         "if u.User != nil {",
         "DialContext: safeDialContext",
