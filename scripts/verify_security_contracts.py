@@ -130,6 +130,11 @@ def main() -> None:
         "resolvedAddressSetRejectsAnyPrivateOrLocalTarget",
     )
     forbid(
+        "apps/android/app/src/main/AndroidManifest.xml",
+        'android.permission.ACCESS_NETWORK_STATE',
+    )
+
+    forbid(
         "apps/android/app/src/main/java/net/radiobalkan/app/RadioPlayerService.java",
         "stopForeground(true)",
         "stopForeground(false)",
