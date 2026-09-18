@@ -10,9 +10,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -161,9 +163,9 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         LinearLayout stationsHeader = new LinearLayout(this);
         stationsHeader.setGravity(Gravity.CENTER_VERTICAL);
         stationsHeader.addView(label("Sve stanice", 25, Color.WHITE, true), new LinearLayout.LayoutParams(0, dp(54), 1f));
-        Button sort = chip("Popularne ⌄", false);
+        Button sort = chip("Filtriraj ⌄", false);
         sort.setTextSize(14);
-        sort.setBackgroundColor(Color.TRANSPARENT);
+        sort.setBackground(interactiveRounded(0x00000000, 0x00000000, 12, 0x24FFFFFF));
         sort.setTextColor(0xFFB9BDC6);
         sort.setOnClickListener(v -> showBrowseDialog());
         stationsHeader.addView(sort, new LinearLayout.LayoutParams(dp(126), dp(46)));
@@ -198,7 +200,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         Button back = smallTop("‹");
         back.setTextSize(32);
         back.setTextColor(0xFFE8EBF1);
-        back.setBackgroundColor(Color.TRANSPARENT);
+        back.setBackground(interactiveRounded(0x00000000, 0x00000000, 12, 0x24FFFFFF));
         back.setContentDescription("Natrag");
         back.setOnClickListener(v -> onBackPressed());
         bar.addView(back, new LinearLayout.LayoutParams(dp(46), dp(52)));
@@ -219,7 +221,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
         Button searchButton = smallTop("⌕");
         searchButton.setTextSize(24);
-        searchButton.setBackgroundColor(Color.TRANSPARENT);
+        searchButton.setBackground(interactiveRounded(0x00000000, 0x00000000, 12, 0x24FFFFFF));
         searchButton.setContentDescription("Pretraži");
         searchButton.setOnClickListener(v -> {
             if (searchBox == null) return;
@@ -235,7 +237,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
         Button menu = smallTop("⋮");
         menu.setTextSize(24);
-        menu.setBackgroundColor(Color.TRANSPARENT);
+        menu.setBackground(interactiveRounded(0x00000000, 0x00000000, 12, 0x24FFFFFF));
         menu.setContentDescription("Više opcija");
         menu.setOnClickListener(v -> showAppMenu());
         bar.addView(menu, new LinearLayout.LayoutParams(dp(42), dp(48)));
@@ -309,7 +311,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         GradientDrawable playBg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, new int[]{0xFFFFB23F,0xFFFFC15B});
         playBg.setCornerRadius(dp(15));
         playBg.setStroke(dp(1), 0xFFFFC66F);
-        heroPlay.setBackground(playBg);
+        heroPlay.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33111111), playBg, rounded(Color.WHITE, 0x00000000, 15)));
         heroPlay.setOnClickListener(v -> { if (featured != null) onPlay(featured); });
         LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(dp(176), dp(54));
         buttonLp.setMargins(0, dp(14), 0, 0);
@@ -355,7 +357,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         playerPlay = playerButton("▶", true);
         GradientDrawable playBg = new GradientDrawable();
         playBg.setColor(0xFF201A16); playBg.setCornerRadius(dp(34)); playBg.setStroke(dp(2), 0xFFFFB23F);
-        playerPlay.setBackground(playBg);
+        playerPlay.setBackground(new RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), playBg, rounded(Color.WHITE, 0x00000000, 34)));
         playerPlay.setTextColor(0xFFFFF3DD);
         LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(dp(60), dp(60));
         pp.setMargins(dp(9), 0, 0, 0);
@@ -378,7 +380,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         nav.addView(navItem("◇", "Otkrij", "discover"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         nav.addView(navItem("▥", "Radio", "radio"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         nav.addView(navItem("♡", "Omiljene", "favorites"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
-        nav.addView(navItem("○", "Profil", "profile"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+        nav.addView(navItem("⋯", "Više", "more"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         selectBottomNav(navSelection);
         return nav;
     }
@@ -392,12 +394,15 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         item.addView(ic, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36)));
         item.addView(tx, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(23)));
         bottomNavItems.put(action, item);
+        item.setFocusable(true);
+        item.setClickable(true);
+        item.setContentDescription(title);
         item.setOnClickListener(v -> {
+            if ("discover".equals(action)) { showBrowseDialog(); return; }
+            if ("more".equals(action)) { showAppMenu(); return; }
             selectBottomNav(action);
             if ("all".equals(action)) { tab="all"; state.setTab(tab); applyFilterAsync(); list.smoothScrollToPosition(0); }
-            else if ("discover".equals(action)) showBrowseDialog();
             else if ("favorites".equals(action)) { tab="favorites"; state.setTab(tab); applyFilterAsync(); }
-            else if ("profile".equals(action)) showAboutDialog();
             else if ("radio".equals(action) && !currentKey.isEmpty()) { list.smoothScrollToPosition(0); }
         });
         updateBottomNavItem(action, item);
@@ -412,7 +417,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private void updateBottomNavItem(String action, LinearLayout item) {
         if (item == null || item.getChildCount() < 2) return;
         boolean selected = action.equals(navSelection);
-        item.setBackground(selected ? rounded(0xFF382819, 0xFF5D4025, 14) : null);
+        item.setSelected(selected);
+        item.setBackground(interactiveRounded(selected ? 0xFF382819 : 0x00000000, selected ? 0xFF5D4025 : 0x00000000, 14, 0x24FFFFFF));
         TextView icon = (TextView) item.getChildAt(0);
         TextView text = (TextView) item.getChildAt(1);
         int color = selected ? 0xFFFFB23F : 0xFFB9C0CB;
@@ -935,9 +941,16 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private LinearLayout chipRow() { LinearLayout l = new LinearLayout(this); l.setOrientation(LinearLayout.HORIZONTAL); l.setGravity(Gravity.CENTER_VERTICAL); return l; }
     private HorizontalScrollView horizontal(View child) { HorizontalScrollView h = new HorizontalScrollView(this); h.setHorizontalScrollBarEnabled(false); h.setFillViewport(false); h.addView(child); return h; }
     private Button chip(String label, boolean selected) {
-        Button b = new Button(this); b.setText(label); b.setAllCaps(false); b.setTextSize(11); b.setTypeface(selected ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
-        b.setTextColor(selected ? 0xFFFFFFFF : 0xFFE4DBD5); b.setPadding(dp(12), 0, dp(12), 0); b.setMinHeight(0); b.setMinimumHeight(0); b.setMinWidth(0); b.setMinimumWidth(0);
-        b.setBackground(rounded(selected ? 0xFFEB5323 : 0xFF2A211D, selected ? 0xFFEB5323 : 0xFF4B3A31, 14)); return b;
+        Button b = new Button(this); b.setText(label); b.setAllCaps(false); b.setTextSize(11);
+        b.setPadding(dp(12), 0, dp(12), 0); b.setMinHeight(0); b.setMinimumHeight(0); b.setMinWidth(0); b.setMinimumWidth(0);
+        styleChip(b, selected);
+        return b;
+    }
+    private void styleChip(Button b, boolean selected) {
+        if (b == null) return;
+        b.setTypeface(selected ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+        b.setTextColor(selected ? 0xFFFFFFFF : 0xFFE4DBD5);
+        b.setBackground(interactiveRounded(selected ? 0xFFEB5323 : 0xFF2A211D, selected ? 0xFFEB5323 : 0xFF4B3A31, 14, 0x30FFFFFF));
     }
     private LinearLayout.LayoutParams chipParams() { LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)); p.setMargins(dp(3), dp(4), dp(4), dp(3)); return p; }
     private Button smallTop(String label) { Button b = chip(label, false); b.setTextSize(11); return b; }
@@ -945,6 +958,11 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private Button playerButton(String label, boolean accent) { Button b = chip(label, accent); b.setTextSize(17); return b; }
     private TextView label(String value, int size, int color, boolean bold) { TextView t = new TextView(this); t.setText(value); t.setTextSize(size); t.setTextColor(color); t.setGravity(Gravity.CENTER_VERTICAL); if (bold) t.setTypeface(Typeface.DEFAULT_BOLD); t.setSingleLine(true); t.setEllipsize(android.text.TextUtils.TruncateAt.END); return t; }
     private GradientDrawable rounded(int fill, int stroke, int radiusDp) { GradientDrawable g = new GradientDrawable(); g.setColor(fill); g.setCornerRadius(dp(radiusDp)); g.setStroke(dp(1), stroke); return g; }
+    private android.graphics.drawable.Drawable interactiveRounded(int fill, int stroke, int radiusDp, int rippleColor) {
+        GradientDrawable content = rounded(fill, stroke, radiusDp);
+        GradientDrawable mask = rounded(Color.WHITE, 0x00000000, radiusDp);
+        return new RippleDrawable(ColorStateList.valueOf(rippleColor), content, mask);
+    }
     private LinearLayout.LayoutParams marginParams(int w, int h, int l, int t, int r, int b) { LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(w, h); p.setMargins(dp(l), dp(t), dp(r), dp(b)); return p; }
     private FrameLayout.LayoutParams playerLayoutParams() { FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(PLAYER_H_DP)); p.gravity = Gravity.BOTTOM; return p; }
     private int dp(int v) { return (int) (v * getResources().getDisplayMetrics().density + 0.5f); }
