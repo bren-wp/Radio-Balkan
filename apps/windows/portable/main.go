@@ -982,6 +982,16 @@ func scheduleCIRuntimeSmokeClose() {
 		if app.hwnd != 0 && !shuttingDown() {
 			runtimeTestTrace("ci-smoke-post-wm-close")
 			procPostMessage.Call(uintptr(app.hwnd), WM_CLOSE, 0, 0)
+			watchdog := time.NewTimer(4 * time.Second)
+			defer watchdog.Stop()
+			select {
+			case <-app.done:
+				return
+			case <-watchdog.C:
+				buf := make([]byte, 512<<10)
+				n := runtime.Stack(buf, true)
+				logError("runtime-test-stacks", errors.New(string(buf[:n])))
+			}
 		}
 	})
 }
