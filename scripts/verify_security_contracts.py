@@ -357,6 +357,8 @@ def main() -> None:
         'safeGo("audio-warmup", warmAudioEngine)',
         "audio engine startup timeout",
         "audioStopped",
+        "runtime.LockOSThread()",
+        "defer runtime.UnlockOSThread()",
         "func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleAction",
         "playbackToggleReconnect",
         "playStationByKey(currentKey, current)",
