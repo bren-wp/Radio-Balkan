@@ -1,5 +1,17 @@
 # Changelog — Android
 
+
+## 0.0.20
+
+- UI kontrole dobile su dosljedniji ripple/pressed feedback bez uvođenja novog UI frameworka
+- donji `Profil` koji nije predstavljao stvarni korisnički profil zamijenjen je opcijom `Više`
+- modalne akcije više ne ostavljaju pogrešno označenu aktivnu bottom-navigation stavku
+- browse/filter UI koristi jasni `Filtriraj` CTA, live selected chip state i `Poništi filtre`
+- Radio Browser votes više se ne predstavljaju kao live listener count; prikazuju se kao `Popularnost · N glasova`
+- repository load hvata executor/shutdown race i ne propušta `RejectedExecutionException` prema UI threadu
+- postojeći Handler, repository, image loader i player cleanup te URL/DNS/redirect hardening ostaju aktivni
+- versionCode podignut na 20 i versionName na 0.0.20
+
 ## 0.0.7
 
 - versionCode podignut na 7 i versionName na 0.0.7

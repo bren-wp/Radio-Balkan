@@ -1,33 +1,34 @@
-# Radio Balkan 0.0.5 — Android
+# Radio Balkan 0.0.20 — Android
 
-Nativni Android source za Radio Balkan (`minSdk 26`, `targetSdk 36`) bez telemetry SDK-a i bez vanjskog backend servisa za reprodukciju. Aplikacija reproducira javne radio streamove izravno s njihovih izvora.
+Nativni Android klijent (`minSdk 26`, `targetSdk 36`) bez telemetry SDK-a i bez vlastitog backend servisa za reprodukciju. Javni radio stream reproducira se izravno s izvora postaje.
 
-## Produkcijska poboljšanja
+## Produkcijski fokus u 0.0.20
 
-- 15-sekundni MediaPlayer prepare watchdog sprječava beskonačno čekanje problematičnog streama
-- health/source poslovi koriste zajednički ograničeni I/O pool
-- automatski health scan ograničen je na 32 prioritetne stanice i jedan worker
-- katalog i mrežni odgovori imaju stroge memorijske limite
-- bitmap cache je dinamički ograničen, a slike se dekodiraju u ciljanu veličinu
-- uklonjen nepotreban Wi-Fi lock i pripadajuća dozvola
-- uklonjeni duplicirani country mapping i mrtvi artwork helper
-- regex normalizacija koristi prekompajlirane uzorke
-- release koristi R8 minifikaciju i resource shrinking
-- `versionCode` i `versionName` usklađeni su s centralnim repozitorijskim `VERSION` izvorom
-- GitHub Actions pokreće lint i release build; nema GitLab/vanjskog CI ovisnog toka
+- jasniji premium UI s ripple/pressed feedbackom na glavnim, navigation i station kontrolama
+- donja navigacija više ne prikazuje nepostojeći korisnički Profil; `Više` otvara stvarne aplikacijske opcije
+- filteri imaju jasni `Filtriraj` CTA, trenutno vidljiv selected state i `Poništi filtre`
+- Radio Browser `votes` prikazuju se točno kao `Popularnost · N glasova`, a ne kao trenutačni broj slušatelja
+- repository load je zaštićen od executor/shutdown racea i ne propušta `RejectedExecutionException` prema UI threadu
+- Activity pri destroyu čisti cijeli Handler queue, a repository, image loader i player imaju eksplicitne shutdown putanje
+- player zadržava prepare watchdog, fallback izvore, audio focus, MediaSession i foreground-service lifecycle zaštite
+- stream, logo, API i ICY mrežni putevi zadržavaju URL/DNS/redirect provjere i response limite
+- bitmap cache je ograničen i reagira na Android memory-trim signale
+- release ostaje R8-minificiran i resource-shrinkan
 
 ## Produkcijski build
 
 Linux/macOS:
 
 ```bash
+cd apps/android
 ./build-apk.sh
 ```
 
 Windows PowerShell:
 
 ```powershell
+cd apps/android
 ./build-apk.ps1
 ```
 
-Za potpisani javni APK signing podatke postavi kao GitHub Actions secrets. Privatni ključ i lozinke ne smiju se spremati u repozitorij.
+CI obavezno izvršava unit testove, Android Lint, release build i clean-worktree provjeru. Potpisani javni APK zahtijeva kompletno konfigurirane GitHub Actions signing secrets; privatni ključ i lozinke ne smiju biti u repozitoriju.

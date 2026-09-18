@@ -1,5 +1,25 @@
 # Izdavanja
 
+## 0.0.20
+
+Izdanje 0.0.20 fokusirano je na premium, jasniji i dostupniji UI/UX na svim klijentima, uz dodatno lifecycle i release-metadata učvršćivanje. Nisu dodane nove dozvole, analytics, telemetry, korisnički račun ni novi backend.
+
+- browser popup lokalno pamti državu, žanr i Omiljene, dodaje jednim klikom `Očisti` filtre te station kartice podržavaju Enter/Space, visible focus state i `aria-current`
+- browser pressed, busy i reduced-motion stanja vizualno su dosljednija, a ručni refresh više ne može cache prikazati kao uspješno novo mrežno osvježavanje
+- browser regression testovi pokrivaju sanitized/saved UI preference i forced-refresh failure semantiku uz postojeće response-limit, API fan-out i player race testove
+- Android UI dobiva ripple/pressed feedback, jasniji `Filtriraj` CTA, trenutno vidljiv selected chip state i `Poništi filtre`
+- Android donja navigacija više ne prikazuje nepostojeći `Profil`; `Više` vodi na stvarne aplikacijske opcije, a modalne akcije ne ostavljaju lažno označen aktivni ekran
+- Radio Browser `votes` na Androidu više se ne prikazuju uz people/listener semantiku, nego točno kao `Popularnost · N glasova`
+- Android `RadioRepository.load()` sigurno podnosi executor/shutdown race i ne propušta `RejectedExecutionException` prema UI threadu
+- Windows Setup dobiva keyboard kontrolu preko Tab/strelica/Enter/Space/Escape, proširene checkbox label hit-targete i vidljivi fokus
+- Windows Portable i Setup source fallback `appVersion` vrijednosti uvedene su u centralni transactional version-bump/check contract; release linker injection ostaje dodatni autoritativni sloj
+- dodani su Windows Setup regression testovi za focus wrap i click-target geometriju
+- production UI, security i version contract verifieri prošireni su na nove UX/lifecycle/version invariants
+- README, platform README/changelogovi, arhitektura, sigurnost, privatnost, build i contribution dokumentacija usklađeni su s produkcijskim stanjem
+- verzija je sinkronizirana na `0.0.20`, uz Android `versionCode 20`
+
+Ovo izdanje smanjuje poznate UI/lifecycle/race rizike pronađene auditom, ali ne tvrdi apsolutno crash-free ponašanje na svakoj kombinaciji OS-a, drivera, OEM Android implementacije, preglednika, mreže i third-party radio streama.
+
 ## 0.0.19
 
 Izdanje 0.0.19 fokusirano je na kontrolu memorije i mrežnog fan-outa u browser katalogu, pouzdanije spremanje Windows stanja te stroži Android lifecycle cleanup, bez novih dozvola, telemetry komponenti ili runtime dependencyja.
