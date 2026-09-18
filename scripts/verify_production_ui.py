@@ -187,6 +187,8 @@ def main() -> int:
         'Prazno polje vraća automatski odabir.',
         'Zapis o pogrešci spremljen je lokalno.',
         "func activateStation(idx int)",
+        "func defaultPlaybackIndexLocked() int",
+        "if defaultIndex >= 0 {",
         'heroLabel = "Ⅱ  Pauziraj"',
         'heroLabel = "▶  Nastavi"',
         'playLabel = "Ⅱ"',

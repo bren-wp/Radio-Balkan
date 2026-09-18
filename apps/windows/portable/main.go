@@ -2943,16 +2943,33 @@ func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleActi
 	return playbackToggleResume
 }
 
+func defaultPlaybackIndexLocked() int {
+	if len(app.filtered) > 0 {
+		idx := app.filtered[0]
+		if idx >= 0 && idx < len(app.stations) {
+			return idx
+		}
+	}
+	if len(app.stations) > 0 {
+		return 0
+	}
+	return -1
+}
+
 func toggleCurrentPlayback() {
 	app.mu.RLock()
 	current, playing, stopped := currentStationIndexLocked(), app.playing, app.audioStopped
 	currentKey := app.currentKey
+	defaultIndex := defaultPlaybackIndexLocked()
 	if currentKey == "" && current >= 0 && current < len(app.stations) {
 		currentKey = stationKey(app.stations[current])
 	}
 	app.mu.RUnlock()
 	action := decidePlaybackToggle(current, playing, stopped)
 	if action == playbackToggleNone {
+		if defaultIndex >= 0 {
+			playStation(defaultIndex)
+		}
 		return
 	}
 	if action == playbackTogglePause {

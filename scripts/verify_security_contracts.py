@@ -408,6 +408,8 @@ def main() -> None:
         "runtime.LockOSThread()",
         "defer runtime.UnlockOSThread()",
         "func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleAction",
+        "func defaultPlaybackIndexLocked() int",
+        "playStation(defaultIndex)",
         "playbackToggleReconnect",
         "Kind: hitPlayerStop",
         "func canStopPlayback(current int, stopped bool) bool",

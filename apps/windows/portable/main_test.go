@@ -162,6 +162,37 @@ func TestTransportAvailabilityUsesVisibleStationCount(t *testing.T) {
 	}
 }
 
+func TestDefaultPlaybackIndexLocked(t *testing.T) {
+	previousStations := app.stations
+	previousFiltered := app.filtered
+	defer func() {
+		app.stations = previousStations
+		app.filtered = previousFiltered
+	}()
+
+	app.stations = nil
+	app.filtered = nil
+	if got := defaultPlaybackIndexLocked(); got != -1 {
+		t.Fatalf("empty default index = %d, want -1", got)
+	}
+
+	app.stations = []RadioStation{{Name: "A"}, {Name: "B"}, {Name: "C"}}
+	app.filtered = nil
+	if got := defaultPlaybackIndexLocked(); got != 0 {
+		t.Fatalf("unfiltered default index = %d, want 0", got)
+	}
+
+	app.filtered = []int{2, 1}
+	if got := defaultPlaybackIndexLocked(); got != 2 {
+		t.Fatalf("filtered default index = %d, want 2", got)
+	}
+
+	app.filtered = []int{99}
+	if got := defaultPlaybackIndexLocked(); got != 0 {
+		t.Fatalf("invalid filtered index fallback = %d, want 0", got)
+	}
+}
+
 func TestPlaybackToggleDecisionLifecycle(t *testing.T) {
 	tests := []struct {
 		name     string
