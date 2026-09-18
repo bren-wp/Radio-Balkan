@@ -4,6 +4,8 @@ package main
 
 import (
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -92,5 +94,33 @@ func TestUnsafeNetworkIPRejectsLocalAndSpecialRanges(t *testing.T) {
 	}
 	if unsafeNetworkIP(net.ParseIP("8.8.8.8")) {
 		t.Fatal("public IPv4 address was rejected")
+	}
+}
+
+
+func TestWriteFileDurablePersistsCompleteContent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.tmp")
+	want := []byte("{\"volume\":80,\"country_code\":\"HR\"}\n")
+	if err := writeFileDurable(path, want, 0600); err != nil {
+		t.Fatalf("writeFileDurable() error = %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("durable file content = %q; want %q", got, want)
+	}
+
+	replacement := []byte("{\"volume\":25}\n")
+	if err := writeFileDurable(path, replacement, 0600); err != nil {
+		t.Fatalf("writeFileDurable() replacement error = %v", err)
+	}
+	got, err = os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile() after replacement error = %v", err)
+	}
+	if string(got) != string(replacement) {
+		t.Fatalf("durable replacement content = %q; want %q", got, replacement)
 	}
 }
