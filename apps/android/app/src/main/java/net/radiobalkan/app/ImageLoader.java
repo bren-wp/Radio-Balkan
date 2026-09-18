@@ -140,7 +140,7 @@ public final class ImageLoader {
     private Bitmap download(String raw) {
         String current = raw == null ? "" : raw.trim();
         for (int redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
-            if (!StreamResolver.isSafeHttp(current)) return null;
+            if (!StreamResolver.isSafeHttpForConnection(current)) return null;
             HttpURLConnection c = null;
             try {
                 URL requested = new URL(current);
