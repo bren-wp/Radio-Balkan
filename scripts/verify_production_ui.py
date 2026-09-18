@@ -191,7 +191,7 @@ def main() -> int:
         'heroLabel = "▶  Nastavi"',
         'playLabel = "Ⅱ"',
         "Kind: hitPlayerStop",
-        "canStop := currentIdx >= 0 && !stopped",
+        "canStopPlayback(currentIdx, stopped)",
         "canNavigate := navigationCount > 1",
         "if canNavigate {",
         '"■"',

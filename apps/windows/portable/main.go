@@ -2502,7 +2502,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	// Center transport controls.
 	cx := cr.Right / 2
 	canNavigate := navigationCount > 1
-	canStop := currentIdx >= 0 && !stopped
+	canStop := canStopPlayback(currentIdx, stopped)
 	selectFont(hdc, app.hFontBold)
 	prevColor := rgb(193, 199, 207)
 	if !canNavigate {
@@ -3000,9 +3000,21 @@ func toggleCurrentPlayback() {
 	invalidate()
 }
 
+func canStopPlayback(current int, stopped bool) bool {
+	return current >= 0 && !stopped
+}
+
+func canNavigateStations(stationCount, filteredCount int) bool {
+	count := stationCount
+	if filteredCount > 0 {
+		count = filteredCount
+	}
+	return count > 1
+}
+
 func stopCurrentPlayback() {
 	app.mu.RLock()
-	canStop := currentStationIndexLocked() >= 0 && !app.audioStopped
+	canStop := canStopPlayback(currentStationIndexLocked(), app.audioStopped)
 	app.mu.RUnlock()
 	if !canStop {
 		return
@@ -3029,11 +3041,7 @@ func playAdjacent(delta int) {
 	filtered := append([]int(nil), app.filtered...)
 	stationCount := len(app.stations)
 	app.mu.RUnlock()
-	navigationCount := stationCount
-	if len(filtered) > 0 {
-		navigationCount = len(filtered)
-	}
-	if navigationCount < 2 {
+	if !canNavigateStations(stationCount, len(filtered)) {
 		return
 	}
 	if len(filtered) > 0 {

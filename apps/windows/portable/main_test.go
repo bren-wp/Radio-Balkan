@@ -145,14 +145,20 @@ func TestTransportAvailabilityUsesVisibleStationCount(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			count := tc.stationCount
-			if tc.filtered > 0 {
-				count = tc.filtered
-			}
-			if got := count > 1; got != tc.want {
+			if got := canNavigateStations(tc.stationCount, tc.filtered); got != tc.want {
 				t.Fatalf("navigation availability = %v, want %v", got, tc.want)
 			}
 		})
+	}
+
+	if canStopPlayback(-1, false) {
+		t.Fatal("stop must be disabled without a current station")
+	}
+	if canStopPlayback(0, true) {
+		t.Fatal("stop must be disabled after terminal stop")
+	}
+	if !canStopPlayback(0, false) {
+		t.Fatal("stop must be enabled for an active or paused current station")
 	}
 }
 
