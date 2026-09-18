@@ -703,9 +703,9 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 if (pa != pb) return Integer.compare(pa, pb);
                 return Integer.compare(b.votes, a.votes);
             });
-            if (source.size() > 32) source = new ArrayList<>(source.subList(0, 32));
+            if (source.size() > 16) source = new ArrayList<>(source.subList(0, 16));
             startHealthScan(source, false);
-        }, 2500);
+        }, 8000);
     }
 
     private void checkVisibleStreams() {

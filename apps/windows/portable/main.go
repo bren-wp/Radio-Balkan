@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	_ "embed"
@@ -151,7 +152,7 @@ const (
 	WS_EX_DLGMODALFRAME            = 0x00000001
 )
 
-var appVersion = "0.0.21"
+var appVersion = "0.0.22"
 
 type WNDCLASS struct {
 	Style         uint32
@@ -317,9 +318,11 @@ type App struct {
 	current                                  int
 	currentKey                               string
 	playing                                  bool
+	audioStopped                             bool
 	audioMu                                  sync.Mutex
 	audioCmd                                 *exec.Cmd
 	audioIn                                  io.WriteCloser
+	audioAck                                 chan string
 	audioRecovering                          bool
 	lastAudioFailure                         time.Time
 	loading                                  bool
@@ -601,6 +604,13 @@ func safeGo(name string, fn func()) {
 		fn()
 	}()
 }
+func runtimeTestTrace(scope string) {
+	if os.Getenv("RADIO_BALKAN_RUNTIME_TEST") != "1" {
+		return
+	}
+	logError("runtime-test", errors.New(scope))
+}
+
 func logError(scope string, err error) {
 	if err == nil {
 		return
@@ -916,7 +926,9 @@ func main() {
 		messageBox(0, "Greška", err.Error(), MB_ICONERROR)
 		return
 	}
+	safeGo("audio-warmup", warmAudioEngine)
 	safeGo("load-stations", loadStations)
+	scheduleCIRuntimeSmokeClose()
 	var msg MSG
 	for {
 		r, _, _ := procGetMessage.Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
@@ -943,6 +955,45 @@ func main() {
 		procTranslateMessage.Call(uintptr(unsafe.Pointer(&msg)))
 		procDispatchMessage.Call(uintptr(unsafe.Pointer(&msg)))
 	}
+}
+
+func scheduleCIRuntimeSmokeClose() {
+	if os.Getenv("RADIO_BALKAN_RUNTIME_TEST") != "1" {
+		return
+	}
+	enabled := false
+	for _, arg := range os.Args[1:] {
+		if arg == "--ci-runtime-smoke" {
+			enabled = true
+			break
+		}
+	}
+	if !enabled {
+		return
+	}
+	safeGo("ci-runtime-smoke-close", func() {
+		timer := time.NewTimer(18 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-app.done:
+			return
+		}
+		if app.hwnd != 0 && !shuttingDown() {
+			runtimeTestTrace("ci-smoke-post-wm-close")
+			procPostMessage.Call(uintptr(app.hwnd), WM_CLOSE, 0, 0)
+			watchdog := time.NewTimer(4 * time.Second)
+			defer watchdog.Stop()
+			select {
+			case <-app.done:
+				return
+			case <-watchdog.C:
+				buf := make([]byte, 512<<10)
+				n := runtime.Stack(buf, true)
+				logError("runtime-test-stacks", errors.New(string(buf[:n])))
+			}
+		}
+	})
 }
 
 func acquireSingleInstance() bool {
@@ -1511,13 +1562,20 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 		showNextAlert()
 		return 0
 	case WM_CLOSE:
+		runtimeTestTrace("wm-close-enter")
 		captureWindowSize()
+		runtimeTestTrace("wm-close-before-shutdown")
 		prepareShutdown()
+		runtimeTestTrace("wm-close-after-shutdown")
 		procDestroyWindow.Call(uintptr(hwnd))
+		runtimeTestTrace("wm-close-after-destroy-window")
 		return 0
 	case WM_DESTROY:
+		runtimeTestTrace("wm-destroy-enter")
 		prepareShutdown()
+		runtimeTestTrace("wm-destroy-after-shutdown")
 		markCleanShutdown()
+		runtimeTestTrace("wm-destroy-before-post-quit")
 		procPostQuitMessage.Call(0)
 		return 0
 	}
@@ -2829,7 +2887,7 @@ func handleKeyDown(key uint32) {
 
 func toggleCurrentPlayback() {
 	app.mu.RLock()
-	current, playing := currentStationIndexLocked(), app.playing
+	current, playing, stopped := currentStationIndexLocked(), app.playing, app.audioStopped
 	currentKey := app.currentKey
 	if currentKey == "" && current >= 0 && current < len(app.stations) {
 		currentKey = stationKey(app.stations[current])
@@ -2850,6 +2908,10 @@ func toggleCurrentPlayback() {
 		invalidate()
 		return
 	}
+	if stopped {
+		playStationByKey(currentKey, current)
+		return
+	}
 	if err := audioResume(); err != nil {
 		logError("audio-resume", err)
 		playStationByKey(currentKey, current)
@@ -2865,6 +2927,7 @@ func toggleCurrentPlayback() {
 	st := app.stations[current]
 	key := stationKey(st)
 	app.playing = true
+	app.audioStopped = false
 	app.nowPlayingStation = key
 	app.metadataSeq++
 	seq := app.metadataSeq
@@ -2882,6 +2945,7 @@ func stopCurrentPlayback() {
 	audioStop()
 	app.mu.Lock()
 	app.playing = false
+	app.audioStopped = true
 	app.metadataSeq++
 	app.playSeq++
 	app.nowPlaying = ""
@@ -3213,6 +3277,7 @@ func playStation(idx int) {
 		app.current = idx
 		app.currentKey = key
 		app.playing = true
+		app.audioStopped = false
 		app.audioRecovering = false
 		app.nowPlaying = ""
 		app.nowPlayingStation = key
@@ -3522,12 +3587,7 @@ func adjustVolume(delta int) {
 	}
 	v := app.state.Volume
 	app.stateMu.Unlock()
-	app.mu.RLock()
-	playing := app.playing
-	app.mu.RUnlock()
-	if playing {
-		audioSetVolume(v)
-	}
+	audioSetVolume(v)
 	scheduleStateSave()
 	setStatus(fmt.Sprintf("Glasnoća %d%%", v))
 	invalidate()
@@ -3937,6 +3997,27 @@ func healthCheckOne(key string) (result int) {
 }
 
 func healthCheckAll() { healthCheckWithLimit(0, true) }
+
+func scheduleStartupHealth(limit int) {
+	if limit < 1 {
+		limit = 24
+	}
+	if app.safeMode || shuttingDown() {
+		return
+	}
+	safeGo("health-startup-delay", func() {
+		timer := time.NewTimer(8 * time.Second)
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+		case <-app.done:
+			return
+		}
+		if !shuttingDown() {
+			healthCheckQuick(limit)
+		}
+	})
+}
 
 func healthCheckQuick(limit int) {
 	if limit < 1 {
@@ -5119,24 +5200,61 @@ func startAudioEngineLocked() error {
 	if app.audioCmd != nil && app.audioCmd.Process != nil {
 		return nil
 	}
-	script := `$ErrorActionPreference='SilentlyContinue'; Add-Type -AssemblyName PresentationCore; $p=New-Object System.Windows.Media.MediaPlayer; while(($line=[Console]::In.ReadLine()) -ne $null){ try { $sp=$line.Split(' ',3); switch($sp[0]){ 'PLAY' { $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[1])); $v=[double]::Parse($sp[2],[Globalization.CultureInfo]::InvariantCulture); $p.Stop(); $p.Close(); $p.Open([Uri]$u); $p.Volume=$v; $p.Play() } 'PAUSE' { $p.Pause() } 'RESUME' { $p.Play() } 'STOP' { $p.Stop(); $p.Close() } 'VOLUME' { $p.Volume=[double]::Parse($sp[1],[Globalization.CultureInfo]::InvariantCulture) } } } catch {} }`
+	script := `$ErrorActionPreference='Stop'; Add-Type -AssemblyName PresentationCore; $p=New-Object System.Windows.Media.MediaPlayer; [Console]::Out.WriteLine('READY'); [Console]::Out.Flush(); while(($line=[Console]::In.ReadLine()) -ne $null){ try { $sp=$line.Split(' ',3); switch($sp[0]){ 'PLAY' { $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[1])); $v=[double]::Parse($sp[2],[Globalization.CultureInfo]::InvariantCulture); $p.Stop(); $p.Close(); $p.Open([Uri]$u); $p.Volume=$v; $p.Play() } 'PAUSE' { $p.Pause() } 'RESUME' { $p.Play() } 'STOP' { $p.Stop(); $p.Close() } 'VOLUME' { $p.Volume=[double]::Parse($sp[1],[Globalization.CultureInfo]::InvariantCulture) } default { throw 'unknown command' } }; [Console]::Out.WriteLine('OK'); [Console]::Out.Flush() } catch { [Console]::Out.WriteLine('ERR'); [Console]::Out.Flush() } }`
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-STA", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err
 	}
-	out, _ := cmd.StdoutPipe()
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		_ = in.Close()
+		return err
+	}
 	cmd.Stderr = nil
 	if err = cmd.Start(); err != nil {
 		_ = in.Close()
 		return err
 	}
-	if out != nil {
-		go io.Copy(io.Discard, out)
+	ack := make(chan string, 8)
+	go func() {
+		scanner := bufio.NewScanner(out)
+		for scanner.Scan() {
+			select {
+			case ack <- strings.TrimSpace(scanner.Text()):
+			case <-app.done:
+				close(ack)
+				return
+			}
+		}
+		close(ack)
+	}()
+	select {
+	case ready, ok := <-ack:
+		if !ok || ready != "READY" {
+			_ = in.Close()
+			if cmd.Process != nil {
+				_ = cmd.Process.Kill()
+			}
+			return errors.New("audio engine se nije ispravno inicijalizirao")
+		}
+	case <-time.After(15 * time.Second):
+		_ = in.Close()
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		return errors.New("audio engine startup timeout")
+	case <-app.done:
+		_ = in.Close()
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		return context.Canceled
 	}
 	app.audioCmd = cmd
 	app.audioIn = in
+	app.audioAck = ack
 	go func(c *exec.Cmd) {
 		_ = c.Wait()
 		app.audioMu.Lock()
@@ -5144,6 +5262,7 @@ func startAudioEngineLocked() error {
 		if sameEngine {
 			app.audioCmd = nil
 			app.audioIn = nil
+			app.audioAck = nil
 		}
 		app.audioMu.Unlock()
 		if !sameEngine || shuttingDown() {
@@ -5195,6 +5314,26 @@ func startAudioEngineLocked() error {
 	}(cmd)
 	return nil
 }
+func waitAudioAckLocked() error {
+	if app.audioAck == nil {
+		return errors.New("audio engine nema kanal potvrde")
+	}
+	select {
+	case reply, ok := <-app.audioAck:
+		if !ok {
+			return errors.New("audio engine je prekinut")
+		}
+		if reply != "OK" {
+			return errors.New("audio engine nije prihvatio naredbu")
+		}
+		return nil
+	case <-time.After(1500 * time.Millisecond):
+		return errors.New("audio engine nije odgovorio na vrijeme")
+	case <-app.done:
+		return context.Canceled
+	}
+}
+
 func audioSend(line string) error {
 	app.audioMu.Lock()
 	defer app.audioMu.Unlock()
@@ -5204,8 +5343,10 @@ func audioSend(line string) error {
 	if app.audioIn == nil {
 		return errors.New("audio engine nije dostupan")
 	}
-	_, err := io.WriteString(app.audioIn, line+"\n")
-	return err
+	if _, err := io.WriteString(app.audioIn, line+"\n"); err != nil {
+		return err
+	}
+	return waitAudioAckLocked()
 }
 func audioSendExisting(line string) error {
 	app.audioMu.Lock()
@@ -5213,15 +5354,30 @@ func audioSendExisting(line string) error {
 	if app.audioIn == nil {
 		return errors.New("audio engine nije pokrenut")
 	}
-	_, err := io.WriteString(app.audioIn, line+"\n")
-	return err
+	if _, err := io.WriteString(app.audioIn, line+"\n"); err != nil {
+		return err
+	}
+	return waitAudioAckLocked()
 }
+func warmAudioEngine() {
+	if shuttingDown() {
+		return
+	}
+	app.audioMu.Lock()
+	err := startAudioEngineLocked()
+	app.audioMu.Unlock()
+	if err != nil && !shuttingDown() {
+		logError("audio-warmup", err)
+	}
+}
+
 func audioShutdown() {
 	app.audioMu.Lock()
 	in := app.audioIn
 	cmd := app.audioCmd
 	app.audioIn = nil
 	app.audioCmd = nil
+	app.audioAck = nil
 	app.audioMu.Unlock()
 	if in != nil {
 		_, _ = io.WriteString(in, "STOP\n")
@@ -5391,6 +5547,7 @@ func shuttingDown() bool {
 }
 
 func signalShutdown() {
+	runtimeTestTrace("signal-shutdown-enter")
 	app.closeOnce.Do(func() {
 		if app.cancel != nil {
 			app.cancel()
@@ -5398,25 +5555,44 @@ func signalShutdown() {
 		if app.done != nil {
 			close(app.done)
 		}
+		runtimeTestTrace("signal-shutdown-after-cancel")
 		app.saveMu.Lock()
 		if app.saveTimer != nil {
 			app.saveTimer.Stop()
+			app.saveTimer = nil
 		}
 		app.saveMu.Unlock()
-		app.mu.Lock()
-		if app.searchTimer != nil {
-			app.searchTimer.Stop()
-		}
-		app.mu.Unlock()
+		// The search debounce callback checks shuttingDown() before touching UI
+		// state. Do not block the UI thread acquiring app.mu during shutdown.
 	})
+	runtimeTestTrace("signal-shutdown-exit")
 }
 
 func prepareShutdown() {
+	runtimeTestTrace("prepare-shutdown-enter")
 	app.shutdownOnce.Do(func() {
 		signalShutdown()
-		saveState()
-		audioShutdown()
+		finished := make(chan struct{})
+		go func() {
+			runtimeTestTrace("cleanup-goroutine-enter")
+			defer func() {
+				runtimeTestTrace("cleanup-goroutine-exit")
+				close(finished)
+			}()
+			saveState()
+			runtimeTestTrace("cleanup-after-save-state")
+			audioShutdown()
+			runtimeTestTrace("cleanup-after-audio-shutdown")
+		}()
+		select {
+		case <-finished:
+			runtimeTestTrace("prepare-cleanup-finished")
+		case <-time.After(2500 * time.Millisecond):
+			logError("shutdown-timeout", errors.New("finalni state/audio cleanup prekoračio je 2.5 s"))
+			runtimeTestTrace("prepare-cleanup-timeout")
+		}
 	})
+	runtimeTestTrace("prepare-shutdown-exit")
 }
 
 func scheduleSearchFilter() {

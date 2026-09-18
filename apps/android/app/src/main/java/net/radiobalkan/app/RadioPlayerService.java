@@ -119,20 +119,31 @@ public final class RadioPlayerService extends Service {
         super.onCreate();
         state = new StateStore(this);
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        AudioAttributes attrs = audioAttributes();
-        focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                .setAudioAttributes(attrs)
-                .setWillPauseWhenDucked(true)
-                .setOnAudioFocusChangeListener(focusListener)
-                .build();
-        mediaSession = new MediaSession(this, "RadioBalkan");
-        mediaSession.setCallback(new MediaSession.Callback() {
-            @Override public void onPlay() { resume(); }
-            @Override public void onPause() { pause(); }
-            @Override public void onStop() { stopPlayback(true); }
-        });
-        mediaSession.setActive(true);
-        createChannel();
+        try {
+            AudioAttributes attrs = audioAttributes();
+            focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(attrs)
+                    .setWillPauseWhenDucked(true)
+                    .setOnAudioFocusChangeListener(focusListener)
+                    .build();
+        } catch (Throwable t) {
+            focusRequest = null;
+            AppLog.e(this, "audio-focus-init", t);
+        }
+        try {
+            mediaSession = new MediaSession(this, "RadioBalkan");
+            mediaSession.setCallback(new MediaSession.Callback() {
+                @Override public void onPlay() { resume(); }
+                @Override public void onPause() { pause(); }
+                @Override public void onStop() { stopPlayback(true); }
+            });
+            mediaSession.setActive(true);
+        } catch (Throwable t) {
+            AppLog.e(this, "media-session-init", t);
+            try { if (mediaSession != null) mediaSession.release(); } catch (Throwable ignored) { }
+            mediaSession = null;
+        }
+        try { createChannel(); } catch (Throwable t) { AppLog.e(this, "notification-channel", t); }
         registerNoisyReceiver();
         updateMediaSession();
     }
@@ -209,7 +220,22 @@ public final class RadioPlayerService extends Service {
         }
         state.setLastStation(key, currentName, meta);
         notifyState("Povezujem…", false);
-        updateForeground(false, "Povezujem…");
+        if (!updateForeground(false, "Povezujem…")) {
+            synchronized (lock) {
+                if (gen == generation) {
+                    generation++;
+                    currentCandidates = new ArrayList<>();
+                    currentCandidate = 0;
+                    currentKey = "";
+                    playing = false;
+                    status = "Reprodukcija nije dostupna";
+                    updateMediaSessionLocked();
+                }
+            }
+            notifyState("Reprodukcija nije dostupna", false);
+            stopSelf();
+            return;
+        }
         updateMediaSession();
         executeWorker(() -> tryCurrentCandidate(gen));
     }
@@ -538,14 +564,28 @@ public final class RadioPlayerService extends Service {
         return new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build();
     }
 
+    @SuppressWarnings("deprecation")
     private boolean requestAudioFocus() {
-        try { return audioManager == null || audioManager.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED; }
-        catch (Throwable t) { AppLog.e(this, "audio-focus", t); return false; }
+        if (audioManager == null) return true;
+        try {
+            if (focusRequest != null) {
+                return audioManager.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+            }
+            return audioManager.requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
+                    == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+        } catch (Throwable t) {
+            AppLog.e(this, "audio-focus", t);
+            return false;
+        }
     }
 
+    @SuppressWarnings("deprecation")
     private void abandonAudioFocus() {
-        try { if (audioManager != null && focusRequest != null) audioManager.abandonAudioFocusRequest(focusRequest); }
-        catch (Throwable ignored) { }
+        if (audioManager == null) return;
+        try {
+            if (focusRequest != null) audioManager.abandonAudioFocusRequest(focusRequest);
+            else audioManager.abandonAudioFocus(focusListener);
+        } catch (Throwable ignored) { }
     }
 
     private Notification buildNotification(boolean isPlaying, String notificationStatus) {
@@ -578,11 +618,13 @@ public final class RadioPlayerService extends Service {
         return b.build();
     }
 
-    private void updateForeground(boolean isPlaying, String notificationStatus) {
+    private boolean updateForeground(boolean isPlaying, String notificationStatus) {
         try {
             startForeground(NOTIFICATION_ID, buildNotification(isPlaying, notificationStatus));
+            return true;
         } catch (Throwable t) {
             AppLog.e(this, "foreground-notification", t);
+            return false;
         }
     }
 

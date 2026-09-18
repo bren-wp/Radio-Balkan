@@ -1,5 +1,24 @@
 # Izdavanja
 
+## 0.0.22
+
+Izdanje 0.0.22 fokusirano je na potvrđene startup, shutdown i playback rizike pronađene dubinskim runtime auditom. Nisu dodane nove dozvole, analytics, telemetry, korisnički račun ni novi backend.
+
+- Windows CI sada pokreće stvarni Portable executable i zahtijeva da glavni prozor/proces ostanu živi kroz 15-sekundni startup soak, nakon čega se aplikacija mora uredno zatvoriti
+- Windows automatski startup health posao odgođen je 8 sekundi i početno radi nad manjim prioritetnim skupom stanica, umjesto da konkurira prvom renderu i katalogu
+- PresentationCore audio subprocess dobiva background warmup, `READY` startup handshake i `OK/ERR` potvrdu svake naredbe; startup i command čekanja ostaju ograničena, a MCI fallback ostaje dostupan
+- Windows Stop → Play radi svježi reconnect umjesto resumea zatvorenog sourcea, a promjena glasnoće primjenjuje se i dok je playback pauziran
+- Windows shutdown prvo signalizira background poslovima prekid, a završni state/audio cleanup ima ograničen vremenski budžet kako UI thread ne bi ostao beskonačno blokiran
+- otkriven je i uklonjen false-green Windows build rizik: `build-release.ps1` sada eksplicitno ruši pipeline ako bilo koji Portable/Setup `go vet`, `go test` ili `go build` završi non-zero
+- Android player faila zatvoreno ako foreground notification/promocija nije moguća; MediaSession, audio-focus request i notification-channel inicijalizacija izolirane su od platformskih/OEM iznimki
+- Android automatski startup health scan odgođen je na 8 sekundi i ograničen na 16 prioritetnih stanica; postojeći `MediaPlayer.prepareAsync()` watchdog i source fallback ostaju aktivni
+- Chromium i Firefox playeri ograničavaju početni `audio.play()` pokušaj na 12 sekundi i imaju 15-sekundni `waiting/stalled` recovery koji prelazi na sljedeći kandidat samo ako je session/generation još aktualan
+- novi izvršni browser regression testovi pokrivaju hanging play promise i stalled stream, uz postojeće stale-session, close/play race i popup state ugovore
+- CI-only Windows shutdown trace aktivira se samo eksplicitnom runtime-test environment varijablom i koristi postojeći lokalni dijagnostički log; ne uvodi mrežno slanje podataka
+- verzija je sinkronizirana na `0.0.22`, uz Android `versionCode 22`
+
+Izdanje uklanja više potvrđenih crash/playback i release-pipeline rizika, ali ne tvrdi apsolutno crash-free ponašanje na svakoj kombinaciji Windows/Android/OEM/browser implementacije, mreže i third-party radio streama.
+
 ## 0.0.21
 
 Izdanje 0.0.21 nastavlja production polish nakon 0.0.20 i fokusira se na oporavak korisničkog sučelja, predvidljiv Android search/back lifecycle i pouzdanije Windows Setup write putanje. Nisu dodane nove dozvole, analytics, telemetry, korisnički račun ni backend.

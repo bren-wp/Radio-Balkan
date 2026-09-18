@@ -17,8 +17,10 @@ function deferred() {
 
 let messageListener = null;
 let playCalls = 0;
+let fastTimeout = false;
 const playPlans = [];
 const reports = [];
+const instances = [];
 
 class FakeAudio {
   constructor() {
@@ -29,6 +31,9 @@ class FakeAudio {
     this.onended = null;
     this.onplaying = null;
     this.onpause = null;
+    this.onwaiting = null;
+    this.onstalled = null;
+    instances.push(this);
   }
 
   async play() {
@@ -64,11 +69,17 @@ const runtime = {
   }
 };
 
+const realSetTimeout = setTimeout;
 const context = {
   console,
   Date,
   Math,
   Promise,
+  setTimeout(fn, delay) {
+    const effective = fastTimeout && (delay === 12_000 || delay === 15_000) ? 0 : delay;
+    return realSetTimeout(fn, effective);
+  },
+  clearTimeout,
   globalThis: null,
   browser: { runtime },
   document: {
@@ -88,6 +99,7 @@ vm.createContext(context);
 
 const stationA = { stationuuid: 'a', name: 'Radio A', streams: ['https://example.com/a'] };
 const stationB = { stationuuid: 'b', name: 'Radio B', streams: ['https://example.com/b'] };
+const stationC = { stationuuid: 'c', name: 'Radio C', streams: ['https://example.com/c1', 'https://example.com/c2'] };
 
 async function flush() {
   for (let i = 0; i < 6; i += 1) await new Promise(resolve => setImmediate(resolve));
@@ -132,9 +144,32 @@ async function main() {
   const finalState = await messageListener({ type: 'RB_GET_STATE' });
   assert.equal(finalState.station.stationuuid, 'b', 'slow old playback must not replace the newer station');
   assert.equal(finalState.playing, true, 'newer station must remain playing after the stale promise resolves');
+
+  const hanging = deferred();
+  playPlans.push(hanging.promise, Promise.resolve());
+  fastTimeout = true;
+  const beforeTimeoutRecovery = playCalls;
+  const recovered = await messageListener({ type: 'RB_PLAY', station: stationC });
+  assert.equal(recovered.station.stationuuid, 'c');
+  assert.equal(recovered.playing, true, 'a hanging first candidate must recover to the next Firefox stream');
+  assert.equal(playCalls, beforeTimeoutRecovery + 2, 'Firefox start timeout must advance exactly one candidate');
+
+  playPlans.push(Promise.resolve(), Promise.resolve());
+  const stalledStart = await messageListener({ type: 'RB_PLAY', station: stationC });
+  assert.equal(stalledStart.playing, true);
+  const active = instances[instances.length - 1];
+  const beforeStallRecovery = playCalls;
+  active.onstalled();
+  await new Promise(resolve => realSetTimeout(resolve, 20));
+  await flush();
+  const afterStall = await messageListener({ type: 'RB_GET_STATE' });
+  assert.equal(afterStall.playing, true, 'Firefox stalled audio must recover to the next candidate');
+  assert.ok(playCalls > beforeStallRecovery, 'Firefox stall recovery must attempt another candidate');
+
+  fastTimeout = false;
   assert.ok(reports.some(message => message.type === 'RB_STATE'), 'player must report state updates to extension UI');
 
-  console.log('Firefox player regression tests OK');
+  console.log('Firefox player timeout/stall/session regression tests OK');
 }
 
 main().catch(error => {

@@ -54,6 +54,7 @@ jobs:
           node --check scripts/test_browser_catalog_contract.js
           node --check scripts/test_browser_state_contract.js
           node --check scripts/test_chromium_player_contract.js
+          node --check scripts/test_chromium_offscreen_contract.js
           node --check scripts/test_firefox_player_contract.js
       - name: Test browser network safety contract
         run: node scripts/test_browser_network_contract.js
@@ -63,7 +64,9 @@ jobs:
         run: node scripts/test_browser_state_contract.js
       - name: Test Chromium player close/session contract
         run: node scripts/test_chromium_player_contract.js
-      - name: Test Firefox player session contract
+      - name: Test Chromium offscreen timeout/stall contract
+        run: node scripts/test_chromium_offscreen_contract.js
+      - name: Test Firefox player timeout/stall/session contract
         run: node scripts/test_firefox_player_contract.js
       - name: Build extensions
         working-directory: extensions
@@ -75,24 +78,31 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate screenshot PowerShell
+      - name: Validate Windows PowerShell tooling
         shell: pwsh
         run: |
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path 'scripts/capture-windows.ps1'),
-            [ref]$tokens,
-            [ref]$errors
-          ) | Out-Null
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Error $_.Message }
-            throw 'scripts/capture-windows.ps1 contains PowerShell syntax errors.'
+          foreach ($path in @('scripts/capture-windows.ps1', 'scripts/test-windows-runtime.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $path),
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              throw "$path contains PowerShell syntax errors."
+            }
           }
       - name: Test and build Windows release
         working-directory: apps/windows
         shell: pwsh
         run: ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
+      - name: Soak-test Windows startup runtime
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION).Trim()
+          ./scripts/test-windows-runtime.ps1 -Exe "apps/windows/dist/RadioBalkan-Portable-v$version.exe" -SoakSeconds 15
       - name: Verify Windows build leaves repository clean
         run: python scripts/check_clean_worktree.py
 

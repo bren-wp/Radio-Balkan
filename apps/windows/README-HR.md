@@ -1,17 +1,17 @@
-# Radio Balkan 0.0.21 — Windows
+# Radio Balkan 0.0.22 — Windows
 
 Nativna Windows x64 aplikacija i installer bez Electrona, ugrađenog browser runtimea ili telemetry SDK-a. Portable i Setup grade se iz istog sourcea i istog Portable payload-a.
 
-## Produkcijski fokus u 0.0.21
+## Produkcijski fokus u 0.0.22
 
-- Setup app payload, uninstaller i ikona zapisuju se preko durable writera koji radi puni write i `Sync()` prije rename/commit koraka
-- installer i dalje prije nastavka provjerava SHA-256 stvarno instaliranog executabla, a ne samo ugrađeni payload
-- Setup zadržava potpunu keyboard kontrolu: Tab/strelice mijenjaju fokus, Enter/Space aktiviraju, Escape zatvara kada instalacija nije u tijeku
-- checkbox opcije imaju proširene click-targete koji uključuju tekst labele i vidljiv fokus
-- Portable state zapis i dalje koristi durable temp-write + sync + backup/rename putanju, a finalni shutdown persistence/audio cleanup ostaje idempotentan
-- station i hero play kontrole aktivne stanice ostaju pause/resume toggle s jasnim `Pauziraj` / `Nastavi` tekstom
-- mrežni transport i dalje razrješava i validira javne IP adrese prije TCP spajanja te blokira privatne/lokalne/metadata ciljeve
-- Portable i Setup prolaze line-ending-neovisni `gofmt` gate, Go vet/test/build te clean-worktree provjeru u CI-ju
+- Portable startup health provjera više ne kreće istodobno s prvim renderom/katalogom; odgođena je 8 sekundi i početno radi nad manjim, prioritetnim skupom stanica
+- PresentationCore audio engine pokreće se u background warmupu, objavljuje `READY` prije prihvaćanja naredbi i za svaku naredbu vraća `OK/ERR`; naredbe imaju ograničene timeoutove, a postojeći MCI fallback ostaje aktivan
+- Stop → Play sada radi svježi reconnect umjesto pokušaja resumea već zatvorenog sourcea
+- promjena glasnoće šalje se aktivnom audio engineu i kada je reprodukcija pauzirana
+- shutdown prvo prekida background rad, a završni state/audio cleanup ima vremenski limit kako UI thread ne bi ostao beskonačno blokiran pri zatvaranju
+- CI pokreće stvarni Portable executable kroz 15-sekundni startup soak i zahtijeva da proces/prozor ostanu živi te da se aplikacija uredno zatvori
+- `build-release.ps1` eksplicitno provjerava exit code svakog Portable/Setup `go vet`, `go test` i `go build` koraka; neuspjeli Go test više ne može završiti lažno-zelenim buildom
+- postojeći durable Portable state zapis, durable Setup payload write, installer SHA-256 provjera, URL/DNS zaštite i keyboard installer UX ostaju aktivni
 
 ## Build
 
@@ -22,4 +22,4 @@ cd apps/windows
 ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
 ```
 
-Rezultat su `RadioBalkan-Portable-v0.0.21.exe`, `RadioBalkan-Setup-v0.0.21.exe` i SHA-256 manifest. Produkcijski release artefakti ponovno se grade u GitHub Publish workflowu iz release commita.
+Rezultat su `RadioBalkan-Portable-v0.0.22.exe`, `RadioBalkan-Setup-v0.0.22.exe` i SHA-256 manifest. Produkcijski release artefakti ponovno se grade u GitHub Publish workflowu iz release commita.

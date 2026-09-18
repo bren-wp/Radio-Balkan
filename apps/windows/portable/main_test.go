@@ -124,3 +124,13 @@ func TestWriteFileDurablePersistsCompleteContent(t *testing.T) {
 		t.Fatalf("durable replacement content = %q; want %q", got, replacement)
 	}
 }
+
+
+func TestAudioEngineAcknowledgesCommand(t *testing.T) {
+	app = App{done: make(chan struct{})}
+	defer audioShutdown()
+
+	if err := audioSend("VOLUME 0.25"); err != nil {
+		t.Fatalf("audio engine command acknowledgement failed: %v", err)
+	}
+}
