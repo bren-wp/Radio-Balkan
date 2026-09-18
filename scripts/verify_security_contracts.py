@@ -510,6 +510,9 @@ def main() -> None:
     )
     require(
         ".github/workflows/ci.yml",
+        "actions/checkout@v6",
+        "actions/setup-java@v6",
+        "gradle/actions/setup-gradle@v6",
         "Verify browser build leaves repository clean",
         "Verify Windows build leaves repository clean",
         "Verify Android build leaves repository clean",
@@ -529,6 +532,9 @@ def main() -> None:
     )
     require(
         ".github/workflows/publish.yml",
+        "actions/checkout@v6",
+        "actions/setup-java@v6",
+        "gradle/actions/setup-gradle@v6",
         "Verify Windows build leaves repository clean",
         "Verify browser build leaves repository clean",
         "Verify Android build leaves repository clean",
@@ -538,6 +544,7 @@ def main() -> None:
     )
     require(
         ".github/workflows/screenshots.yml",
+        "actions/checkout@v6",
         "Verify screenshot build leaves repository clean",
         "python scripts/check_clean_worktree.py",
     )
