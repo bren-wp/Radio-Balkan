@@ -589,6 +589,32 @@ func runtimeTestTrace(scope string) {
 	logError("runtime-test", errors.New(scope))
 }
 
+const (
+	maxAppLogBytes      int64 = 2 << 20
+	maxAppLogEntryRunes       = 16384
+)
+
+func boundedLogText(value string, maxRunes int) string {
+	value = strings.ReplaceAll(strings.ReplaceAll(value, "\r", " "), "\n", " ")
+	runes := []rune(value)
+	if len(runes) <= maxRunes {
+		return value
+	}
+	return string(runes[:maxRunes]) + "…"
+}
+
+func rotateAppLog(path string) {
+	info, err := os.Stat(path)
+	if err != nil || info.Size() <= maxAppLogBytes {
+		return
+	}
+	previous := path + ".1"
+	_ = os.Remove(previous)
+	if err := os.Rename(path, previous); err != nil {
+		_ = os.WriteFile(path, nil, 0644)
+	}
+}
+
 func logError(scope string, err error) {
 	if err == nil {
 		return
@@ -597,16 +623,17 @@ func logError(scope string, err error) {
 	defer logMu.Unlock()
 	_ = os.MkdirAll(filepath.Join(stateDir(), "logs"), 0755)
 	p := filepath.Join(stateDir(), "logs", "app.log")
-	if info, e := os.Stat(p); e == nil && info.Size() > 2<<20 {
-		_ = os.Remove(p + ".1")
-		_ = os.Rename(p, p+".1")
-	}
+	rotateAppLog(p)
 	f, e := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if e != nil {
 		return
 	}
 	defer f.Close()
-	_, _ = fmt.Fprintf(f, "%s [%s] %v\n", time.Now().Format(time.RFC3339), scope, err)
+	_, _ = fmt.Fprintf(f, "%s [%s] %s\n",
+		time.Now().Format(time.RFC3339),
+		boundedLogText(scope, 256),
+		boundedLogText(err.Error(), maxAppLogEntryRunes),
+	)
 }
 func safeHTTPURL(raw string) bool {
 	raw = strings.TrimSpace(raw)
