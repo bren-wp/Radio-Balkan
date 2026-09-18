@@ -9,6 +9,7 @@ Nativna Windows x64 aplikacija i installer bez Electrona, ugrađenog browser run
 - source fallback verzija Portable i Setup aplikacije više nije zastarjeli hardcoded string; version tooling je sinkronizira s root `VERSION`
 - release build i dalje linkerom postavlja `main.appVersion`, koristi `-trimpath`, uklanja VCS metadata i stripped simbole
 - state zapis koristi durable temp-write + sync + backup/rename putanju, a finalni shutdown persistence/audio cleanup je idempotentan
+- station i hero play kontrole aktivne stanice rade kao pause/resume toggle i prikazuju `Pauziraj` / `Nastavi` umjesto nepotrebnog ponovnog pokretanja playback pipelinea
 - mrežni transport razrješava i validira javne IP adrese prije TCP spajanja te blokira privatne/lokalne/metadata ciljeve
 - installer provjerava SHA-256 instaliranog executabla prije nastavka
 - Portable i Setup prolaze strogi line-ending-neovisni `gofmt` gate, Go vet/test/build te clean-worktree provjeru u CI-ju
