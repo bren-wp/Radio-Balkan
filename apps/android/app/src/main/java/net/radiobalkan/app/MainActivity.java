@@ -66,6 +66,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private final AtomicInteger healthGeneration = new AtomicInteger();
     private final AtomicBoolean healthRunning = new AtomicBoolean();
     private final AtomicBoolean autoHealthStarted = new AtomicBoolean();
+    private final AtomicBoolean catalogRefreshRunning = new AtomicBoolean();
     private final Object dataLock = new Object();
     private List<RadioStation> allStations = new ArrayList<>();
     private List<RadioStation> visibleStations = new ArrayList<>();
@@ -133,6 +134,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         }
         genre = state.genre();
         tab = validTab(state.tab()) ? state.tab() : "all";
+        navSelection = navSelectionForTab(tab);
         images = new ImageLoader();
         repository = new RadioRepository(this);
         buildUi();
@@ -409,6 +411,12 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         return item;
     }
 
+    private static String navSelectionForTab(String value) {
+        if ("favorites".equals(value)) return "favorites";
+        if ("all".equals(value)) return "all";
+        return "radio";
+    }
+
     private void selectBottomNav(String action) {
         navSelection = safe(action).isEmpty() ? "radio" : action;
         for (Map.Entry<String, LinearLayout> entry : bottomNavItems.entrySet()) updateBottomNavItem(entry.getKey(), entry.getValue());
@@ -572,6 +580,10 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
     private void refreshCatalog() {
         if (destroyed) return;
+        if (!catalogRefreshRunning.compareAndSet(false, true)) {
+            Toast.makeText(this, "Osvježavanje je već u tijeku", Toast.LENGTH_SHORT).show();
+            return;
+        }
         statusText.setText("Osvježavam popis stanica…");
         int gen = catalogGeneration.incrementAndGet();
         RadioRepository old = repository;
@@ -579,8 +591,14 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         old.shutdown();
         repository.load(new RadioRepository.Listener() {
             @Override public void onCached(List<RadioStation> stations) { }
-            @Override public void onLoaded(List<RadioStation> stations) { postIfActive(() -> { if (gen != catalogGeneration.get()) return; useStations(stations, "Popis je osvježen"); }); }
-            @Override public void onError(Throwable error, boolean hasCache) { postIfActive(() -> { if (gen != catalogGeneration.get()) return; statusText.setText("Osvježavanje nije uspjelo"); }); }
+            @Override public void onLoaded(List<RadioStation> stations) {
+                catalogRefreshRunning.set(false);
+                postIfActive(() -> { if (gen != catalogGeneration.get()) return; useStations(stations, "Popis je osvježen"); });
+            }
+            @Override public void onError(Throwable error, boolean hasCache) {
+                catalogRefreshRunning.set(false);
+                postIfActive(() -> { if (gen != catalogGeneration.get()) return; statusText.setText("Osvježavanje nije uspjelo"); });
+            }
         });
     }
 
@@ -775,12 +793,14 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             sendPlayerAction(playing ? RadioPlayerService.ACTION_PAUSE : RadioPlayerService.ACTION_RESUME);
             return;
         }
-        currentKey = key; state.addRecent(key); state.setLastStation(key, s.name, s.meta());
         Intent i = new Intent(this, RadioPlayerService.class).setAction(RadioPlayerService.ACTION_PLAY);
         i.putExtra(RadioPlayerService.EXTRA_KEY, key); i.putExtra(RadioPlayerService.EXTRA_NAME, s.name); i.putExtra(RadioPlayerService.EXTRA_META, s.meta());
         i.putExtra(RadioPlayerService.EXTRA_URL, s.url); i.putExtra(RadioPlayerService.EXTRA_RESOLVED, s.urlResolved); i.putExtra(RadioPlayerService.EXTRA_UUID, s.stationUuid); i.putExtra(RadioPlayerService.EXTRA_HOMEPAGE, s.homepage); i.putExtra(RadioPlayerService.EXTRA_COUNTRY, s.countryCode);
         try { if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i); }
         catch (Throwable t) { AppLog.e(this, "player-play", t); Toast.makeText(this, "Reprodukciju nije moguće pokrenuti", Toast.LENGTH_LONG).show(); return; }
+        currentKey = key;
+        state.addRecent(key);
+        state.setLastStation(key, s.name, s.meta());
         currentCountryCode = s.countryCode;
         playerName.setText(s.name); playerMeta.setText(s.meta()); applyFlag(playerMeta, s.countryCode); statusText.setText("Povezujem…");
         if (playerArtwork != null) { playerArtwork.setImageResource(R.drawable.ic_radio_balkan); images.load(s.favicon, playerArtwork, null); }
@@ -803,7 +823,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         options.add("Kopiraj poveznicu za reprodukciju");
         options.add("Odaberi drugi izvor");
         options.add("Provjeri dostupnost");
-        if (!state.autoReplacement(s.key()).isEmpty() || !state.backups(s.key()).isEmpty()) options.add("Vrati automatski odabir");
+        if (state.manualReplacement(s.key()).isEmpty() && (!state.autoReplacement(s.key()).isEmpty() || !state.backups(s.key()).isEmpty())) options.add("Vrati automatski odabir");
         String[] array = options.toArray(new String[0]);
         new AlertDialog.Builder(this).setTitle(s.name).setItems(array, (d, which) -> {
             String chosen = array[which];
@@ -813,12 +833,19 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             else if (chosen.equals("Kopiraj poveznicu za reprodukciju")) copyText(s.activeUrl);
             else if (chosen.equals("Odaberi drugi izvor")) showSourceDialog(s);
             else if (chosen.equals("Provjeri dostupnost")) checkOne(s);
-            else if (chosen.equals("Vrati automatski odabir")) { state.clearAutomaticSources(s.key()); s.replaced = !state.manualReplacement(s.key()).isEmpty(); s.activeUrl = !s.urlResolved.isEmpty() ? s.urlResolved : s.url; adapter.notifyDataSetChanged(); statusText.setText("Vraćen automatski odabir izvora"); }
+            else if (chosen.equals("Vrati automatski odabir")) {
+                state.clearAutomaticSources(s.key());
+                String manual = state.manualReplacement(s.key());
+                s.replaced = !manual.isEmpty();
+                s.activeUrl = !manual.isEmpty() ? manual : (!s.urlResolved.isEmpty() ? s.urlResolved : s.url);
+                adapter.notifyDataSetChanged();
+                statusText.setText(manual.isEmpty() ? "Vraćen automatski odabir izvora" : "Ručni izvor ostaje aktivan");
+            }
         }).setNegativeButton("Zatvori", null).show();
     }
 
     private void openWeb(RadioStation s) {
-        if (!StreamResolver.isHttp(s.homepage)) { Toast.makeText(this, "Web stranica nije dostupna", Toast.LENGTH_SHORT).show(); return; }
+        if (!StreamResolver.isSafeHttp(s.homepage)) { Toast.makeText(this, "Web stranica nije dostupna", Toast.LENGTH_SHORT).show(); return; }
         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(s.homepage))); }
         catch (Throwable t) { AppLog.e(this, "open-web", t); Toast.makeText(this, "Nije moguće otvoriti web stranicu", Toast.LENGTH_SHORT).show(); }
     }
