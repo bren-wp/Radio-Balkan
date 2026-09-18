@@ -136,6 +136,7 @@ def main() -> int:
         "setSearchVisible(",
         "@Override public void onBackPressed()",
         "hideSoftInputFromWindow",
+        '"Prikaz nije moguće osvježiti"',
     ):
         require(errors, android, needle, "Android MainActivity")
     for needle in (
@@ -144,6 +145,7 @@ def main() -> int:
         '"Očisti automatske izvore"',
         '"Promijeni izvor"',
         'navItem("○", "Profil", "profile")',
+        '"Prikaz je osvježen"',
     ):
         forbid(errors, android, needle, "Android MainActivity")
 

@@ -1109,7 +1109,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 r.run();
             } catch (Throwable error) {
                 AppLog.e(MainActivity.this, "ui-update", error);
-                if (statusText != null) statusText.setText("Prikaz je osvježen");
+                if (statusText != null) statusText.setText("Prikaz nije moguće osvježiti");
             }
         });
     }
