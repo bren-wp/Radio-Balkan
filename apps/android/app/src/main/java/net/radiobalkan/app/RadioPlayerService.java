@@ -302,7 +302,7 @@ public final class RadioPlayerService extends Service {
         }
         if (unavailable) {
             notifyState("Stanica trenutno nije dostupna", false);
-            stopForeground(false);
+            stopForeground(STOP_FOREGROUND_DETACH);
             abandonAudioFocus();
             return;
         }
@@ -517,7 +517,7 @@ public final class RadioPlayerService extends Service {
         }
         abandonAudioFocus();
         notifyState("Zaustavljeno", false);
-        stopForeground(true);
+        stopForeground(STOP_FOREGROUND_REMOVE);
         if (stopSelfToo) stopSelf();
     }
 

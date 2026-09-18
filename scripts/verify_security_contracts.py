@@ -68,6 +68,8 @@ def main() -> None:
         "explicitlyStopped = true;",
         "explicitlyStopped = false;",
         "i.putExtra(EXTRA_STOPPED, stopped);",
+        "stopForeground(STOP_FOREGROUND_DETACH);",
+        "stopForeground(STOP_FOREGROUND_REMOVE);",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/PlaybackLifecycle.java",
@@ -84,6 +86,14 @@ def main() -> None:
         "pausedOrRecoverablePlaybackCanResume",
         "stopThenPlayUsesFreshSessionInsteadOfResume",
         "adjacentNavigationWrapsAndHandlesMissingSelection",
+    )
+    require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
+        "installBackHandler()",
+        "OnBackInvokedDispatcher.PRIORITY_DEFAULT",
+        "showRadioLibrary()",
+        "list.smoothScrollToPosition(1)",
+        "playerArtwork = null",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
@@ -108,6 +118,11 @@ def main() -> None:
         "https://user:pass@example.com/live",
         "http://169.254.169.254/latest/meta-data/",
         "resolvedAddressSetRejectsAnyPrivateOrLocalTarget",
+    )
+    forbid(
+        "apps/android/app/src/main/java/net/radiobalkan/app/RadioPlayerService.java",
+        "stopForeground(true)",
+        "stopForeground(false)",
     )
     forbid(
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",

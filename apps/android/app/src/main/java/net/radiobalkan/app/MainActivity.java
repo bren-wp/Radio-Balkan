@@ -140,6 +140,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         images = new ImageLoader();
         repository = new RadioRepository(this);
         buildUi();
+        installBackHandler();
         registerPlayerReceiver();
         queryPlayerState();
         loadStations();
@@ -206,7 +207,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         back.setTextColor(0xFFE8EBF1);
         back.setBackground(interactiveRounded(0x00000000, 0x00000000, 12, 0x24FFFFFF));
         back.setContentDescription("Natrag");
-        back.setOnClickListener(v -> onBackPressed());
+        back.setOnClickListener(v -> handleBackNavigation());
         bar.addView(back, new LinearLayout.LayoutParams(dp(46), dp(52)));
 
         EqualizerView mark = new EqualizerView(this);
@@ -327,16 +328,21 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         shell.setStroke(dp(1), 0xFF3B414C);
         player.setBackground(shell);
 
-        playerArtwork = new ImageView(this);
-        playerArtwork.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        playerArtwork.setImageResource(R.drawable.ic_radio_balkan);
-        playerArtwork.setBackground(rounded(0xFF20262F, 0xFF3C4653, 16));
-        playerArtwork.setClipToOutline(true);
-        player.addView(playerArtwork, new LinearLayout.LayoutParams(dp(68), dp(68)));
+        boolean compactPlayer = isCompactWidth();
+        if (!compactPlayer) {
+            playerArtwork = new ImageView(this);
+            playerArtwork.setScaleType(ImageView.ScaleType.CENTER_CROP);
+            playerArtwork.setImageResource(R.drawable.ic_radio_balkan);
+            playerArtwork.setBackground(rounded(0xFF20262F, 0xFF3C4653, 16));
+            playerArtwork.setClipToOutline(true);
+            player.addView(playerArtwork, new LinearLayout.LayoutParams(dp(68), dp(68)));
+        } else {
+            playerArtwork = null;
+        }
 
         LinearLayout info = new LinearLayout(this);
         info.setOrientation(LinearLayout.VERTICAL);
-        info.setPadding(dp(12), 0, dp(8), 0);
+        info.setPadding(dp(compactPlayer ? 6 : 12), 0, dp(compactPlayer ? 4 : 8), 0);
         TextView nowLabel = label("Sada svira", 11, 0xFFFFB23F, false);
         playerName = label("Odaberi radio stanicu", 17, Color.WHITE, true);
         playerMeta = label("Radio iz Hrvatske i regije", 11, 0xFFADB3BD, false);
@@ -347,7 +353,6 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         info.addView(statusText, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(17)));
         player.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
 
-        boolean compactPlayer = isCompactWidth();
         playerEqualizer = new EqualizerView(this);
         playerEqualizer.setBarCount(9);
         if (!compactPlayer) {
@@ -433,13 +438,26 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         item.setOnClickListener(v -> {
             if ("discover".equals(action)) { showBrowseDialog(); return; }
             if ("more".equals(action)) { showAppMenu(); return; }
+            if ("radio".equals(action)) { showRadioLibrary(); return; }
             selectBottomNav(action);
             if ("all".equals(action)) { tab="all"; state.setTab(tab); applyFilterAsync(); list.smoothScrollToPosition(0); }
             else if ("favorites".equals(action)) { tab="favorites"; state.setTab(tab); applyFilterAsync(); }
-            else if ("radio".equals(action)) { tab="all"; state.setTab(tab); applyFilterAsync(); list.smoothScrollToPosition(0); }
         });
         updateBottomNavItem(action, item);
         return item;
+    }
+
+    private void showRadioLibrary() {
+        tab = "all";
+        state.setTab(tab);
+        selectBottomNav("radio");
+        applyFilterAsync();
+        if (list != null) {
+            list.post(() -> {
+                if (destroyed || list.getCount() <= 1) return;
+                list.smoothScrollToPosition(1);
+            });
+        }
     }
 
     private static String navSelectionForTab(String value) {
@@ -1058,6 +1076,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         if (v != null) { InputMethodManager im = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE); if (im != null) im.hideSoftInputFromWindow(v.getWindowToken(), 0); }
     }
 
+    @SuppressWarnings("deprecation")
     private void installSystemBarInsets(View root) {
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             int top;
@@ -1114,11 +1133,34 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         applyFilterAsync();
     }
 
-    @Override public void onBackPressed() {
+    private void installBackHandler() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                    this::handleBackNavigation);
+        }
+    }
+
+    private boolean closeTransientUiForBack() {
         if (searchBox != null && searchBox.getVisibility() == View.VISIBLE) {
             setSearchVisible(false);
+            return true;
+        }
+        return false;
+    }
+
+    private void handleBackNavigation() {
+        if (closeTransientUiForBack()) return;
+        finishAfterTransition();
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override public void onBackPressed() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            handleBackNavigation();
             return;
         }
+        if (closeTransientUiForBack()) return;
         super.onBackPressed();
     }
 
