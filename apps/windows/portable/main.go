@@ -462,7 +462,6 @@ func currentStationIndexLocked() int {
 	return -1
 }
 
-
 var (
 	user32   = syscall.NewLazyDLL("user32.dll")
 	gdi32    = syscall.NewLazyDLL("gdi32.dll")
