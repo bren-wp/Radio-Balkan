@@ -160,6 +160,7 @@ async function main() {
   const active = instances[instances.length - 1];
   const beforeStallRecovery = playCalls;
   active.onstalled();
+  await new Promise(resolve => realSetTimeout(resolve, 20));
   await flush();
   const afterStall = await messageListener({ type: 'RB_GET_STATE' });
   assert.equal(afterStall.playing, true, 'Firefox stalled audio must recover to the next candidate');
