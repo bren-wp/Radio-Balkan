@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	_ "embed"
@@ -320,6 +321,7 @@ type App struct {
 	audioMu                                  sync.Mutex
 	audioCmd                                 *exec.Cmd
 	audioIn                                  io.WriteCloser
+	audioAck                                 chan string
 	audioRecovering                          bool
 	lastAudioFailure                         time.Time
 	loading                                  bool
@@ -5140,24 +5142,39 @@ func startAudioEngineLocked() error {
 	if app.audioCmd != nil && app.audioCmd.Process != nil {
 		return nil
 	}
-	script := `$ErrorActionPreference='SilentlyContinue'; Add-Type -AssemblyName PresentationCore; $p=New-Object System.Windows.Media.MediaPlayer; while(($line=[Console]::In.ReadLine()) -ne $null){ try { $sp=$line.Split(' ',3); switch($sp[0]){ 'PLAY' { $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[1])); $v=[double]::Parse($sp[2],[Globalization.CultureInfo]::InvariantCulture); $p.Stop(); $p.Close(); $p.Open([Uri]$u); $p.Volume=$v; $p.Play() } 'PAUSE' { $p.Pause() } 'RESUME' { $p.Play() } 'STOP' { $p.Stop(); $p.Close() } 'VOLUME' { $p.Volume=[double]::Parse($sp[1],[Globalization.CultureInfo]::InvariantCulture) } } } catch {} }`
+	script := `$ErrorActionPreference='Stop'; Add-Type -AssemblyName PresentationCore; $p=New-Object System.Windows.Media.MediaPlayer; while(($line=[Console]::In.ReadLine()) -ne $null){ try { $sp=$line.Split(' ',3); switch($sp[0]){ 'PLAY' { $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[1])); $v=[double]::Parse($sp[2],[Globalization.CultureInfo]::InvariantCulture); $p.Stop(); $p.Close(); $p.Open([Uri]$u); $p.Volume=$v; $p.Play() } 'PAUSE' { $p.Pause() } 'RESUME' { $p.Play() } 'STOP' { $p.Stop(); $p.Close() } 'VOLUME' { $p.Volume=[double]::Parse($sp[1],[Globalization.CultureInfo]::InvariantCulture) } default { throw 'unknown command' } }; [Console]::Out.WriteLine('OK'); [Console]::Out.Flush() } catch { [Console]::Out.WriteLine('ERR'); [Console]::Out.Flush() } }`
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-STA", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err
 	}
-	out, _ := cmd.StdoutPipe()
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		_ = in.Close()
+		return err
+	}
 	cmd.Stderr = nil
 	if err = cmd.Start(); err != nil {
 		_ = in.Close()
 		return err
 	}
-	if out != nil {
-		go io.Copy(io.Discard, out)
-	}
+	ack := make(chan string, 8)
+	go func() {
+		scanner := bufio.NewScanner(out)
+		for scanner.Scan() {
+			select {
+			case ack <- strings.TrimSpace(scanner.Text()):
+			case <-app.done:
+				close(ack)
+				return
+			}
+		}
+		close(ack)
+	}()
 	app.audioCmd = cmd
 	app.audioIn = in
+	app.audioAck = ack
 	go func(c *exec.Cmd) {
 		_ = c.Wait()
 		app.audioMu.Lock()
@@ -5165,6 +5182,7 @@ func startAudioEngineLocked() error {
 		if sameEngine {
 			app.audioCmd = nil
 			app.audioIn = nil
+			app.audioAck = nil
 		}
 		app.audioMu.Unlock()
 		if !sameEngine || shuttingDown() {
@@ -5216,6 +5234,26 @@ func startAudioEngineLocked() error {
 	}(cmd)
 	return nil
 }
+func waitAudioAckLocked() error {
+	if app.audioAck == nil {
+		return errors.New("audio engine nema kanal potvrde")
+	}
+	select {
+	case reply, ok := <-app.audioAck:
+		if !ok {
+			return errors.New("audio engine je prekinut")
+		}
+		if reply != "OK" {
+			return errors.New("audio engine nije prihvatio naredbu")
+		}
+		return nil
+	case <-time.After(1500 * time.Millisecond):
+		return errors.New("audio engine nije odgovorio na vrijeme")
+	case <-app.done:
+		return context.Canceled
+	}
+}
+
 func audioSend(line string) error {
 	app.audioMu.Lock()
 	defer app.audioMu.Unlock()
@@ -5225,8 +5263,10 @@ func audioSend(line string) error {
 	if app.audioIn == nil {
 		return errors.New("audio engine nije dostupan")
 	}
-	_, err := io.WriteString(app.audioIn, line+"\n")
-	return err
+	if _, err := io.WriteString(app.audioIn, line+"\n"); err != nil {
+		return err
+	}
+	return waitAudioAckLocked()
 }
 func audioSendExisting(line string) error {
 	app.audioMu.Lock()
@@ -5234,8 +5274,10 @@ func audioSendExisting(line string) error {
 	if app.audioIn == nil {
 		return errors.New("audio engine nije pokrenut")
 	}
-	_, err := io.WriteString(app.audioIn, line+"\n")
-	return err
+	if _, err := io.WriteString(app.audioIn, line+"\n"); err != nil {
+		return err
+	}
+	return waitAudioAckLocked()
 }
 func audioShutdown() {
 	app.audioMu.Lock()
@@ -5243,6 +5285,7 @@ func audioShutdown() {
 	cmd := app.audioCmd
 	app.audioIn = nil
 	app.audioCmd = nil
+	app.audioAck = nil
 	app.audioMu.Unlock()
 	if in != nil {
 		_, _ = io.WriteString(in, "STOP\n")
