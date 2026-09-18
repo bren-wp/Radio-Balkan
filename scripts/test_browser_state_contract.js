@@ -327,26 +327,26 @@ async function main() {
   assert.equal(elements.playerStop.attributes['aria-busy'], 'false', 'stop busy state must clear after completion');
   assert.equal(elements.playerStop.attributes['aria-label'], 'Reprodukcija je zaustavljena', 'stopped control must expose its terminal state accessibly');
 
+  const playCallsBeforeStoppedReplay = playCalls;
+  getState = { epoch: 'epoch-b', revision: 6, station: stationB, playing: true, sessionId: 'session-b2' };
+  elements.playerToggle.dispatch('click');
+  await flush();
+  assert.equal(playCalls, playCallsBeforeStoppedReplay + 1, 'main play control after stop must send a fresh RB_PLAY command');
+  assert.equal(elements.playerState.textContent, 'Sada svira', 'play after stop must create a fresh playback session from the main control');
+
   const adjacentCallsBefore = playCalls;
-  getState = { epoch: 'epoch-b', revision: 6, station: stationB, playing: true, sessionId: 'session-b-next' };
+  getState = { epoch: 'epoch-b', revision: 7, station: stationB, playing: true, sessionId: 'session-b-next' };
   elements.playerNext.dispatch('click');
   await flush();
   assert.equal(playCalls, adjacentCallsBefore + 1, 'next control must start the adjacent station');
   assert.equal(lastPlayedStation?.stationuuid, 'station-extra-0', 'next from Radio B must select the following visible station');
   const afterNextCalls = playCalls;
-  getState = { epoch: 'epoch-b', revision: 7, station: stationB, playing: true, sessionId: 'session-b-prev' };
+  getState = { epoch: 'epoch-b', revision: 8, station: stationB, playing: true, sessionId: 'session-b-prev' };
   elements.playerPrev.dispatch('click');
   await flush();
   assert.equal(playCalls, afterNextCalls + 1, 'previous control must start the previous visible station');
   assert.equal(lastPlayedStation?.stationuuid, 'station-a', 'previous from Radio B must select the preceding visible station');
   assert.equal(elements.playerPrev.disabled, false, 'previous control must remain available after adjacent playback');
-
-  const playCallsBeforeStoppedReplay = playCalls;
-  getState = { epoch: 'epoch-b', revision: 8, station: stationB, playing: true, sessionId: 'session-b2' };
-  elements.playerToggle.dispatch('click');
-  await flush();
-  assert.equal(playCalls, playCallsBeforeStoppedReplay + 1, 'main play control after stop must send a fresh RB_PLAY command');
-  assert.equal(elements.playerState.textContent, 'Sada svira', 'play after stop must create a fresh playback session from the main control');
 
   console.log('Browser popup state and UI regression tests OK');
 }
