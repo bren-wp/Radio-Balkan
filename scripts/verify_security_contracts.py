@@ -282,6 +282,7 @@ def main() -> None:
         "player toggle must be re-enabled after command completion",
         "duplicate stop clicks must be ignored while stop is in flight",
         "completed stop command must render an explicit stopped state",
+        "player stop must stay disabled once playback is already stopped",
         "main play control after stop must send a fresh RB_PLAY command",
     )
     require(

@@ -313,8 +313,9 @@ async function main() {
   pendingStop.resolve({ epoch: 'epoch-b', revision: 5, station: stationB, playing: false, sessionId: null });
   await flush();
   assert.equal(elements.playerState.textContent, 'Zaustavljeno', 'completed stop command must render an explicit stopped state');
-  assert.equal(elements.playerStop.disabled, false, 'player stop must recover after command completion');
+  assert.equal(elements.playerStop.disabled, true, 'player stop must stay disabled once playback is already stopped');
   assert.equal(elements.playerStop.attributes['aria-busy'], 'false', 'stop busy state must clear after completion');
+  assert.equal(elements.playerStop.attributes['aria-label'], 'Reprodukcija je zaustavljena', 'stopped control must expose its terminal state accessibly');
 
   const playCallsBeforeStoppedReplay = playCalls;
   getState = { epoch: 'epoch-b', revision: 6, station: stationB, playing: true, sessionId: 'session-b2' };

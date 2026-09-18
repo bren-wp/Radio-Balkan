@@ -472,9 +472,9 @@
     $('playerFav').disabled = !station || commandBusy;
     $('playerFav').setAttribute('aria-pressed', String(favorite));
     $('playerFav').setAttribute('aria-label', favorite ? 'Ukloni iz omiljenih' : 'Dodaj u omiljene');
-    $('playerStop').disabled = !station || commandBusy;
+    $('playerStop').disabled = !station || commandBusy || stopped;
     $('playerStop').setAttribute('aria-busy', String(commandBusy));
-    $('playerStop').setAttribute('aria-label', commandBusy ? 'Radnja je u tijeku' : 'Zaustavi reprodukciju');
+    $('playerStop').setAttribute('aria-label', commandBusy ? 'Radnja je u tijeku' : (stopped ? 'Reprodukcija je zaustavljena' : 'Zaustavi reprodukciju'));
   }
 
   list.addEventListener('click', event => {
