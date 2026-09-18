@@ -50,32 +50,27 @@ const RB = (() => {
       throw new Error('API odgovor je prevelik');
     }
 
-    if (response.body?.getReader) {
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      const parts = [];
-      let total = 0;
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          total += value?.byteLength || 0;
-          if (total > maxBytes) {
-            try { await reader.cancel(); } catch { }
-            throw new Error('API odgovor je prevelik');
-          }
-          parts.push(decoder.decode(value, { stream: true }));
+    if (!response.body?.getReader) throw new Error('Streaming API odgovor nije dostupan');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const parts = [];
+    let total = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value?.byteLength || 0;
+        if (total > maxBytes) {
+          try { await reader.cancel(); } catch { }
+          throw new Error('API odgovor je prevelik');
         }
-        parts.push(decoder.decode());
-      } finally {
-        try { reader.releaseLock?.(); } catch { }
+        parts.push(decoder.decode(value, { stream: true }));
       }
-      return JSON.parse(parts.join(''));
+      parts.push(decoder.decode());
+    } finally {
+      try { reader.releaseLock?.(); } catch { }
     }
-
-    const text = await response.text();
-    if (new TextEncoder().encode(text).byteLength > maxBytes) throw new Error('API odgovor je prevelik');
-    return JSON.parse(text);
+    return JSON.parse(parts.join(''));
   }
 
   const host = raw => {
