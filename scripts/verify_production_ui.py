@@ -74,6 +74,9 @@ def main() -> int:
         "if (activeCommandToken) return;",
         "playerToggle').setAttribute('aria-busy'",
         "button.disabled = !!activeCommandToken && active",
+        "function renderEmptyState(",
+        "'Pokušaj ponovno'",
+        "'Poništi filtre'",
     ):
         require(errors, popup_js, needle, "extensions/shared/popup.js")
     forbid(errors, popup_js, "$('playerName').textContent = station ? station.name : 'Ništa'", "extensions/shared/popup.js")
@@ -81,6 +84,7 @@ def main() -> int:
     require(errors, popup_css, "width: 44px", "extensions/shared/popup.css")
     require(errors, popup_css, ".station:focus-visible", "extensions/shared/popup.css")
     require(errors, popup_css, "button:active:not(:disabled)", "extensions/shared/popup.css")
+    require(errors, popup_css, ".emptyAction", "extensions/shared/popup.css")
 
     android = read("apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java")
     adapter = read("apps/android/app/src/main/java/net/radiobalkan/app/StationAdapter.java")
@@ -103,6 +107,9 @@ def main() -> int:
         "updatePlaybackControls()",
         "StreamResolver.isSafeHttp(s.homepage)",
         "ui.removeCallbacksAndMessages(null)",
+        "setSearchVisible(",
+        "@Override public void onBackPressed()",
+        "hideSoftInputFromWindow",
     ):
         require(errors, android, needle, "Android MainActivity")
     for needle in (

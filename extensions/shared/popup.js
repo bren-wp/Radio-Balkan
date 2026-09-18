@@ -308,10 +308,8 @@
     const fragment = document.createDocumentFragment();
     for (const station of shown) fragment.append(stationCard(station));
     if (!shown.length) {
-      const empty = document.createElement('div');
-      empty.className = 'empty';
-      empty.textContent = favoritesOnly ? 'Još nema omiljenih stanica za ovaj prikaz.' : 'Nema stanica za odabranu kombinaciju filtera.';
-      fragment.append(empty);
+      const message = favoritesOnly ? 'Još nema omiljenih stanica za ovaj prikaz.' : 'Nema stanica za odabranu kombinaciju filtera.';
+      fragment.append(renderEmptyState(message, 'Poništi filtre', resetFilters));
     } else if (visible.length > renderLimit) {
       const more = document.createElement('button');
       more.type = 'button';
@@ -335,6 +333,25 @@
     const target = buttons?.[index];
     if (target && typeof target.focus === 'function') target.focus();
   }
+
+  function renderEmptyState(message, actionLabel = '', action = null) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.setAttribute('role', 'status');
+    const copy = document.createElement('p');
+    copy.textContent = message;
+    empty.append(copy);
+    if (actionLabel && typeof action === 'function') {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'emptyAction';
+      button.textContent = actionLabel;
+      button.addEventListener('click', action, { once: true });
+      empty.append(button);
+    }
+    return empty;
+  }
+
 
   async function play(station) {
     if (!station) return;
@@ -517,10 +534,11 @@
         status.textContent = 'Nije moguće osvježiti · prikazan je postojeći popis';
       } else {
         status.textContent = 'Katalog trenutačno nije dostupan';
-        const empty = document.createElement('div');
-        empty.className = 'empty';
-        empty.textContent = 'Provjeri internetsku vezu i pokušaj ponovno.';
-        list.replaceChildren(empty);
+        list.replaceChildren(renderEmptyState(
+          'Provjeri internetsku vezu i pokušaj ponovno.',
+          'Pokušaj ponovno',
+          () => void load(true)
+        ));
       }
     } finally {
       setBusy(false);

@@ -67,7 +67,7 @@ const (
 	SW_SHOW              = 5
 )
 
-var appVersion = "0.0.20"
+var appVersion = "0.0.21"
 
 type WNDCLASS struct {
 	Style                                    uint32
@@ -649,7 +649,7 @@ func install() {
 		return
 	}
 	if len(setupIconBytes) > 0 {
-		if err := os.WriteFile(iconPath(), setupIconBytes, 0644); err != nil {
+		if err := writeFileDurable(iconPath(), setupIconBytes, 0644); err != nil {
 			_ = writeSetupLog("ikona: " + err.Error())
 		}
 	}
@@ -658,7 +658,7 @@ func install() {
 	old := targetExe() + ".old"
 	_ = os.Remove(tmp)
 	_ = os.Remove(old)
-	if err := os.WriteFile(tmp, appBytes, 0755); err != nil {
+	if err := writeFileDurable(tmp, appBytes, 0755); err != nil {
 		fail(err)
 		return
 	}
@@ -706,7 +706,7 @@ func install() {
 	uninstaller := filepath.Join(dir, "Uninstall.exe")
 	uTmp := uninstaller + ".tmp"
 	_ = os.Remove(uTmp)
-	if err := os.WriteFile(uTmp, uninstallerBytes, 0755); err != nil {
+	if err := writeFileDurable(uTmp, uninstallerBytes, 0755); err != nil {
 		fail(fmt.Errorf("ne mogu zapisati deinstalator: %w", err))
 		return
 	}
@@ -783,6 +783,26 @@ func acquireInstallLock() (func(), error) {
 		return nil, fmt.Errorf("instalacija je već pokrenuta")
 	}
 	return nil, fmt.Errorf("nije moguće zaključati instalaciju")
+}
+
+func writeFileDurable(path string, data []byte, perm os.FileMode) (err error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if closeErr := f.Close(); err == nil {
+			err = closeErr
+		}
+	}()
+	n, err := f.Write(data)
+	if err != nil {
+		return err
+	}
+	if n != len(data) {
+		return io.ErrShortWrite
+	}
+	return f.Sync()
 }
 
 func fileSHA256(path string) ([32]byte, error) {

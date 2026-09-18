@@ -1,19 +1,17 @@
-# Radio Balkan 0.0.20 — Windows
+# Radio Balkan 0.0.21 — Windows
 
 Nativna Windows x64 aplikacija i installer bez Electrona, ugrađenog browser runtimea ili telemetry SDK-a. Portable i Setup grade se iz istog sourcea i istog Portable payload-a.
 
-## Produkcijski fokus u 0.0.20
+## Produkcijski fokus u 0.0.21
 
-- Setup je potpuno upotrebljiv tipkovnicom: Tab/strelice mijenjaju fokus, Enter/Space aktiviraju, Escape zatvara kada instalacija nije u tijeku
-- checkbox opcije imaju veće click-targete koji uključuju i tekst labele, uz vidljivo fokus stanje
-- source fallback verzija Portable i Setup aplikacije više nije zastarjeli hardcoded string; version tooling je sinkronizira s root `VERSION`
-- release build i dalje linkerom postavlja `main.appVersion`, koristi `-trimpath`, uklanja VCS metadata i stripped simbole
-- state zapis koristi durable temp-write + sync + backup/rename putanju, a finalni shutdown persistence/audio cleanup je idempotentan
-- station i hero play kontrole aktivne stanice rade kao pause/resume toggle i prikazuju `Pauziraj` / `Nastavi` umjesto nepotrebnog ponovnog pokretanja playback pipelinea
-- mrežni transport razrješava i validira javne IP adrese prije TCP spajanja te blokira privatne/lokalne/metadata ciljeve
-- installer provjerava SHA-256 instaliranog executabla prije nastavka
-- Portable i Setup prolaze strogi line-ending-neovisni `gofmt` gate, Go vet/test/build te clean-worktree provjeru u CI-ju
-- `WM_GETMINMAXINFO` minimal-size handler koristi kontrolirani memory-copy put umjesto direktnog callback `uintptr → unsafe.Pointer` casta
+- Setup app payload, uninstaller i ikona zapisuju se preko durable writera koji radi puni write i `Sync()` prije rename/commit koraka
+- installer i dalje prije nastavka provjerava SHA-256 stvarno instaliranog executabla, a ne samo ugrađeni payload
+- Setup zadržava potpunu keyboard kontrolu: Tab/strelice mijenjaju fokus, Enter/Space aktiviraju, Escape zatvara kada instalacija nije u tijeku
+- checkbox opcije imaju proširene click-targete koji uključuju tekst labele i vidljiv fokus
+- Portable state zapis i dalje koristi durable temp-write + sync + backup/rename putanju, a finalni shutdown persistence/audio cleanup ostaje idempotentan
+- station i hero play kontrole aktivne stanice ostaju pause/resume toggle s jasnim `Pauziraj` / `Nastavi` tekstom
+- mrežni transport i dalje razrješava i validira javne IP adrese prije TCP spajanja te blokira privatne/lokalne/metadata ciljeve
+- Portable i Setup prolaze line-ending-neovisni `gofmt` gate, Go vet/test/build te clean-worktree provjeru u CI-ju
 
 ## Build
 
@@ -24,4 +22,4 @@ cd apps/windows
 ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
 ```
 
-Rezultat su `RadioBalkan-Portable-v0.0.20.exe`, `RadioBalkan-Setup-v0.0.20.exe` i SHA-256 manifest. Produkcijski release artefakti ponovno se grade u GitHub Publish workflowu iz release commita.
+Rezultat su `RadioBalkan-Portable-v0.0.21.exe`, `RadioBalkan-Setup-v0.0.21.exe` i SHA-256 manifest. Produkcijski release artefakti ponovno se grade u GitHub Publish workflowu iz release commita.

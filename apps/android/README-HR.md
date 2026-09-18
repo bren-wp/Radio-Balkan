@@ -1,17 +1,14 @@
-# Radio Balkan 0.0.20 — Android
+# Radio Balkan 0.0.21 — Android
 
 Nativni Android klijent (`minSdk 26`, `targetSdk 36`) bez telemetry SDK-a i bez vlastitog backend servisa za reprodukciju. Javni radio stream reproducira se izravno s izvora postaje.
 
-## Produkcijski fokus u 0.0.20
+## Produkcijski fokus u 0.0.21
 
-- jasniji premium UI s ripple/pressed feedbackom na glavnim, navigation i station kontrolama
-- donja navigacija više ne prikazuje nepostojeći korisnički Profil; `Više` otvara stvarne aplikacijske opcije
-- filteri imaju jasni `Filtriraj` CTA, trenutno vidljiv selected state i `Poništi filtre`
-- Radio Browser `votes` prikazuju se točno kao `Popularnost · N glasova`, a station red uz popularnost prikazuje i health status
-- hero i player CTA prate Slušaj/Nastavi/Pauziraj stanje, spremljeni tab usklađuje bottom-nav selected state, a accessibility opis prati stvarnu radnju
-- ručni catalog refresh je single-flight; neuspjeli start playback servisa ne ostavlja lažni aktivni key, a replacement-source povratak ostaje konzistentan
-- repository load je zaštićen od executor/shutdown racea i ne propušta `RejectedExecutionException` prema UI threadu
-- Activity pri destroyu čisti cijeli Handler queue, a repository, image loader i player imaju eksplicitne shutdown putanje
+- search overlay sada ima dosljedan lifecycle: ponovno pritiskanje gumba za pretragu ili Back zatvara search, skriva tipkovnicu, uklanja skriveni query i odmah vraća odgovarajući popis
+- Back iz otvorene pretrage više ne izlazi iz Activityja prije nego što zatvori search stanje
+- postojeći premium ripple/pressed feedback, selected chip state, `Poništi filtre`, health status i točna popularnost ostaju aktivni
+- hero i player CTA i dalje prate Slušaj/Nastavi/Pauziraj stanje, a single-flight catalog refresh sprječava paralelne repository instance
+- Activity pri destroyu i dalje prazni Handler queue, gasi repository/workere/image loader te ne ostavlja post-destroy UI posao
 - player zadržava prepare watchdog, fallback izvore, audio focus, MediaSession i foreground-service lifecycle zaštite
 - stream, logo, API i ICY mrežni putevi zadržavaju URL/DNS/redirect provjere i response limite
 - bitmap cache je ograničen i reagira na Android memory-trim signale

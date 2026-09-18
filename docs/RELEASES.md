@@ -1,5 +1,24 @@
 # Izdavanja
 
+## 0.0.21
+
+Izdanje 0.0.21 nastavlja production polish nakon 0.0.20 i fokusira se na oporavak korisničkog sučelja, predvidljiv Android search/back lifecycle i pouzdanije Windows Setup write putanje. Nisu dodane nove dozvole, analytics, telemetry, korisnički račun ni backend.
+
+- browser popup više ne završava u pasivnom empty-stateu: kombinacija filtera bez rezultata nudi izravni `Poništi filtre` CTA
+- početni browser catalog/network failure nudi `Pokušaj ponovno`, koji pokreće kontrolirani forced refresh bez potrebe za zatvaranjem ili reloadanjem ekstenzije
+- novi browser recovery gumbi koriste iste focus, pressed, disabled i premium vizualne konvencije kao ostatak popup sučelja
+- Android search više se ne može sakriti dok nevidljivi query nastavlja filtrirati listu; zatvaranje searcha čisti query, uklanja pending debounce callback, skriva tipkovnicu i odmah osvježava prikaz
+- Android Back dok je search otvoren prvo zatvara search stanje umjesto da odmah izlazi iz Activityja
+- Windows Setup app executable, instalirani uninstaller i ikona zapisuju se preko durable writera koji radi puni write i `Sync()` prije rename/commit koraka
+- installer i dalje provjerava SHA-256 instaliranog executabla nakon zamjene, pa durable write nadopunjuje postojeću integrity provjeru umjesto da je zamjenjuje
+- dodan je Windows regression test za durable installer payload writer
+- production UI verifier zaključava actionable browser recovery stateove i Android search/back ponašanje, a security contract verifier zaključava Setup durable-write putanju
+- premium UX iz 0.0.20 ostaje aktivan: keyboard/focus/pressed/busy stanja, single-flight playback i refresh zaštite, Android health/popularity prikaz te Windows pause/resume kontrole
+- README, Windows/Android/browser platform README-i, arhitektura, sigurnost, privatnost, build vodič i release dokumentacija usklađeni su s produkcijskim stanjem
+- verzija je sinkronizirana na `0.0.21`, uz Android `versionCode 21`
+
+Ovo izdanje smanjuje potvrđene UI i persistence rizike pronađene auditom. Ne tvrdi apsolutno crash-free ponašanje na svakoj kombinaciji OS-a, filesystema, OEM Android implementacije, preglednika, mreže i third-party radio streama.
+
 ## 0.0.20
 
 Izdanje 0.0.20 fokusirano je na premium, jasniji i dostupniji UI/UX na svim klijentima, uz dodatno lifecycle i release-metadata učvršćivanje. Nisu dodane nove dozvole, analytics, telemetry, korisnički račun ni novi backend.

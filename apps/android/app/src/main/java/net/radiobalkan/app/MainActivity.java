@@ -225,16 +225,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         searchButton.setTextSize(24);
         searchButton.setBackground(interactiveRounded(0x00000000, 0x00000000, 12, 0x24FFFFFF));
         searchButton.setContentDescription("Pretraži");
-        searchButton.setOnClickListener(v -> {
-            if (searchBox == null) return;
-            boolean show = searchBox.getVisibility() != View.VISIBLE;
-            searchBox.setVisibility(show ? View.VISIBLE : View.GONE);
-            if (show) {
-                search.requestFocus();
-                InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-                if (imm != null) imm.showSoftInput(search, InputMethodManager.SHOW_IMPLICIT);
-            }
-        });
+        searchButton.setOnClickListener(v -> setSearchVisible(searchBox == null || searchBox.getVisibility() != View.VISIBLE));
         bar.addView(searchButton, new LinearLayout.LayoutParams(dp(48), dp(48)));
 
         Button menu = smallTop("⋮");
@@ -469,11 +460,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         String[] items = {"Pretraži", "Filtriraj stanice", "Poništi filtre", "Osvježi popis", "Provjeri prikazane stanice", "Rezervni izvori", "Nedostupne stanice", "O aplikaciji"};
         new AlertDialog.Builder(this).setTitle("Radio Balkan").setItems(items, (d, which) -> {
             String chosen = items[which];
-            if ("Pretraži".equals(chosen) && searchBox != null) {
-                searchBox.setVisibility(View.VISIBLE);
-                search.requestFocus();
-                InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-                if (imm != null) imm.showSoftInput(search, InputMethodManager.SHOW_IMPLICIT);
+            if ("Pretraži".equals(chosen)) {
+                setSearchVisible(true);
             } else if ("Filtriraj stanice".equals(chosen)) {
                 showBrowseDialog();
             } else if ("Poništi filtre".equals(chosen)) {
@@ -1031,6 +1019,35 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             }
         });
     }
+
+    private void setSearchVisible(boolean show) {
+        if (searchBox == null || search == null) return;
+        searchBox.setVisibility(show ? View.VISIBLE : View.GONE);
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (show) {
+            search.requestFocus();
+            if (imm != null) imm.showSoftInput(search, InputMethodManager.SHOW_IMPLICIT);
+            return;
+        }
+
+        search.clearFocus();
+        if (imm != null) imm.hideSoftInputFromWindow(search.getWindowToken(), 0);
+        if (searchRunnable != null) ui.removeCallbacks(searchRunnable);
+        if (search.length() > 0) search.setText("");
+        if (searchRunnable != null) ui.removeCallbacks(searchRunnable);
+        searchRunnable = null;
+        query = "";
+        applyFilterAsync();
+    }
+
+    @Override public void onBackPressed() {
+        if (searchBox != null && searchBox.getVisibility() == View.VISIBLE) {
+            setSearchVisible(false);
+            return;
+        }
+        super.onBackPressed();
+    }
+
     private static boolean sameUrl(String a, String b) { return safe(a).equalsIgnoreCase(safe(b)); }
     private static boolean validTab(String value) { return "all".equals(value) || "popular".equals(value) || "favorites".equals(value) || "recent".equals(value) || "replaced".equals(value) || "broken".equals(value); }
     private RadioStation stationByKey(String key) {
