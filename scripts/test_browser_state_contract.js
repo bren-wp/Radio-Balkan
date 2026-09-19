@@ -243,6 +243,7 @@ async function main() {
   assert.equal(elements.playerStop.disabled, false, 'player stop must be enabled after a station is available');
   assert.equal(elements.playerFav.disabled, false, 'favorite control must be enabled after a station is available');
   assert.equal(elements.playerFav.attributes['aria-pressed'], 'false', 'favorite state must be announced accessibly');
+  assert.equal(elements.adminControls.hidden, true, 'advanced source controls must stay hidden before admin login');
 
   elements.genre.value = 'jazz';
   elements.genre.dispatch('change');
@@ -390,6 +391,14 @@ async function main() {
   await flush();
   assert.equal(playCalls, coldAdjacentCalls, 'cold adjacent controls must not start playback without a current station');
   assert.equal(elements.heroPlay.disabled, false, 'hero play must remain available and may start the first visible station');
+
+  adminOverrides['station-a'] = 'https://override.example/live';
+  const overrideCallsBefore = playCalls;
+  getState = { epoch: 'epoch-b', revision: 10, station: stationA, playing: true, sessionId: 'session-admin-override' };
+  elements.heroPlay.dispatch('click');
+  await flush();
+  assert.equal(playCalls, overrideCallsBefore + 1, 'hero play must remain functional with an admin-configured source override');
+  assert.equal(lastPlayedStation?.url_resolved, 'https://override.example/live', 'saved admin source override must be applied without exposing it in the normal UI');
 
   console.log('Browser popup state and UI regression tests OK');
 }

@@ -47,6 +47,43 @@ def main() -> None:
         "}, 8000);",
     )
     require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/AdminAuth.java",
+        'private static final String USERNAME = "brendigo";',
+        'private static final String SALT = "RadioBalkanAdmin:v1:";',
+        "MessageDigest.isEqual",
+        "79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0",
+    )
+    forbid(
+        "apps/android/app/src/main/java/net/radiobalkan/app/AdminAuth.java",
+        "brendigo2025",
+    )
+    require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
+        "private boolean adminMode;",
+        "private boolean requireAdmin()",
+        "private void showAdminLogin()",
+        "InputType.TYPE_TEXT_VARIATION_PASSWORD",
+        'itemList.add("Admin prijava")',
+        'itemList.add("Odjava administratora")',
+        'if (adminMode) {',
+        'chosen.equals("Web stranica") && requireAdmin()',
+        'chosen.equals("Odaberi drugi izvor") && requireAdmin()',
+        "if (!requireAdmin()) return;",
+        "adminLockedUntilMs = System.currentTimeMillis() + 30_000L",
+    )
+    forbid(
+        "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
+        "brendigo2025",
+    )
+    require(
+        "apps/android/app/src/test/java/net/radiobalkan/app/AdminAuthTest.java",
+        "acceptsOnlyConfiguredAdministratorCredentials",
+    )
+    forbid(
+        "apps/android/app/src/test/java/net/radiobalkan/app/AdminAuthTest.java",
+        "brendigo2025",
+    )
+    require(
         "apps/android/app/src/main/java/net/radiobalkan/app/RadioRepository.java",
         "StreamResolver.isSafeHttpForConnection(current)",
         "setInstanceFollowRedirects(false)",
@@ -269,6 +306,17 @@ def main() -> None:
         "navigationStations()",
         "ext.runtime.sendMessage({ type: 'RB_STOP' })",
         "playerStop').setAttribute('aria-busy'",
+        "const ADMIN_DIGEST = '79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0';",
+        "async function adminCredentialsValid",
+        "crypto.subtle.digest('SHA-256'",
+        "let adminMode = false;",
+        "RB.adminOverrideFor(RB.key(station))",
+        "RB.setAdminOverride(RB.key(current), value)",
+        "adminLockedUntil = Date.now() + 30000",
+    )
+    forbid(
+        "extensions/shared/popup.js",
+        "brendigo2025",
     )
     require(
         "extensions/shared/popup.html",
@@ -276,6 +324,9 @@ def main() -> None:
         'id="playerPrev"',
         'id="playerStop"',
         'id="playerNext"',
+        'id="adminPanel"',
+        'id="adminPassword" type="password"',
+        'id="adminSource"',
         'aria-live="polite"',
     )
     require(
@@ -298,6 +349,8 @@ def main() -> None:
         "authoritative cold state must clear the optimistic catalog selection",
         "cold adjacent controls must not start playback without a current station",
         "unfavoriting inside favorites view must immediately remove the station from the visible set",
+        "advanced source controls must stay hidden before admin login",
+        "saved admin source override must be applied without exposing it in the normal UI",
     )
     require(
         "scripts/test_chromium_player_contract.js",
@@ -428,6 +481,25 @@ def main() -> None:
         "audioSetVolume(v)",
         "if shuttingDown() {",
         "func prepareShutdown()",
+        "ES_PASSWORD",
+        "func adminCredentialsValid(username, password string) bool",
+        "subtle.ConstantTimeCompare",
+        "func requireAdmin() bool",
+        "func passwordDialog(",
+        "func toggleAdminSession()",
+        "if adminModeEnabled()",
+    )
+    forbid(
+        "apps/windows/portable/main.go",
+        "brendigo2025",
+    )
+    require(
+        "apps/windows/portable/main_test.go",
+        "TestAdminCredentialsAcceptOnlyConfiguredAdministrator",
+    )
+    forbid(
+        "apps/windows/portable/main_test.go",
+        "brendigo2025",
     )
     require(
         "scripts/test-windows-runtime.ps1",

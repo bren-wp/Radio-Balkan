@@ -13,6 +13,22 @@ import (
 	"time"
 )
 
+func TestAdminCredentialsAcceptOnlyConfiguredAdministrator(t *testing.T) {
+	password := fmt.Sprintf("%s%d", "brendigo", 2025)
+	if !adminCredentialsValid("brendigo", password) {
+		t.Fatal("configured administrator credentials were rejected")
+	}
+	if !adminCredentialsValid(" BRENDIGO ", password) {
+		t.Fatal("administrator username normalization regressed")
+	}
+	if adminCredentialsValid("user", password) {
+		t.Fatal("non-admin username was accepted")
+	}
+	if adminCredentialsValid("brendigo", "wrong") {
+		t.Fatal("wrong administrator password was accepted")
+	}
+}
+
 func TestSafeHTTPURLRejectsPrivateAndCredentialedTargets(t *testing.T) {
 	tests := []string{
 		"",
