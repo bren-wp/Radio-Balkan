@@ -39,6 +39,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .hero p { max-width: 252px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #b8c0ca; font-size: 11px; }
 .primaryButton { flex: 0 0 auto; min-width: 104px; height: 44px; padding: 0 14px; border: 1px solid #ffca72; border-radius: 13px; background: linear-gradient(180deg, var(--accent-strong), var(--accent)); color: #1d140b; font-weight: 800; cursor: pointer; box-shadow: 0 8px 20px #ff9b2830; }
 .primaryButton:hover:not(:disabled) { filter: brightness(1.04); }
+.quickAreas { display: grid; grid-template-columns: .8fr 1.25fr 1fr; gap: 7px; padding: 0 12px 8px; }
+.quickAreaButton { height: 34px; border: 1px solid #33404f; border-radius: 11px; background: #101720; color: #cbd2dc; cursor: pointer; font-size: 11px; font-weight: 700; }
+.quickAreaButton:hover, .quickAreaButton[aria-pressed="true"] { border-color: #9b6630; background: #221b16; color: #ffba55; }
 .tools { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 7px 8px; padding: 0 12px; }
 .searchField { grid-column: 1 / -1; height: 40px; display: flex; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid var(--border); border-radius: 12px; background: #101821; color: #8b96a4; }
 .searchField:focus-within, .selectField:focus-within { border-color: #9f6a34; box-shadow: 0 0 0 1px #9f6a3422; }
@@ -54,7 +57,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .textButton:hover { background: #ffffff0b; border-color: #ffffff0d; }
 .subtleButton { color: #9ca7b4; }
 [hidden] { display: none !important; }
-.stations { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 1px 10px 92px; scrollbar-width: thin; scrollbar-color: #513b2a transparent; }
+.stations { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 1px 10px 120px; scrollbar-width: thin; scrollbar-color: #513b2a transparent; }
 .station { min-height: 72px; contain: layout paint style; content-visibility: auto; contain-intrinsic-size: 72px; display: grid; grid-template-columns: 56px minmax(0, 1fr) 44px; align-items: center; gap: 10px; margin: 5px 0; padding: 7px 8px 7px 7px; border: 1px solid #27323f; border-radius: 15px; background: #101720; cursor: pointer; transition: border-color .12s ease, background .12s ease; }
 .station:hover { border-color: #6e4b2c; background: #151c25; }
 .station:focus-visible { border-color: #d08a31; background: #151c25; }
@@ -77,6 +80,22 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .emptyAction { min-width: 138px; height: 40px; margin-top: 14px; padding: 0 16px; border: 1px solid #76502d; border-radius: 12px; background: linear-gradient(180deg, #201a16, #17191d); color: #ffc15b; font-weight: 800; cursor: pointer; }
 .emptyAction:hover:not(:disabled) { border-color: #c17d32; background: #241c16; }
 .emptyAction:active:not(:disabled) { transform: translateY(1px) scale(.985); }
+.builtWith { position: absolute; z-index: 4; left: 0; right: 0; bottom: 82px; min-height: 30px; display: flex; align-items: center; justify-content: center; gap: 4px; border-top: 1px solid #202a36; background: #090e14e8; color: #788493; font-size: 10.5px; }
+.builtWith a { color: #d6a461; font-weight: 800; text-decoration: none; }
+.builtWith a:hover, .builtWith a:focus-visible { color: #ffc15b; text-decoration: underline; outline: none; }
+
+.stationPanel { position: absolute; inset: 0; z-index: 19; display: grid; place-items: center; padding: 16px; background: #05080dd6; backdrop-filter: blur(6px); }
+.stationDetailCard { width: 100%; max-width: 390px; max-height: 548px; overflow: auto; border: 1px solid #6d4a2a; border-radius: 19px; background: linear-gradient(180deg, #171d26, #0c1219); box-shadow: 0 26px 64px #000c; }
+.stationDetailHeader { min-height: 88px; display: grid; grid-template-columns: 64px minmax(0, 1fr) 42px; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid #293442; }
+.stationDetailHeader img { width: 64px; height: 64px; border-radius: 14px; object-fit: cover; background: #1b232d; }
+.stationDetailHeading { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.stationDetailHeading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; }
+.stationDetailHeading span { color: #ffb44c; font-size: 11px; line-height: 1.35; }
+.stationDetailBody { padding: 15px 16px 17px; }
+.stationDetailBody p { margin: 0; color: #d7dde5; font-size: 12.5px; line-height: 1.58; }
+.stationFacts { margin-top: 13px; padding: 11px 12px; border: 1px solid #2d3947; border-radius: 12px; background: #101720; color: #99a5b2; font-size: 11px; line-height: 1.55; }
+.stationDetailActions { display: grid; grid-template-columns: 1fr; gap: 9px; margin-top: 15px; }
+.stationDetailActions .primaryButton, .stationDetailActions .textButton { width: 100%; min-height: 42px; }
 .adminPanel { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: #05080dcc; backdrop-filter: blur(5px); }
 .adminCard { width: 100%; max-width: 388px; max-height: 560px; overflow: auto; border: 1px solid #6f4a29; border-radius: 18px; background: linear-gradient(180deg, #171b22, #0d1219); box-shadow: 0 24px 60px #000c; }
 .adminHeader { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 16px; border-bottom: 1px solid #27323f; }
@@ -118,6 +137,9 @@ button:disabled { cursor: default; opacity: .46; box-shadow: none; }
   .hero p { max-width: 205px; }
   .primaryButton { min-width: 92px; padding: 0 10px; }
   .brandCopy span { font-size: 9.5px; }
+  .quickAreas { grid-template-columns: .7fr 1.2fr .9fr; gap: 5px; }
+  .quickAreaButton { padding: 0 5px; font-size: 10px; }
+  .stationDetailActions { grid-template-columns: 1fr; }
   .player { grid-template-columns: minmax(0, 1fr) 42px minmax(168px, auto); }
   .player > img { display: none; }
 }

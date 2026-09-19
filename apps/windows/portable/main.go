@@ -211,22 +211,23 @@ type BITMAPINFO struct {
 }
 
 type RadioStation struct {
-	ChangeUUID  string `json:"changeuuid"`
-	StationUUID string `json:"stationuuid"`
-	Name        string `json:"name"`
-	URL         string `json:"url"`
-	URLResolved string `json:"url_resolved"`
-	Homepage    string `json:"homepage"`
-	Favicon     string `json:"favicon"`
-	Tags        string `json:"tags"`
-	Country     string `json:"country"`
-	CountryCode string `json:"countrycode"`
-	State       string `json:"state"`
-	Language    string `json:"language"`
-	Votes       int    `json:"votes"`
-	Codec       string `json:"codec"`
-	Bitrate     int    `json:"bitrate"`
-	LastCheckOK int    `json:"lastcheckok"`
+	ChangeUUID        string `json:"changeuuid"`
+	StationUUID       string `json:"stationuuid"`
+	Name              string `json:"name"`
+	URL               string `json:"url"`
+	URLResolved       string `json:"url_resolved"`
+	Homepage          string `json:"homepage"`
+	Favicon           string `json:"favicon"`
+	Tags              string `json:"tags"`
+	Country           string `json:"country"`
+	CountryCode       string `json:"countrycode"`
+	SourceCountryCode string `json:"sourcecountrycode,omitempty"`
+	State             string `json:"state"`
+	Language          string `json:"language"`
+	Votes             int    `json:"votes"`
+	Codec             string `json:"codec"`
+	Bitrate           int    `json:"bitrate"`
+	LastCheckOK       int    `json:"lastcheckok"`
 
 	Health      string `json:"-"`
 	ActiveURL   string `json:"-"`
@@ -280,6 +281,8 @@ const (
 	hitGenreChoice
 	hitAbout
 	hitAdmin
+	hitStationDetails
+	hitBrendigo
 )
 
 type HitRegion struct {
@@ -1838,7 +1841,7 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 	app.hits = append(app.hits, HitRegion{R: RECT{76, 52, sidebarWidth - 14, 84}, Kind: hitAdmin, Index: -1, Value: adminValue})
 
 	app.mu.RLock()
-	tab, genre := app.tab, strings.ToLower(strings.TrimSpace(app.genre))
+	tab, genre, country := app.tab, strings.ToLower(strings.TrimSpace(app.genre)), strings.ToUpper(strings.TrimSpace(app.country))
 	app.mu.RUnlock()
 	y := int32(91)
 	drawSidebarItem(hdc, y, "⌂", "Početna", tab == "all" && genre == "", hitTab, "all")
@@ -1850,6 +1853,8 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 	drawSidebarItem(hdc, y, "♡", "Omiljene", tab == "favorites", hitTab, "favorites")
 	y += 44
 	drawSidebarItem(hdc, y, "◷", "Nedavno slušano", tab == "recent", hitTab, "recent")
+	y += 44
+	drawSidebarItem(hdc, y, "◎", "Dijaspora", country == diasporaCatalogCode, hitCountryChoice, diasporaCatalogCode)
 
 	y += 56
 	drawSidebarLabel(hdc, "BRZI ODABIR", y)
@@ -2300,6 +2305,7 @@ func drawHomeHero(hdc syscall.Handle, l, t, r, b int32, idx int, st RadioStation
 	infoW := int32(330)
 	featureR := r - infoW - gap
 	drawRounded(hdc, l, t, featureR, b, 16, color(14, 19, 26), color(67, 72, 82))
+	app.hits = append(app.hits, HitRegion{R: RECT{l, t, featureR, b}, Kind: hitStationDetails, Index: idx, Value: stationKey(st)})
 	drawFeatureBackdrop(hdc, l+2, t+2, featureR-2, b-2)
 	// Opaque left readability panel, visually approximating the generated gradient.
 	leftPanelR := l + (featureR-l)*46/100
@@ -2313,7 +2319,7 @@ func drawHomeHero(hdc syscall.Handle, l, t, r, b int32, idx int, st RadioStation
 	text(hdc, trimName(st.Name), l+24, t+44, leftPanelR-16, t+83, rgb(250, 250, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 	selectFont(hdc, app.hFontSmall)
 	text(hdc, "Glazba koja povezuje regiju.", l+24, t+84, leftPanelR-16, t+110, rgb(205, 209, 215), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	drawCountryFlag(hdc, l+24, t+122, l+48, t+137, st.CountryCode)
+	drawCountryFlag(hdc, l+24, t+122, l+48, t+137, stationFlagCode(st))
 	text(hdc, stationMeta(st), l+56, t+114, leftPanelR-16, t+144, rgb(185, 192, 201), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 	heroKey := stationKey(st)
 	app.mu.RLock()
@@ -2408,23 +2414,24 @@ func drawGenreTile(hdc syscall.Handle, l, t, r, b int32, label, value string, sl
 }
 
 func drawRegionCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStation, slot int) {
+	key := stationKey(s)
 	border := color(49, 57, 68)
-	if hovered(hitPlay, idx, stationKey(s)) {
+	if hovered(hitPlay, idx, key) || hovered(hitStationDetails, idx, key) {
 		border = color(133, 88, 40)
 	}
 	drawRounded(hdc, l, t, r, b, 10, color(20, 25, 33), border)
 	artR := l + 58
 	drawStationArtwork(hdc, l+6, t+7, artR-5, b-7, s, slot)
 	selectFont(hdc, app.hFontBold)
-	text(hdc, trimName(s.Name), artR+5, t+6, r-8, t+31, rgb(244, 246, 248), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	drawCountryFlag(hdc, artR+5, t+35, artR+25, t+48, s.CountryCode)
+	text(hdc, trimName(s.Name), artR+5, t+6, r-40, t+31, rgb(244, 246, 248), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+	drawCountryFlag(hdc, artR+5, t+35, artR+25, t+48, stationFlagCode(s))
 	selectFont(hdc, app.hFontSmall)
-	meta := countryNameByCode(strings.ToUpper(s.CountryCode))
-	if meta == "" {
-		meta = s.Country
-	}
-	text(hdc, meta, artR+31, t+31, r-8, t+54, rgb(160, 168, 178), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitPlay, Index: idx, Value: stationKey(s)})
+	meta := stationAreaLabel(s)
+	text(hdc, meta, artR+31, t+31, r-40, t+54, rgb(160, 168, 178), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+	drawCircle(hdc, r-34, t+18, r-10, t+42, color(45, 49, 57), color(105, 74, 40))
+	text(hdc, "▶", r-32, t+18, r-12, t+42, rgb(246, 248, 250), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitStationDetails, Index: idx, Value: key})
+	app.hits = append(app.hits, HitRegion{R: RECT{r - 38, t + 14, r - 6, t + 46}, Kind: hitPlay, Index: idx, Value: key})
 }
 
 func drawStationScrollBar(hdc syscall.Handle, cr RECT, top, bottom int32, count, scroll, step int) {
@@ -2455,7 +2462,7 @@ func drawStationScrollBar(hdc syscall.Handle, cr RECT, top, bottom int32, count,
 
 func drawPopularCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStation, theme int) {
 	border := color(50, 58, 70)
-	if hovered(hitPlay, idx, stationKey(s)) {
+	if hovered(hitPlay, idx, stationKey(s)) || hovered(hitStationDetails, idx, stationKey(s)) {
 		border = color(133, 88, 40)
 	}
 	drawRounded(hdc, l, t, r, b, 12, color(18, 24, 33), border)
@@ -2468,12 +2475,9 @@ func drawPopularCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStati
 	procDeleteObject.Call(uintptr(br))
 	selectFont(hdc, app.hFontBold)
 	text(hdc, trimName(s.Name), l+12, imageBottom+4, r-42, imageBottom+29, rgb(247, 248, 250), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	drawCountryFlag(hdc, l+12, imageBottom+34, l+32, imageBottom+47, s.CountryCode)
+	drawCountryFlag(hdc, l+12, imageBottom+34, l+32, imageBottom+47, stationFlagCode(s))
 	selectFont(hdc, app.hFontSmall)
-	meta := countryNameByCode(strings.ToUpper(s.CountryCode))
-	if meta == "" {
-		meta = s.Country
-	}
+	meta := stationAreaLabel(s)
 	genre := firstTag(s.Tags)
 	if genre != "" && meta != "" {
 		meta += " · " + genre
@@ -2488,7 +2492,9 @@ func drawPopularCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStati
 	text(hdc, bitrate, l+12, b-25, r-48, b-6, rgb(130, 140, 151), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 	drawCircle(hdc, r-40, b-42, r-12, b-14, color(49, 56, 66), color(92, 69, 37))
 	text(hdc, "▶", r-38, b-41, r-14, b-14, rgb(248, 249, 250), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitPlay, Index: idx, Value: stationKey(s)})
+	key := stationKey(s)
+	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitStationDetails, Index: idx, Value: key})
+	app.hits = append(app.hits, HitRegion{R: RECT{r - 44, b - 46, r - 8, b - 10}, Kind: hitPlay, Index: idx, Value: key})
 }
 
 func firstTag(tags string) string {
@@ -2510,20 +2516,18 @@ func drawStationCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStati
 	fill, border := color(17, 23, 31), color(47, 56, 68)
 	if selected {
 		fill, border = color(24, 28, 34), color(132, 89, 39)
-	} else if hovered(hitPlay, idx, key) {
+	} else if hovered(hitPlay, idx, key) || hovered(hitStationDetails, idx, key) {
 		fill, border = color(20, 27, 36), color(94, 72, 48)
 	}
 	drawRounded(hdc, l, t, r, b, 14, fill, border)
+	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitStationDetails, Index: idx, Value: key})
 	artR := l + 128
 	drawStationArtwork(hdc, l+1, t+1, artR, b-1, s, idx)
 	selectFont(hdc, app.hFontBold)
 	text(hdc, trimName(s.Name), artR+15, t+10, r-170, t+38, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	drawCountryFlag(hdc, artR+15, t+45, artR+37, t+59, s.CountryCode)
+	drawCountryFlag(hdc, artR+15, t+45, artR+37, t+59, stationFlagCode(s))
 	selectFont(hdc, app.hFontSmall)
-	meta := countryNameByCode(strings.ToUpper(s.CountryCode))
-	if meta == "" {
-		meta = s.Country
-	}
+	meta := stationAreaLabel(s)
 	g := firstTag(s.Tags)
 	if g != "" && meta != "" {
 		meta += " · " + g
@@ -2599,7 +2603,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 		current = app.stations[idx]
 		name = current.Name
 		meta = stationMeta(current)
-		currentCountry = current.CountryCode
+		currentCountry = stationFlagCode(current)
 		if app.nowPlaying != "" && app.nowPlayingStation == stationKey(current) {
 			np = app.nowPlaying
 		}
@@ -2715,6 +2719,12 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 		selectFont(hdc, app.hFontBold)
 		text(hdc, "+", cr.Right-106, t+27, cr.Right-74, t+59, rgb(91, 98, 108), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	}
+
+	// Production attribution: only the Brendigo word is interactive.
+	selectFont(hdc, app.hFontSmall)
+	text(hdc, "Built with", cr.Right-244, t+66, cr.Right-188, t+90, rgb(106, 116, 128), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
+	text(hdc, "Brendigo", cr.Right-182, t+66, cr.Right-112, t+90, rgb(218, 164, 91), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+	app.hits = append(app.hits, HitRegion{R: RECT{cr.Right - 184, t + 66, cr.Right - 110, t + 91}, Kind: hitBrendigo, Index: -1, Value: "https://brendigo.com/"})
 }
 
 func drawEqualizerBars(hdc syscall.Handle, l, t, r, b int32, active bool) {
@@ -3408,9 +3418,15 @@ func handleClick(x, y int32) {
 				safeGo("manual-health", healthCheckAll)
 			}
 		case hitAbout:
-			messageBox(hwndOrZero(), "Radio Balkan", "Radio Balkan "+appVersion+"\n\nRadio stanice samo iz Hrvatske, Bosne i Hercegovine, Srbije, Slovenije, Sjeverne Makedonije, Albanije i Crne Gore.\nFavoriti i povijest slušanja rade lokalno na tvojem računalu. Napredne kontrole izvora dostupne su samo u Admin načinu rada.", MB_ICONINFORMATION)
+			messageBox(hwndOrZero(), "Radio Balkan", "Radio Balkan "+appVersion+"\n\nRadio iz Hrvatske i regije, posebna kategorija Dijaspora te odabrane strane postaje.\nFavoriti i povijest slušanja rade lokalno na tvojem računalu. Napredne kontrole izvora dostupne su samo u Admin načinu rada.", MB_ICONINFORMATION)
 		case hitAdmin:
 			toggleAdminSession()
+		case hitStationDetails:
+			if idx := stationIndexFromHit(h); idx >= 0 {
+				showStationDetails(idx)
+			}
+		case hitBrendigo:
+			shellOpen("https://brendigo.com/")
 		case hitRefresh:
 			app.mu.Lock()
 			app.countryMenuOpen = false
@@ -3670,7 +3686,7 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 		}
 	}
 	if s.StationUUID != "" {
-		if one, err := fetchStationByUUID(s.StationUUID); err == nil && one != nil {
+		if one, err := fetchStationByUUID(s.StationUUID, s.CountryCode, s.SourceCountryCode); err == nil && one != nil {
 			for _, c := range uniqueStrings([]string{one.URLResolved, one.URL}) {
 				if resolved, ok := checkStream(c); ok {
 					rememberReplacement(idx, key, resolved)
@@ -3680,7 +3696,7 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 		}
 	}
 	if s.Name != "" {
-		if list, err := searchStationsByName(s.Name, s.CountryCode); err == nil {
+		if list, err := searchStationsByName(s.Name, s.CountryCode, s.SourceCountryCode); err == nil {
 			checked := 0
 			for _, alt := range list {
 				if !sameStation(s, alt) {
@@ -3772,6 +3788,60 @@ func copyStationLink(idx int) {
 	}
 	invalidate()
 }
+func showStationDetails(idx int) {
+	app.mu.RLock()
+	if idx < 0 || idx >= len(app.stations) {
+		app.mu.RUnlock()
+		return
+	}
+	station := app.stations[idx]
+	app.mu.RUnlock()
+
+	area := strings.TrimSpace(station.Country)
+	switch strings.ToUpper(strings.TrimSpace(station.CountryCode)) {
+	case diasporaCatalogCode:
+		if area == "" {
+			area = "Dijaspora"
+		} else {
+			area = "Dijaspora · " + area
+		}
+	case foreignCatalogCode:
+		if area == "" {
+			area = "Strana postaja"
+		}
+	default:
+		if area == "" {
+			area = countryNameByCode(station.CountryCode)
+		}
+	}
+	if area == "" {
+		area = "Radio uživo"
+	}
+	genre := firstTag(strings.ReplaceAll(station.Tags, "dijaspora,", ""))
+	description := station.Name + " je radio stanica iz područja " + area + "."
+	if genre != "" {
+		description += "\nProgram: " + genre + "."
+	}
+	if strings.TrimSpace(station.Language) != "" {
+		description += "\nJezik: " + strings.TrimSpace(station.Language) + "."
+	}
+	facts := make([]string, 0, 4)
+	if strings.TrimSpace(station.Codec) != "" {
+		facts = append(facts, strings.ToUpper(strings.TrimSpace(station.Codec)))
+	}
+	if station.Bitrate > 0 {
+		facts = append(facts, fmt.Sprintf("%d kbps", station.Bitrate))
+	}
+	if station.LastCheckOK == 1 {
+		facts = append(facts, "zadnja provjera: dostupna")
+	}
+	if len(facts) > 0 {
+		description += "\n\n" + strings.Join(facts, " · ")
+	}
+	description += "\n\nZa slušanje koristi ▶ na kartici ili u donjem playeru. Stream URL i maintenance podaci ostaju skriveni izvan Admin načina rada."
+	messageBox(hwndOrZero(), station.Name, description, MB_ICONINFORMATION)
+}
+
 func openStationWeb(idx int) {
 	if !requireAdmin() {
 		return
@@ -4697,31 +4767,40 @@ func fetchCountryStations(code string) ([]RadioStation, error) {
 	return nil, last
 }
 
-func fetchStationByUUID(id string) (*RadioStation, error) {
+func fetchStationByUUID(id, requestedCode, sourceCountryCode string) (*RadioStation, error) {
 	for _, base := range apiBases() {
 		var list []RadioStation
 		if err := getJSON(base+"/json/stations/byuuid/"+url.PathEscape(id), &list); err == nil {
 			for i := range list {
-				code := strings.ToUpper(strings.TrimSpace(list[i].CountryCode))
-				if code != "" && isBalkanCode(code) {
-					list[i].CountryCode = code
-					return &list[i], nil
+				actual := strings.ToUpper(strings.TrimSpace(list[i].CountryCode))
+				if !matchesCatalogCountry(requestedCode, sourceCountryCode, actual) {
+					continue
 				}
+				if isSupplementalCatalogCode(requestedCode) {
+					list[i].SourceCountryCode = actual
+					list[i].CountryCode = strings.ToUpper(strings.TrimSpace(requestedCode))
+				} else {
+					list[i].CountryCode = actual
+				}
+				return &list[i], nil
 			}
 		}
 	}
 	return nil, errors.New("nije pronađeno")
 }
-func searchStationsByName(name, countryCode string) ([]RadioStation, error) {
+func searchStationsByName(name, requestedCode, sourceCountryCode string) ([]RadioStation, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, errors.New("prazan naziv")
 	}
 	q := url.QueryEscape(name)
-	cc := url.QueryEscape(strings.ToUpper(strings.TrimSpace(countryCode)))
+	queryCountry := strings.ToUpper(strings.TrimSpace(requestedCode))
+	if isSupplementalCatalogCode(queryCountry) {
+		queryCountry = strings.ToUpper(strings.TrimSpace(sourceCountryCode))
+	}
 	paths := []string{"/json/stations/search?name=" + q + "&hidebroken=false&limit=50"}
-	if cc != "" {
-		paths = []string{"/json/stations/search?name=" + q + "&countrycode=" + cc + "&hidebroken=false&limit=50", paths[0]}
+	if queryCountry != "" {
+		paths = []string{"/json/stations/search?name=" + q + "&countrycode=" + url.QueryEscape(queryCountry) + "&hidebroken=false&limit=50", paths[0]}
 	}
 	var last error
 	for _, base := range apiBases() {
@@ -4730,14 +4809,16 @@ func searchStationsByName(name, countryCode string) ([]RadioStation, error) {
 			if err := getJSON(base+p, &list); err == nil && len(list) > 0 {
 				filtered := make([]RadioStation, 0, len(list))
 				for _, st := range list {
-					code := strings.ToUpper(strings.TrimSpace(st.CountryCode))
-					if code == "" || !isBalkanCode(code) {
+					actual := strings.ToUpper(strings.TrimSpace(st.CountryCode))
+					if !matchesCatalogCountry(requestedCode, sourceCountryCode, actual) {
 						continue
 					}
-					if countryCode != "" && !strings.EqualFold(code, strings.TrimSpace(countryCode)) {
-						continue
+					if isSupplementalCatalogCode(requestedCode) {
+						st.SourceCountryCode = actual
+						st.CountryCode = strings.ToUpper(strings.TrimSpace(requestedCode))
+					} else {
+						st.CountryCode = actual
 					}
-					st.CountryCode = code
 					filtered = append(filtered, st)
 				}
 				if len(filtered) > 0 {
@@ -4753,6 +4834,7 @@ func searchStationsByName(name, countryCode string) ([]RadioStation, error) {
 	}
 	return nil, last
 }
+
 func apiBases() []string {
 	apiOnce.Do(func() {
 		type server struct {
@@ -5006,7 +5088,9 @@ func sameStation(a, b RadioStation) bool {
 	if a.StationUUID != "" && a.StationUUID == b.StationUUID {
 		return true
 	}
-	if a.CountryCode != "" && b.CountryCode != "" && !strings.EqualFold(a.CountryCode, b.CountryCode) {
+	ac := stationComparisonCountry(a)
+	bc := stationComparisonCountry(b)
+	if ac != "" && bc != "" && !strings.EqualFold(ac, bc) {
 		return false
 	}
 	an := normalizeName(a.Name)
@@ -5148,6 +5232,9 @@ func mergeStationRecord(a, b RadioStation) RadioStation {
 	if primary.CountryCode == "" {
 		primary.CountryCode = other.CountryCode
 	}
+	if primary.SourceCountryCode == "" {
+		primary.SourceCountryCode = other.SourceCountryCode
+	}
 	if primary.Codec == "" {
 		primary.Codec = other.Codec
 	}
@@ -5159,6 +5246,23 @@ func mergeStationRecord(a, b RadioStation) RadioStation {
 	}
 	if primary.LastCheckOK < other.LastCheckOK {
 		primary.LastCheckOK = other.LastCheckOK
+	}
+	if isDiasporaCatalogCode(a.CountryCode) || isDiasporaCatalogCode(b.CountryCode) {
+		primary.CountryCode = diasporaCatalogCode
+		if primary.SourceCountryCode == "" {
+			if a.SourceCountryCode != "" {
+				primary.SourceCountryCode = a.SourceCountryCode
+			} else {
+				primary.SourceCountryCode = b.SourceCountryCode
+			}
+		}
+		if !containsFoldedTag(primary.Tags, "dijaspora") {
+			if strings.TrimSpace(primary.Tags) == "" {
+				primary.Tags = "dijaspora"
+			} else {
+				primary.Tags = primary.Tags + ",dijaspora"
+			}
+		}
 	}
 	return primary
 }
@@ -5409,12 +5513,68 @@ func clampScrollLocked() {
 	}
 }
 
+func stationFlagCode(s RadioStation) string {
+	source := strings.ToUpper(strings.TrimSpace(s.SourceCountryCode))
+	if source != "" {
+		return source
+	}
+	if isSupplementalCatalogCode(s.CountryCode) {
+		return ""
+	}
+	return strings.ToUpper(strings.TrimSpace(s.CountryCode))
+}
+
+func stationAreaLabel(s RadioStation) string {
+	code := strings.ToUpper(strings.TrimSpace(s.CountryCode))
+	country := strings.TrimSpace(s.Country)
+	switch {
+	case isDiasporaCatalogCode(code):
+		if country != "" {
+			return "Dijaspora · " + country
+		}
+		return "Dijaspora"
+	case isForeignCatalogCode(code):
+		if country != "" {
+			return "Strano · " + country
+		}
+		return "Strano"
+	}
+	label := countryNameByCode(code)
+	if label == code && country != "" {
+		return country
+	}
+	if label != "" {
+		return label
+	}
+	return country
+}
+
+func stationComparisonCountry(s RadioStation) string {
+	if isSupplementalCatalogCode(s.CountryCode) && strings.TrimSpace(s.SourceCountryCode) != "" {
+		return strings.ToUpper(strings.TrimSpace(s.SourceCountryCode))
+	}
+	return strings.ToUpper(strings.TrimSpace(s.CountryCode))
+}
+
+func matchesCatalogCountry(requestedCode, sourceCode, actualCode string) bool {
+	requested := strings.ToUpper(strings.TrimSpace(requestedCode))
+	source := strings.ToUpper(strings.TrimSpace(sourceCode))
+	actual := strings.ToUpper(strings.TrimSpace(actualCode))
+	if actual == "" {
+		return false
+	}
+	if isSupplementalCatalogCode(requested) {
+		if isRegionalCatalogCode(actual) {
+			return false
+		}
+		return source == "" || source == actual
+	}
+	return isRegionalCatalogCode(requested) && requested == actual
+}
+
 func stationMeta(s RadioStation) string {
 	parts := []string{}
-	country := countryNameByCode(strings.ToUpper(s.CountryCode))
-	if country == "" {
-		country = s.Country
-	}
+	country := stationAreaLabel(s)
 	if s.State != "" && country != "" {
 		parts = append(parts, s.State+", "+country)
 	} else if country != "" {

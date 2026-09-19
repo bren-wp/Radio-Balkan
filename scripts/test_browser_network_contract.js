@@ -111,6 +111,15 @@ async function testRefresh() {
   const foreign = await RBNet.refreshCandidateUrls({ stationuuid: 'world-1', countrycode: 'INT', sourcecountrycode: 'DE' });
   assert.deepEqual(Array.from(foreign), ['https://world.example.com/live'], 'curated foreign station may refresh only within its source country');
 
+  assert.equal(RBNet.allowedCountry('DIA'), true, 'diaspora pseudo-country must be accepted by browser playback validation');
+  assert.deepEqual(
+    Array.from(RBNet.candidateUrls({ countrycode: 'DIA', url_resolved: 'https://diaspora.example.com/live' })),
+    ['https://diaspora.example.com/live'],
+    'diaspora stations must expose safe playback candidates'
+  );
+  const diaspora = await RBNet.refreshCandidateUrls({ stationuuid: 'world-1', countrycode: 'DIA', sourcecountrycode: 'DE' });
+  assert.deepEqual(Array.from(diaspora), ['https://world.example.com/live'], 'diaspora station may refresh only within its saved source country');
+
   fetchHandler = async () => responseJson([{
     stationuuid: 'world-1',
     countrycode: 'HR',
@@ -118,6 +127,9 @@ async function testRefresh() {
   }]);
   const foreignRegional = await RBNet.refreshCandidateUrls({ stationuuid: 'world-1', countrycode: 'INT', sourcecountrycode: 'DE' });
   assert.deepEqual(Array.from(foreignRegional), [], 'foreign refresh must never remap a Balkan station into the INT group');
+
+  const diasporaRegional = await RBNet.refreshCandidateUrls({ stationuuid: 'world-1', countrycode: 'DIA', sourcecountrycode: 'DE' });
+  assert.deepEqual(Array.from(diasporaRegional), [], 'diaspora refresh must never remap a Balkan station into the DIA group');
 
   let oversizedCalls = 0;
   fetchHandler = async () => {

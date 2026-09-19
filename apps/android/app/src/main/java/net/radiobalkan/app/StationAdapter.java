@@ -22,6 +22,7 @@ import java.util.Locale;
 public final class StationAdapter extends BaseAdapter {
     public interface Actions {
         void onPlay(RadioStation s);
+        void onDetails(RadioStation s);
         void onFavorite(RadioStation s);
         void onMore(RadioStation s);
     }
@@ -86,7 +87,7 @@ public final class StationAdapter extends BaseAdapter {
 
         row.name.setText(s.name);
         row.meta.setText(countryAndGenre(s));
-        CountryFlagDrawable flag = new CountryFlagDrawable(s.countryCode);
+        CountryFlagDrawable flag = new CountryFlagDrawable(s.flagCode());
         flag.setBounds(0, 0, dp(22), dp(14));
         row.meta.setCompoundDrawablePadding(dp(6));
         row.meta.setCompoundDrawables(flag, null, null, null);
@@ -103,7 +104,7 @@ public final class StationAdapter extends BaseAdapter {
         row.root.setContentDescription(s.name + ", " + countryAndGenre(s) + ", " + statusLine(s) + (active ? ", trenutno odabrana" : ""));
         row.play.setOnClickListener(v -> actions.onPlay(s));
         row.more.setOnClickListener(v -> actions.onMore(s));
-        row.root.setOnClickListener(v -> actions.onPlay(s));
+        row.root.setOnClickListener(v -> actions.onDetails(s));
         row.root.setOnLongClickListener(v -> { actions.onMore(s); return true; });
         return convertView;
     }
@@ -165,7 +166,7 @@ public final class StationAdapter extends BaseAdapter {
             String v = raw.trim();
             if (v.length() >= 2 && v.length() <= 18) {
                 String lower = v.toLowerCase(Locale.ROOT);
-                if (!lower.contains("radio") && !lower.contains("music")) return Character.toUpperCase(v.charAt(0)) + v.substring(1);
+                if (!"dijaspora".equals(lower) && !lower.contains("radio") && !lower.contains("music")) return Character.toUpperCase(v.charAt(0)) + v.substring(1);
             }
         }
         return "";

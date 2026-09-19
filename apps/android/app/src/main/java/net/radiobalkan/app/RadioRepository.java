@@ -41,10 +41,12 @@ public final class RadioRepository {
     }
 
     public static final String FOREIGN_CODE = "INT";
+    public static final String DIASPORA_CODE = "DIA";
     public static final String[][] COUNTRIES = {
             {"", "Sve postaje"}, {"HR", "Hrvatska"}, {"BA", "Bosna i Hercegovina"},
             {"RS", "Srbija"}, {"SI", "Slovenija"}, {"MK", "Sjeverna Makedonija"},
-            {"AL", "Albanija"}, {"ME", "Crna Gora"}, {FOREIGN_CODE, "Strano"}
+            {"AL", "Albanija"}, {"ME", "Crna Gora"}, {DIASPORA_CODE, "Dijaspora"},
+            {FOREIGN_CODE, "Strano"}
     };
 
     private static final String[] REGION_CODES = {"HR", "BA", "RS", "SI", "MK", "AL", "ME"};
@@ -57,9 +59,11 @@ public final class RadioRepository {
     };
     private static final int PAGE = 250;
     private static final int MAX_PER_COUNTRY = 1800;
-    private static final int MAX_FOREIGN = 50;
-    private static final int FOREIGN_SCAN_LIMIT = 500;
-    private static final int MAX_CATALOG = 7050;
+    private static final int MAX_FOREIGN = 120;
+    private static final int MAX_DIASPORA = 120;
+    private static final int FOREIGN_SCAN_LIMIT = 1000;
+    private static final int DIASPORA_QUERY_LIMIT = 100;
+    private static final int MAX_CATALOG = 7240;
     private static final int PRODUCTION_MIN_REGIONAL = 600;
     private static final int MAX_REDIRECTS = 4;
 
@@ -128,6 +132,8 @@ public final class RadioRepository {
         }
         completion.submit(this::fetchForeign);
         tasks++;
+        completion.submit(this::fetchDiaspora);
+        tasks++;
 
         CatalogAccumulator unique = new CatalogAccumulator();
         Throwable first = null;
@@ -184,7 +190,7 @@ public final class RadioRepository {
 
     public static boolean isSupportedCountry(String code) {
         String normalized = safe(code).toUpperCase(Locale.ROOT);
-        return FOREIGN_CODE.equals(normalized) || REGION_SET.contains(normalized);
+        return FOREIGN_CODE.equals(normalized) || DIASPORA_CODE.equals(normalized) || REGION_SET.contains(normalized);
     }
 
     private static boolean isRegionalCountry(String code) {
@@ -215,12 +221,22 @@ public final class RadioRepository {
         if (safe(primary.tags).isEmpty()) primary.tags = other.tags;
         if (safe(primary.country).isEmpty()) primary.country = other.country;
         if (safe(primary.countryCode).isEmpty()) primary.countryCode = other.countryCode;
+        if (safe(primary.sourceCountryCode).isEmpty()) primary.sourceCountryCode = other.sourceCountryCode;
         if (safe(primary.state).isEmpty()) primary.state = other.state;
         if (safe(primary.language).isEmpty()) primary.language = other.language;
         if (safe(primary.codec).isEmpty()) primary.codec = other.codec;
         if (primary.bitrate <= 0) primary.bitrate = other.bitrate;
         primary.votes = Math.max(primary.votes, other.votes);
         primary.lastCheckOk = Math.max(primary.lastCheckOk, other.lastCheckOk);
+        if (DIASPORA_CODE.equalsIgnoreCase(a.countryCode) || DIASPORA_CODE.equalsIgnoreCase(b.countryCode)) {
+            primary.countryCode = DIASPORA_CODE;
+            if (safe(primary.sourceCountryCode).isEmpty()) {
+                primary.sourceCountryCode = !safe(a.sourceCountryCode).isEmpty() ? a.sourceCountryCode : b.sourceCountryCode;
+            }
+            if (!safe(primary.tags).toLowerCase(Locale.ROOT).contains("dijaspora")) {
+                primary.tags = safe(primary.tags).isEmpty() ? "dijaspora" : "dijaspora," + primary.tags;
+            }
+        }
         primary.refreshIndexes();
         return primary;
     }
@@ -326,6 +342,7 @@ public final class RadioRepository {
                     String originalCode = safe(station.countryCode).toUpperCase(Locale.ROOT);
                     if (originalCode.isEmpty() || isRegionalCountry(originalCode) || station.lastCheckOk != 1) continue;
                     if (!StreamResolver.isSafeHttp(station.url) && !StreamResolver.isSafeHttp(station.urlResolved)) continue;
+                    station.sourceCountryCode = originalCode;
                     station.countryCode = FOREIGN_CODE;
                     if (safe(station.country).isEmpty()) station.country = "Strana postaja";
                     station.refreshIndexes();
@@ -335,6 +352,53 @@ public final class RadioRepository {
                 out.sort(Comparator.comparingInt((RadioStation station) -> station.votes).reversed()
                         .thenComparing(station -> RadioStation.fold(station.name)));
                 if (out.size() > MAX_FOREIGN) out = new ArrayList<>(out.subList(0, MAX_FOREIGN));
+                if (!out.isEmpty()) return out;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw e;
+            } catch (Exception e) {
+                last = e;
+            }
+        }
+        if (last != null) throw last;
+        return Collections.emptyList();
+    }
+
+    private List<RadioStation> fetchDiaspora() throws Exception {
+        final String[] queries = {
+                "tag=diaspora", "name=balkan", "name=ex%20yu",
+                "language=croatian", "language=serbian", "language=bosnian",
+                "language=macedonian", "language=albanian", "language=slovenian"
+        };
+        Exception last = null;
+        for (String base : apiBases()) {
+            if (closed) throw new InterruptedException("zatvaranje");
+            try {
+                List<RadioStation> out = new ArrayList<>();
+                for (String query : queries) {
+                    if (closed || Thread.currentThread().isInterrupted()) throw new InterruptedException("zatvaranje");
+                    String endpoint = base + "/json/stations/search?" + query
+                            + "&hidebroken=true&order=votes&reverse=true&limit=" + DIASPORA_QUERY_LIMIT;
+                    JSONArray rows = new JSONArray(get(endpoint, 3 * 1024 * 1024));
+                    for (int i = 0; i < rows.length(); i++) {
+                        JSONObject object = rows.optJSONObject(i);
+                        if (object == null) continue;
+                        RadioStation station = RadioStation.fromJson(object);
+                        String originalCode = safe(station.countryCode).toUpperCase(Locale.ROOT);
+                        if (originalCode.isEmpty() || isRegionalCountry(originalCode) || station.lastCheckOk != 1) continue;
+                        if (!StreamResolver.isSafeHttp(station.url) && !StreamResolver.isSafeHttp(station.urlResolved)) continue;
+                        station.sourceCountryCode = originalCode;
+                        station.countryCode = DIASPORA_CODE;
+                        station.tags = safe(station.tags).isEmpty() ? "dijaspora" : "dijaspora," + station.tags;
+                        if (safe(station.country).isEmpty()) station.country = "Dijaspora";
+                        station.refreshIndexes();
+                        out.add(station);
+                    }
+                }
+                out = dedupe(out);
+                out.sort(Comparator.comparingInt((RadioStation station) -> station.votes).reversed()
+                        .thenComparing(station -> RadioStation.fold(station.name)));
+                if (out.size() > MAX_DIASPORA) out = new ArrayList<>(out.subList(0, MAX_DIASPORA));
                 if (!out.isEmpty()) return out;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -369,19 +433,26 @@ public final class RadioRepository {
 
     private static List<RadioStation> sortCatalog(List<RadioStation> input) {
         List<RadioStation> regional = new ArrayList<>();
+        List<RadioStation> diaspora = new ArrayList<>();
         List<RadioStation> foreign = new ArrayList<>();
         for (RadioStation station : input) {
             if (!isUsable(station)) continue;
             if (FOREIGN_CODE.equalsIgnoreCase(station.countryCode)) foreign.add(station);
+            else if (DIASPORA_CODE.equalsIgnoreCase(station.countryCode)) diaspora.add(station);
             else regional.add(station);
         }
         regional.sort(Comparator.comparingInt((RadioStation station) -> countryPriority(station.countryCode))
                 .thenComparing(Comparator.comparingInt((RadioStation station) -> station.votes).reversed())
                 .thenComparing(station -> RadioStation.fold(station.name)));
+        diaspora.sort(Comparator.comparingInt((RadioStation station) -> station.votes).reversed()
+                .thenComparing(station -> RadioStation.fold(station.name)));
         foreign.sort(Comparator.comparingInt((RadioStation station) -> station.votes).reversed()
                 .thenComparing(station -> RadioStation.fold(station.name)));
-        if (regional.size() > MAX_CATALOG - MAX_FOREIGN) regional = new ArrayList<>(regional.subList(0, MAX_CATALOG - MAX_FOREIGN));
+        int regionalLimit = MAX_CATALOG - MAX_FOREIGN - MAX_DIASPORA;
+        if (regional.size() > regionalLimit) regional = new ArrayList<>(regional.subList(0, regionalLimit));
+        if (diaspora.size() > MAX_DIASPORA) diaspora = new ArrayList<>(diaspora.subList(0, MAX_DIASPORA));
         if (foreign.size() > MAX_FOREIGN) foreign = new ArrayList<>(foreign.subList(0, MAX_FOREIGN));
+        regional.addAll(diaspora);
         regional.addAll(foreign);
         return regional;
     }

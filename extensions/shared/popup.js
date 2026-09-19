@@ -29,6 +29,7 @@
   let adminFailures = 0;
   let adminLockedUntil = 0;
   let adminDetailsGeneration = 0;
+  let detailStation = null;
   const retiredEpochs = new Set();
   const ADMIN_ITERATIONS = 120000;
   const ADMIN_SALT = Uint8Array.from('c6d79acaafb52bb8bac278313e84ccf7'.match(/../g).map(x => Number.parseInt(x, 16)));
@@ -135,6 +136,7 @@
   }
 
   function stationCountry(station) {
+    if (station?.countrycode === RB.DIASPORA_CODE) return station.country ? `Dijaspora · ${station.country}` : 'Dijaspora';
     if (station?.countrycode === RB.FOREIGN_CODE) return station.country ? `Strano · ${station.country}` : 'Strano';
     return station?.country || station?.countrycode || '';
   }
@@ -173,6 +175,7 @@
   }
 
   function primaryCategory(station) {
+    if (station?.countrycode === RB.DIASPORA_CODE) return 'Dijaspora';
     for (const [value, label] of GENRE_LABELS) if (matchesGenre(station, value)) return label;
     return station.countrycode === RB.FOREIGN_CODE ? 'Strana postaja' : 'Radio uživo';
   }

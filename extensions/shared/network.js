@@ -2,7 +2,8 @@
 
 const RBNet = (() => {
   const FOREIGN_CODE = 'INT';
-  const ALLOWED = new Set(['HR', 'BA', 'RS', 'SI', 'MK', 'AL', 'ME', FOREIGN_CODE]);
+  const DIASPORA_CODE = 'DIA';
+  const ALLOWED = new Set(['HR', 'BA', 'RS', 'SI', 'MK', 'AL', 'ME', DIASPORA_CODE, FOREIGN_CODE]);
   const RADIO_BROWSER_SUFFIX = '.api.radio-browser.info';
   const BALKAN = new Set(['HR', 'BA', 'RS', 'SI', 'MK', 'AL', 'ME']);
   const RADIO_BROWSER_API_BASES = Object.freeze([
@@ -135,7 +136,7 @@ const RBNet = (() => {
         const out = [];
         for (const row of rows) {
           const actualCountry = countryCode(row?.countrycode);
-          if (expectedCountry === FOREIGN_CODE) {
+          if (expectedCountry === FOREIGN_CODE || expectedCountry === DIASPORA_CODE) {
             if (!actualCountry || BALKAN.has(actualCountry) || (sourceCountry && actualCountry !== sourceCountry)) continue;
           } else if (actualCountry !== expectedCountry) {
             continue;
@@ -154,7 +155,7 @@ const RBNet = (() => {
   }
 
   return Object.freeze({
-    FOREIGN_CODE, allowedCountry, safeHttp, safeRadioBrowserBase, candidateUrls,
+    FOREIGN_CODE, DIASPORA_CODE, allowedCountry, safeHttp, safeRadioBrowserBase, candidateUrls,
     validStation, refreshCandidateUrls
   });
 })();

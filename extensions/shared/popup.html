@@ -14,7 +14,7 @@
         <img src="icon48.png" alt="" width="40" height="40">
         <div class="brandCopy">
           <strong>Radio Balkan</strong>
-          <span>Balkan + 50 stranih · radio uživo</span>
+          <span>Balkan · Dijaspora · Strano · radio uživo</span>
         </div>
       </div>
       <div class="topbarActions">
@@ -32,6 +32,12 @@
       </div>
       <button id="heroPlay" class="primaryButton" type="button" disabled>▶ Slušaj</button>
     </section>
+
+    <nav class="quickAreas" aria-label="Brzi odabir područja">
+      <button id="quickAll" class="quickAreaButton" type="button">Sve</button>
+      <button id="quickDiaspora" class="quickAreaButton" type="button">◎ Dijaspora</button>
+      <button id="quickForeign" class="quickAreaButton" type="button">◉ Strano</button>
+    </nav>
 
     <section class="tools" aria-label="Pretraživanje i filtriranje">
       <label class="searchField" aria-label="Pretraži radio stanice">
@@ -70,6 +76,30 @@
     </div>
 
     <section id="stations" class="stations" role="list" aria-label="Radio stanice"></section>
+
+    <div class="builtWith" aria-label="Izradio Brendigo">
+      Built with <a href="https://brendigo.com/" target="_blank" rel="noopener noreferrer">Brendigo</a>
+    </div>
+
+    <section id="stationPanel" class="stationPanel" role="dialog" aria-modal="true" aria-labelledby="stationPanelTitle" hidden>
+      <div class="stationDetailCard">
+        <div class="stationDetailHeader">
+          <img id="stationDetailLogo" src="icon48.png" alt="" width="64" height="64" referrerpolicy="no-referrer">
+          <div class="stationDetailHeading">
+            <strong id="stationPanelTitle">Radio stanica</strong>
+            <span id="stationDetailMeta">Radio uživo</span>
+          </div>
+          <button id="stationDetailClose" class="iconButton" type="button" aria-label="Zatvori detalje stanice">×</button>
+        </div>
+        <div class="stationDetailBody">
+          <p id="stationDescription"></p>
+          <div id="stationFacts" class="stationFacts"></div>
+          <div class="stationDetailActions">
+            <button id="stationDetailPlay" class="primaryButton" type="button">▶ Slušaj ovu stanicu</button>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <section id="adminPanel" class="adminPanel" role="dialog" aria-modal="true" aria-labelledby="adminPanelTitle" hidden>
       <div class="adminCard">
@@ -117,5 +147,6 @@
   <script src="network.js"></script>
   <script src="catalog.js"></script>
   <script src="popup.js"></script>
+  <script src="enhancements.js"></script>
 </body>
 </html>

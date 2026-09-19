@@ -112,10 +112,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             String name = safe(intent.getStringExtra(RadioPlayerService.EXTRA_NAME));
             String meta = safe(intent.getStringExtra(RadioPlayerService.EXTRA_META));
             currentCountryCode = safe(intent.getStringExtra(RadioPlayerService.EXTRA_COUNTRY));
-            if (currentCountryCode.isEmpty()) {
-                RadioStation match = stationByKey(currentKey);
-                if (match != null) currentCountryCode = match.countryCode;
-            }
+            RadioStation match = stationByKey(currentKey);
+            if (match != null) currentCountryCode = match.flagCode();
             String now = safe(intent.getStringExtra(RadioPlayerService.EXTRA_NOW_PLAYING));
             String status = safe(intent.getStringExtra(RadioPlayerService.EXTRA_STATUS));
             playerName.setText(name.isEmpty() ? "Odaberi radio stanicu" : name);
@@ -149,7 +147,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             tab = "all";
             state.setTab("all");
         }
-        navSelection = navSelectionForTab(tab);
+        navSelection = RadioRepository.DIASPORA_CODE.equalsIgnoreCase(country) ? "diaspora" : navSelectionForTab(tab);
         images = new ImageLoader();
         repository = new RadioRepository(this);
         buildUi();
@@ -175,7 +173,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.addView(buildHero(), marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(238), 0, 3, 0, 14));
+        header.addView(buildHero(), marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(224), 0, 3, 0, 12));
+        header.addView(buildQuickAreas(), marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48), 0, 0, 0, 8));
 
         LinearLayout stationsHeader = new LinearLayout(this);
         stationsHeader.setGravity(Gravity.CENTER_VERTICAL);
@@ -191,6 +190,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         adapter = new StationAdapter(this, this, images);
         list = new ListView(this);
         list.addHeaderView(header, null, false);
+        list.addFooterView(buildBrendigoFooter(), null, true);
         list.setAdapter(adapter);
         list.setDivider(null);
         list.setDividerHeight(0);
@@ -330,6 +330,61 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         return hero;
     }
 
+
+    private View buildQuickAreas() {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(1), 0, dp(1), 0);
+
+        Button popular = chip("★ Popularno", false);
+        popular.setContentDescription("Prikaži popularne radio stanice");
+        popular.setOnClickListener(v -> {
+            tab = "popular"; country = ""; genre = "";
+            state.setTab(tab); state.setCountry(country); state.setGenre(genre);
+            selectBottomNav("radio"); applyFilterAsync();
+        });
+        row.addView(popular, new LinearLayout.LayoutParams(0, dp(42), 1f));
+
+        Button diaspora = chip("◎ Dijaspora", false);
+        diaspora.setContentDescription("Prikaži radio stanice za dijasporu");
+        diaspora.setOnClickListener(v -> {
+            tab = "all"; country = RadioRepository.DIASPORA_CODE; genre = "";
+            state.setTab(tab); state.setCountry(country); state.setGenre(genre);
+            selectBottomNav("diaspora"); applyFilterAsync();
+        });
+        LinearLayout.LayoutParams middle = new LinearLayout.LayoutParams(0, dp(42), 1f);
+        middle.setMargins(dp(6), 0, dp(6), 0);
+        row.addView(diaspora, middle);
+
+        Button foreign = chip("◉ Strano", false);
+        foreign.setContentDescription("Prikaži više stranih radio stanica");
+        foreign.setOnClickListener(v -> {
+            tab = "all"; country = RadioRepository.FOREIGN_CODE; genre = "";
+            state.setTab(tab); state.setCountry(country); state.setGenre(genre);
+            selectBottomNav("radio"); applyFilterAsync();
+        });
+        row.addView(foreign, new LinearLayout.LayoutParams(0, dp(42), 1f));
+        return row;
+    }
+
+    private View buildBrendigoFooter() {
+        TextView footer = label("Built with Brendigo", 11, 0xFF9CA3AF, false);
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(dp(12), dp(18), dp(12), dp(24));
+        footer.setClickable(true);
+        footer.setFocusable(true);
+        footer.setContentDescription("Built with Brendigo, otvori brendigo.com");
+        footer.setOnClickListener(v -> {
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://brendigo.com/")));
+            } catch (Throwable error) {
+                AppLog.e(this, "open-brendigo", error);
+                Toast.makeText(this, "Brendigo web stranica trenutačno nije dostupna", Toast.LENGTH_SHORT).show();
+            }
+        });
+        return footer;
+    }
+
     private View buildPlayerBar() {
         LinearLayout player = new LinearLayout(this);
         player.setOrientation(LinearLayout.HORIZONTAL);
@@ -427,6 +482,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         nav.setBackground(rounded(0xFF0D1219, 0xFF303844, 0));
         nav.addView(navItem("⌂", "Početna", "all"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         nav.addView(navItem("◇", "Otkrij", "discover"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+        nav.addView(navItem("◎", "Dijaspora", "diaspora"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         nav.addView(navItem("▥", "Radio", "radio"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         nav.addView(navItem("♡", "Omiljene", "favorites"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         nav.addView(navItem("⋯", "Više", "more"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
@@ -450,9 +506,19 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             if ("discover".equals(action)) { showBrowseDialog(); return; }
             if ("more".equals(action)) { showAppMenu(); return; }
             selectBottomNav(action);
-            if ("all".equals(action)) { tab="all"; state.setTab(tab); applyFilterAsync(); list.smoothScrollToPosition(0); }
-            else if ("favorites".equals(action)) { tab="favorites"; state.setTab(tab); applyFilterAsync(); }
-            else if ("radio".equals(action)) { tab="all"; state.setTab(tab); applyFilterAsync(); list.smoothScrollToPosition(0); }
+            if ("all".equals(action)) {
+                tab = "all"; country = ""; genre = "";
+                state.setTab(tab); state.setCountry(country); state.setGenre(genre);
+                applyFilterAsync(); list.smoothScrollToPosition(0);
+            } else if ("diaspora".equals(action)) {
+                tab = "all"; country = RadioRepository.DIASPORA_CODE; genre = "";
+                state.setTab(tab); state.setCountry(country); state.setGenre(genre);
+                applyFilterAsync(); list.smoothScrollToPosition(0);
+            } else if ("favorites".equals(action)) {
+                tab = "favorites"; state.setTab(tab); applyFilterAsync();
+            } else if ("radio".equals(action)) {
+                tab = "all"; state.setTab(tab); applyFilterAsync(); list.smoothScrollToPosition(0);
+            }
         });
         updateBottomNavItem(action, item);
         return item;
@@ -704,7 +770,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             int count = code.isEmpty() ? total : counts.getOrDefault(code, 0);
             Button b = chip(count > 0 ? name + " · " + count : name, code.equalsIgnoreCase(country));
             b.setTag(code);
-            applyFlag(b, code);
+            if (code.isEmpty() || RadioRepository.DIASPORA_CODE.equals(code) || RadioRepository.FOREIGN_CODE.equals(code)) clearFlag(b);
+            else applyFlag(b, code);
             countryButtons.add(b);
             b.setOnClickListener(v -> {
                 country = code;
@@ -864,7 +931,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                     } else {
                         heroName.setText(featured.name);
                         heroMeta.setText(featured.meta());
-                        applyFlag(heroMeta, featured.countryCode);
+                        applyFlag(heroMeta, featured.flagCode());
                     }
                     updatePlaybackControls();
                 });
@@ -1032,8 +1099,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         currentKey = key;
         state.addRecent(key);
         state.setLastStation(key, s.name, s.meta());
-        currentCountryCode = s.countryCode;
-        playerName.setText(s.name); playerMeta.setText(s.meta()); applyFlag(playerMeta, s.countryCode); statusText.setText("Povezujem…");
+        currentCountryCode = s.flagCode();
+        playerName.setText(s.name); playerMeta.setText(s.meta()); applyFlag(playerMeta, s.flagCode()); statusText.setText("Povezujem…");
         if (playerArtwork != null) { playerArtwork.setImageResource(R.drawable.ic_radio_balkan); images.load(s.favicon, playerArtwork, null); }
         if (playerEqualizer != null) playerEqualizer.setActive(false);
         playing = false;
@@ -1077,6 +1144,75 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         boolean on = state.toggleFavorite(s.key());
         Toast.makeText(this, on ? "Dodano u omiljene" : "Uklonjeno iz omiljenih", Toast.LENGTH_SHORT).show();
         if ("favorites".equals(tab)) applyFilterAsync();
+    }
+
+
+    @Override public void onDetails(RadioStation s) {
+        if (s == null) return;
+        String area;
+        if (RadioRepository.DIASPORA_CODE.equalsIgnoreCase(s.countryCode)) {
+            area = safe(s.country).isEmpty() ? "Dijaspora" : "Dijaspora · " + safe(s.country);
+        } else if (RadioRepository.FOREIGN_CODE.equalsIgnoreCase(s.countryCode)) {
+            area = safe(s.country).isEmpty() ? "Strana postaja" : safe(s.country);
+        } else {
+            area = safe(s.country).isEmpty() ? s.countryCode : safe(s.country);
+        }
+
+        StringBuilder description = new StringBuilder();
+        description.append(s.name).append(" je radio stanica");
+        if (!area.isEmpty()) description.append(" iz područja ").append(area);
+        description.append(". ");
+        String firstGenre = firstUsefulTag(s.tags);
+        if (!firstGenre.isEmpty()) description.append("Glavni sadržaj: ").append(firstGenre).append(". ");
+        if (!safe(s.language).isEmpty()) description.append("Jezik programa: ").append(s.language).append(". ");
+        description.append("Reprodukcija se pokreće kroz sigurni stream s automatskim fallback/recovery postupkom kada je dostupan.");
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(20), dp(8), dp(20), dp(4));
+        TextView meta = label(area.isEmpty() ? "Radio uživo" : area, 13, 0xFFFFB23F, true);
+        meta.setSingleLine(false);
+        panel.addView(meta, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        TextView body = label(description.toString(), 14, 0xFFE2E6EC, false);
+        body.setSingleLine(false);
+        body.setLineSpacing(0, 1.12f);
+        LinearLayout.LayoutParams bodyLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bodyLp.setMargins(0, dp(10), 0, dp(8));
+        panel.addView(body, bodyLp);
+        TextView technical = label(stationPublicDetails(s), 12, 0xFFAAB2BD, false);
+        technical.setSingleLine(false);
+        panel.addView(technical, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        boolean favorite = state.favorites().contains(s.key());
+        new AlertDialog.Builder(this)
+                .setTitle(s.name)
+                .setView(panel)
+                .setPositiveButton("▶ Slušaj", (dialog, which) -> onPlay(s))
+                .setNeutralButton(favorite ? "♥ Ukloni iz omiljenih" : "♡ Dodaj u omiljene", (dialog, which) -> onFavorite(s))
+                .setNegativeButton("Zatvori", null)
+                .show();
+    }
+
+    private String stationPublicDetails(RadioStation s) {
+        List<String> parts = new ArrayList<>();
+        if (!safe(s.state).isEmpty() && !safe(s.state).equalsIgnoreCase(s.country)) parts.add(s.state);
+        if (!safe(s.codec).isEmpty()) parts.add(s.codec.toUpperCase(Locale.ROOT));
+        if (s.bitrate > 0) parts.add(s.bitrate + " kbps");
+        if (!safe(s.tags).isEmpty()) {
+            String tags = s.tags.replace("dijaspora,", "").replace("dijaspora", "").trim();
+            if (!tags.isEmpty()) parts.add("Kategorije: " + tags);
+        }
+        return parts.isEmpty() ? "Radio uživo" : android.text.TextUtils.join(" · ", parts);
+    }
+
+    private String firstUsefulTag(String tags) {
+        if (tags == null) return "";
+        for (String raw : tags.split(",")) {
+            String value = raw.trim();
+            if (value.isEmpty() || "dijaspora".equalsIgnoreCase(value)) continue;
+            if (value.length() <= 32) return value;
+        }
+        return "";
     }
 
     @Override public void onMore(RadioStation s) {
