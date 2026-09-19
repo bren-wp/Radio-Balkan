@@ -83,7 +83,32 @@ async function mockFetch(raw) {
     }
     return response([station(1, code)]);
   }
-  if (url.includes('/json/stations/search?hidebroken=true&order=votes&reverse=true&limit=500')) {
+  if (url.includes('/json/stations/search?') && url.includes('hidebroken=true') && url.includes('limit=100') &&
+      (url.includes('tag=diaspora') || url.includes('name=balkan') || url.includes('name=ex%20yu') ||
+       url.includes('language=croatian') || url.includes('language=serbian') || url.includes('language=bosnian') ||
+       url.includes('language=macedonian') || url.includes('language=albanian') || url.includes('language=slovenian'))) {
+    if (networkOffline) throw new Error('simulated offline diaspora catalog');
+    const parsed = new URL(url);
+    if (parsed.hostname.startsWith('dyn')) {
+      attemptedDynamicHosts.add(parsed.hostname);
+      throw new Error('simulated dynamic API failure');
+    }
+    const signature = Array.from(parsed.searchParams.entries()).find(([key]) => ['tag', 'name', 'language'].includes(key))?.join(':') || 'diaspora';
+    const seed = Array.from(signature).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    const diaspora = [];
+    for (let i = 0; i < 28; i += 1) {
+      const item = station(seed * 100 + i, i % 2 ? 'DE' : 'AT');
+      item.name = `Diaspora ${signature} ${i}`;
+      item.country = i % 2 ? 'Germany' : 'Austria';
+      item.language = 'Croatian';
+      diaspora.push(item);
+    }
+    diaspora.push(station(seed * 100 + 90, 'HR'));
+    diaspora.push(station(seed * 100 + 91, 'CH', 0));
+    diaspora.push(station(seed * 100 + 92, 'DE', 1, 'http://127.0.0.1/private'));
+    return response(diaspora);
+  }
+  if (url.includes('/json/stations/search?hidebroken=true&order=votes&reverse=true&limit=1000')) {
     if (networkOffline) throw new Error('simulated offline catalog');
     const parsed = new URL(url);
     if (parsed.hostname.startsWith('dyn')) {
@@ -91,7 +116,7 @@ async function mockFetch(raw) {
       throw new Error('simulated dynamic API failure');
     }
     const foreign = [];
-    for (let i = 0; i < 70; i += 1) foreign.push(station(i, i % 2 ? 'US' : 'GB'));
+    for (let i = 0; i < 150; i += 1) foreign.push(station(i, i % 2 ? 'US' : 'GB'));
     foreign.push(station(500, 'HR'));
     foreign.push(station(501, 'US', 0));
     foreign.push(station(502, 'DE', 1, 'http://localhost./private'));
@@ -146,14 +171,22 @@ async function main() {
   const RB = vm.runInContext('RB', context);
 
   assert.equal(RB.FOREIGN_CODE, 'INT');
+  assert.equal(RB.DIASPORA_CODE, 'DIA');
   assert.ok(RB.COUNTRIES.some(([code, name]) => code === 'INT' && name === 'Strano'));
+  assert.ok(RB.COUNTRIES.some(([code, name]) => code === 'DIA' && name === 'Dijaspora'));
 
   const catalog = await RB.load(true);
   const foreign = catalog.filter(item => item.countrycode === RB.FOREIGN_CODE);
-  const regional = catalog.filter(item => item.countrycode !== RB.FOREIGN_CODE);
+  const diaspora = catalog.filter(item => item.countrycode === RB.DIASPORA_CODE);
+  const regional = catalog.filter(item => balkanCodes.has(item.countrycode));
 
-  assert.equal(foreign.length, 50, 'foreign catalog must be capped at 50 stations');
+  assert.equal(foreign.length, 120, 'foreign catalog must be capped at 120 stations');
+  assert.equal(diaspora.length, 120, 'diaspora catalog must be capped at 120 stations');
   assert.equal(regional.length, 7, 'regional catalog must retain all seven Balkan country batches');
+  assert.ok(diaspora.every(item => item.lastcheckok === 1), 'diaspora catalog must keep only healthy Radio Browser entries');
+  assert.ok(diaspora.every(item => !balkanCodes.has(item.sourcecountrycode)), 'diaspora catalog must represent stations hosted outside supported Balkan countries');
+  assert.ok(diaspora.every(item => String(item.tags || '').toLowerCase().includes('dijaspora')), 'diaspora stations must keep their explicit classification');
+  assert.ok(diaspora.every(item => /^https?:\/\//.test(item.url_resolved || item.url)), 'diaspora catalog must keep safe HTTP(S) streams');
   assert.ok(foreign.every(item => item.lastcheckok === 1), 'foreign catalog must keep only healthy Radio Browser entries');
   assert.ok(foreign.every(item => !balkanCodes.has(item.sourcecountrycode)), 'foreign catalog must exclude supported Balkan countries');
   assert.ok(foreign.every(item => /^https?:\/\//.test(item.url_resolved || item.url)), 'foreign catalog must keep safe HTTP(S) streams');
@@ -167,7 +200,7 @@ async function main() {
   delete storage.rbCatalogAt;
   oversizedCountry = 'HR';
   const limitedCatalog = await RB.load(true);
-  const limitedRegional = limitedCatalog.filter(item => item.countrycode !== RB.FOREIGN_CODE);
+  const limitedRegional = limitedCatalog.filter(item => balkanCodes.has(item.countrycode));
   assert.equal(limitedRegional.length, 6, 'oversized country response must be rejected without poisoning other country batches');
   assert.ok(!limitedRegional.some(item => item.countrycode === 'HR'), 'oversized response must not be parsed into the catalog');
   oversizedCountry = '';
@@ -182,7 +215,7 @@ async function main() {
   assert.ok(cachedWhileOffline.length > 0, 'normal load may still fall back to a fresh cached catalog while offline');
   networkOffline = false;
 
-  console.log('Browser catalog, response-limit, refresh-state and UI preference contracts OK');
+  console.log('Browser regional, diaspora, foreign, response-limit, refresh-state and UI preference contracts OK');
 }
 
 main().catch(error => {
