@@ -179,7 +179,7 @@ def main() -> int:
         '"Popularne", tab == "popular"',
         '"Jazz", genre == "jazz"',
         'RECT{mainR - 150, 528, mainR, 558}, Kind: hitGenreDropdown',
-        'action("Kopiraj", 54, hitLink)',
+        'action(layout.copyLabel, layout.copyW, hitLink)',
         'setStatus("Poveznica za reprodukciju je kopirana")',
         'Prazno polje vraća automatski odabir.',
         'Zapis o pogrešci spremljen je lokalno.',
