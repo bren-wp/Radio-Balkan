@@ -3410,9 +3410,15 @@ func handleClick(x, y int32) {
 				safeGo("manual-health", healthCheckAll)
 			}
 		case hitAbout:
-			messageBox(hwndOrZero(), "Radio Balkan", "Radio Balkan "+appVersion+"\n\nRadio stanice samo iz Hrvatske, Bosne i Hercegovine, Srbije, Slovenije, Sjeverne Makedonije, Albanije i Crne Gore.\nFavoriti i povijest slušanja rade lokalno na tvojem računalu. Napredne kontrole izvora dostupne su samo u Admin načinu rada.", MB_ICONINFORMATION)
+			messageBox(hwndOrZero(), "Radio Balkan", "Radio Balkan "+appVersion+"\n\nRadio iz Hrvatske i regije, posebna kategorija Dijaspora te odabrane strane postaje.\nFavoriti i povijest slušanja rade lokalno na tvojem računalu. Napredne kontrole izvora dostupne su samo u Admin načinu rada.", MB_ICONINFORMATION)
 		case hitAdmin:
 			toggleAdminSession()
+		case hitStationDetails:
+			if idx := stationIndexFromHit(h); idx >= 0 {
+				showStationDetails(idx)
+			}
+		case hitBrendigo:
+			shellOpen("https://brendigo.com/")
 		case hitRefresh:
 			app.mu.Lock()
 			app.countryMenuOpen = false
@@ -3774,6 +3780,60 @@ func copyStationLink(idx int) {
 	}
 	invalidate()
 }
+func showStationDetails(idx int) {
+	app.mu.RLock()
+	if idx < 0 || idx >= len(app.stations) {
+		app.mu.RUnlock()
+		return
+	}
+	station := app.stations[idx]
+	app.mu.RUnlock()
+
+	area := strings.TrimSpace(station.Country)
+	switch strings.ToUpper(strings.TrimSpace(station.CountryCode)) {
+	case diasporaCatalogCode:
+		if area == "" {
+			area = "Dijaspora"
+		} else {
+			area = "Dijaspora · " + area
+		}
+	case foreignCatalogCode:
+		if area == "" {
+			area = "Strana postaja"
+		}
+	default:
+		if area == "" {
+			area = countryNameByCode(station.CountryCode)
+		}
+	}
+	if area == "" {
+		area = "Radio uživo"
+	}
+	genre := firstTag(strings.ReplaceAll(station.Tags, "dijaspora,", ""))
+	description := station.Name + " je radio stanica iz područja " + area + "."
+	if genre != "" {
+		description += "\nProgram: " + genre + "."
+	}
+	if strings.TrimSpace(station.Language) != "" {
+		description += "\nJezik: " + strings.TrimSpace(station.Language) + "."
+	}
+	facts := make([]string, 0, 4)
+	if strings.TrimSpace(station.Codec) != "" {
+		facts = append(facts, strings.ToUpper(strings.TrimSpace(station.Codec)))
+	}
+	if station.Bitrate > 0 {
+		facts = append(facts, fmt.Sprintf("%d kbps", station.Bitrate))
+	}
+	if station.LastCheckOK == 1 {
+		facts = append(facts, "zadnja provjera: dostupna")
+	}
+	if len(facts) > 0 {
+		description += "\n\n" + strings.Join(facts, " · ")
+	}
+	description += "\n\nZa slušanje koristi ▶ na kartici ili u donjem playeru. Stream URL i maintenance podaci ostaju skriveni izvan Admin načina rada."
+	messageBox(hwndOrZero(), station.Name, description, MB_ICONINFORMATION)
+}
+
 func openStationWeb(idx int) {
 	if !requireAdmin() {
 		return
