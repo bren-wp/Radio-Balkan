@@ -21,6 +21,10 @@
         android:usesCleartextTraffic="true"
         android:networkSecurityConfig="@xml/network_security_config">
         <activity
+            android:name=".StationDetailsActivity"
+            android:exported="false"
+            android:screenOrientation="unspecified" />
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:screenOrientation="unspecified">
