@@ -1,5 +1,28 @@
 # Izdavanja
 
+## 0.0.29
+
+Izdanje 0.0.29 fokusira se na jasniju informacijsku arhitekturu, zasebne station-detail stranice, uklanjanje dupliciranog koda i dodatno lifecycle/security učvršćivanje. Nisu dodani analytics, telemetry, javni korisnički računi, novi backend ni šire browser dozvole.
+
+- Windows, Android i browser klijenti više ne koriste javni modalni/popup opis stanice kao primarni detail UX; klik na radio karticu vodi na zaseban station-detail prikaz
+- izravni ▶ ostaje posebna playback akcija, pa otvaranje detalja nikada implicitno ne pokreće radio
+- station stranice prikazuju javni opis, područje, žanr, jezik i dostupne tehničke činjenice bez izlaganja stream URL-a, homepagea ili administratorskih maintenance podataka
+- Windows i browser imaju prikaz sličnih stanica; browser Back/Escape vraća keyboard fokus na izvornu browse karticu čak i nakon prelaska kroz slične stanice
+- navigacija je razdvojena na različite funkcije umjesto više stavki koje vode na isti prikaz; Windows sidebar i Android/browser navigation jasnije odvajaju Početnu/Sve, Top, Zemlje/Otkrij, Žanrove, Dijasporu, Strano, Omiljene i dodatne opcije
+- Android bottom navigation više ne sadrži duplicirane Radio/Dijaspora stavke koje su se ponašale kao postojeći prikazi
+- uklonjen je stari browser `extensions/shared/enhancements.js` i njegov zaseban regression test; station-detail/navigation logika konsolidirana je u produkcijski `popup.js`
+- Android `PlaybackStarter` centralizira pokretanje reprodukcije iz MainActivity i StationDetailsActivity, čime se smanjuje duplicirana playback/state logika
+- Android `StationPresentation` centralizira javni opis i facts model uz zasebne JVM regression testove
+- `StationDetailsActivity` je non-exported, prihvaća ograničen JSON payload i ne izlaže source/homepage maintenance podatke
+- Android `AdminLoginGuard` sada stvarno upravlja process-lifetime lockout/single-flight stanjem, pa Activity recreation/rotacija više ne resetira broj neuspjelih pokušaja ili dopušta paralelne KDF prijave
+- admin sesija sama ostaje Activity-local i nepersistentna; logout i postojeći logic-level privilege guardovi ostaju aktivni
+- browser state contract sada uključuje stvarne DIA i INT fixture stanice, uz zadržavanje determinističnog adjacent-player poretka
+- production UI verifier zabranjuje povratak starog station modalnog prikaza i dupliciranih Android navigation stavki
+- security verifier zabranjuje povratak Activity-local admin rate-limit/single-flight implementacije
+- development exact-head CI prije release bumpa prošao je versions/security/UI, browser network/catalog/state/player testove, Android unit/lint/release build i Windows Go test/vet/build + stvarni startup runtime soak + clean-worktree
+
+Dostupnost pojedinog radio streama i dalje ovisi o infrastrukturi same radio stanice. Aplikacija koristi provjeru sigurnih URL-ova, ograničene timeout/fallback/recovery putanje i katalog health podatke, ali ne može jamčiti da će svaki third-party stream biti online u svakom trenutku.
+
 ## 0.0.28
 
 Izdanje 0.0.28 proširuje katalog i poboljšava discovery, station-detail UX i cross-platform playback recovery bez dodavanja analyticsa, telemetryja, novog korisničkog računa, novog backenda ili širih browser dozvola.

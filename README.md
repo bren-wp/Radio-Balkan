@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.28" src="assets/badges/version.svg">
+  <img alt="version 0.0.29" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -15,16 +15,17 @@
 
 Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrvatske i regije bez korisničkog računa, bez telemetry sustava i bez teškog web runtimea u Windows aplikaciji. Projekt objedinjuje nativni Windows klijent, nativni Android klijent i produkcijske ekstenzije za Chrome, Edge, Opera i Firefox.
 
-## Što donosi v0.0.28
+## Što donosi v0.0.29
 
-- **Nova kategorija Dijaspora na svim klijentima** — Windows, Android i browseri imaju zaseban `Dijaspora` prikaz za relevantne Balkan/Ex-Yu i regionalne jezične stanice izvan matičnih balkanskih država.
-- **Više stanica bez nekontroliranog fan-outa** — `Strano` je prošireno na do 120 provjerenih stanica, a `Dijaspora` ima zaseban limit do 120; dohvat ostaje ograničen timeoutima, response limitima, deduplikacijom i `hidebroken=true`.
-- **Klik na stanicu sada otvara detalje** — kartica prikazuje javni opis, područje, jezik, žanr i tehničke metapodatke koji su sigurni za korisnika; zasebni ▶ i dalje pokreće postojeći hardened playback put.
-- **Bolji početni raspored i discovery** — Android i browser dobivaju brzi pristup Popularnom, Dijaspori i Stranom, a Windows sidebar dobiva stvarnu Dijaspora stavku.
-- **Pouzdaniji playback i recovery za DIA/INT** — stvarni country code izvora čuva se odvojeno od aplikacijske kategorije, pa UUID/name recovery i zastave više ne pokušavaju koristiti pseudo-kodove `DIA` ili `INT` kao stvarne države.
-- **Built with Brendigo** — javni klijenti prikazuju produkcijski attribution; klik na **Brendigo** vodi na `https://brendigo.com/`.
-- **Bez novog backenda, telemetryja ili širih dozvola** — postojeći privacy/security model ostaje nepromijenjen, a javni station-detail ne izlaže stream URL, homepage ni administratorske maintenance podatke.
-- **Puni cross-platform gate je zelen** — browser runtime/network/catalog/state/UI testovi, Android unit/lint/release build, Windows Go test/vet/build, stvarni startup soak, security/UI contracti i clean-worktree provjere prošli su prije release bumpa.
+- **Zasebne stranice radio stanica** — klik na karticu više ne otvara javni modalni opis niti automatski pokreće stream. Windows, Android i browseri imaju poseban station-detail prikaz, dok zasebni ▶ ostaje izravna playback akcija.
+- **Jasnija navigacija bez duplih odredišta** — Početna/Sve, Top, Zemlje/Otkrij, Žanrovi, Dijaspora, Strano, Omiljene i Više imaju jasno odvojene uloge; Android bottom navigation više nema stavke koje vode na isti prikaz.
+- **Bogati javni detalji bez izlaganja osjetljivih podataka** — opis, područje, žanr, jezik, codec/bitrate i slične stanice gdje platforma to podržava, bez javnog stream URL-a, homepagea ili admin maintenance podataka.
+- **Bolje keyboard/focus ponašanje** — browser vraća fokus na izvornu karticu i nakon navigacije kroz slične stanice; dedicated page podržava Back/Escape putanju bez izgubljenog fokusa.
+- **Manje dupliciranog i mrtvog koda** — stari browser `enhancements.js` i njegov zaseban test uklonjeni su; station-detail i navigation logika konsolidirani su u produkcijski `popup.js`.
+- **Centraliziran Android playback i presentation sloj** — `PlaybackStarter` uklanja duplicirane start putanje, a `StationPresentation` zajednički generira javni opis i činjenice.
+- **Jači Android admin lifecycle** — process-lifetime `AdminLoginGuard` sada stvarno upravlja lockoutom i single-flight prijavom, pa Activity recreation/rotacija ne resetira zaštitu; admin sesija i dalje ostaje lokalna i nepersistentna.
+- **Dodatni regression contracti** — browser navigation/DIA/INT/adjacent state, Android admin guard i station presentation te Windows dedicated page/menu ponašanje ostaju obavezni u CI-ju.
+- **Bez novih analytics/telemetry komponenti** — postojeći safe-URL, redirect, timeout, session/generation, private-network i clean-worktree sigurnosni ugovori ostaju aktivni.
 
 ## Zašto Radio Balkan
 
@@ -64,7 +65,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.28 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.28):
+Gotovi v0.0.29 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.29):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -104,7 +105,7 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.29
+python scripts/bump_version.py 0.0.30
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.
