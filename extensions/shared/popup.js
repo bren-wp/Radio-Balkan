@@ -238,7 +238,7 @@
   function openStationPage(station, returnFocus = null) {
     if (!station) return;
     detailStation = station;
-    detailReturnFocus = returnFocus;
+    if (returnFocus && !detailReturnFocus) detailReturnFocus = returnFocus;
     $('browsePage').hidden = true;
     $('stationPage').hidden = false;
     $('stationPageTitle').textContent = station.name;
