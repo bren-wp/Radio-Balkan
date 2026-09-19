@@ -221,6 +221,7 @@ public final class RadioRepository {
         if (safe(primary.tags).isEmpty()) primary.tags = other.tags;
         if (safe(primary.country).isEmpty()) primary.country = other.country;
         if (safe(primary.countryCode).isEmpty()) primary.countryCode = other.countryCode;
+        if (safe(primary.sourceCountryCode).isEmpty()) primary.sourceCountryCode = other.sourceCountryCode;
         if (safe(primary.state).isEmpty()) primary.state = other.state;
         if (safe(primary.language).isEmpty()) primary.language = other.language;
         if (safe(primary.codec).isEmpty()) primary.codec = other.codec;
@@ -229,6 +230,9 @@ public final class RadioRepository {
         primary.lastCheckOk = Math.max(primary.lastCheckOk, other.lastCheckOk);
         if (DIASPORA_CODE.equalsIgnoreCase(a.countryCode) || DIASPORA_CODE.equalsIgnoreCase(b.countryCode)) {
             primary.countryCode = DIASPORA_CODE;
+            if (safe(primary.sourceCountryCode).isEmpty()) {
+                primary.sourceCountryCode = !safe(a.sourceCountryCode).isEmpty() ? a.sourceCountryCode : b.sourceCountryCode;
+            }
             if (!safe(primary.tags).toLowerCase(Locale.ROOT).contains("dijaspora")) {
                 primary.tags = safe(primary.tags).isEmpty() ? "dijaspora" : "dijaspora," + primary.tags;
             }
@@ -338,6 +342,7 @@ public final class RadioRepository {
                     String originalCode = safe(station.countryCode).toUpperCase(Locale.ROOT);
                     if (originalCode.isEmpty() || isRegionalCountry(originalCode) || station.lastCheckOk != 1) continue;
                     if (!StreamResolver.isSafeHttp(station.url) && !StreamResolver.isSafeHttp(station.urlResolved)) continue;
+                    station.sourceCountryCode = originalCode;
                     station.countryCode = FOREIGN_CODE;
                     if (safe(station.country).isEmpty()) station.country = "Strana postaja";
                     station.refreshIndexes();
@@ -382,6 +387,7 @@ public final class RadioRepository {
                         String originalCode = safe(station.countryCode).toUpperCase(Locale.ROOT);
                         if (originalCode.isEmpty() || isRegionalCountry(originalCode) || station.lastCheckOk != 1) continue;
                         if (!StreamResolver.isSafeHttp(station.url) && !StreamResolver.isSafeHttp(station.urlResolved)) continue;
+                        station.sourceCountryCode = originalCode;
                         station.countryCode = DIASPORA_CODE;
                         station.tags = safe(station.tags).isEmpty() ? "dijaspora" : "dijaspora," + station.tags;
                         if (safe(station.country).isEmpty()) station.country = "Dijaspora";
