@@ -79,7 +79,7 @@ function deferred() {
 const ids = [
   'search', 'country', 'genre', 'stations', 'status', 'refresh', 'heroPlay',
   'playerToggle', 'playerPrev', 'playerStop', 'playerNext', 'favoritesOnly', 'clearFilters', 'playerFav', 'playerState',
-  'playerName', 'playerMeta', 'heroName', 'heroMeta', 'playerLogo',
+  'playerName', 'playerMeta', 'heroName', 'heroMeta', 'playerLogo', 'playerDetails',
   'adminToggle', 'adminStatusBadge', 'adminPanel', 'adminClose', 'adminRole', 'adminLoginView', 'adminControls',
   'adminUsername', 'adminPassword', 'adminLogin', 'adminMessage', 'adminStationName',
   'adminSource', 'adminSaveSource', 'adminResetSource', 'adminHomepage', 'adminOpenWeb',
@@ -256,10 +256,6 @@ const context = {
     async recent() {
       return copy(recentStore);
     },
-    async addRecent(key) {
-      recentStore = [key, ...recentStore.filter(value => value !== key)].slice(0, 50);
-      return copy(recentStore);
-    },
     async setFavorite(key, value) {
       if (value) favoriteStore[key] = true;
       else delete favoriteStore[key];
@@ -303,9 +299,17 @@ async function main() {
   assert.equal(elements.playerStop.disabled, false, 'player stop must be enabled after a station is available');
   assert.equal(elements.playerFav.disabled, false, 'favorite control must be enabled after a station is available');
   assert.equal(elements.playerFav.attributes['aria-pressed'], 'false', 'favorite state must be announced accessibly');
+  assert.equal(elements.playerDetails.disabled, false, 'current-station details control must be enabled when a station is active');
   assert.equal(elements.adminControls.hidden, true, 'advanced source controls must stay hidden before admin login');
   assert.equal(elements.adminStatusBadge.hidden, true, 'admin status badge must stay hidden before authentication');
   assert.equal(elements.quickAll.attributes['aria-pressed'], 'true', 'all-stations navigation must be selected initially');
+
+  const playCallsBeforePlayerDetails = playCalls;
+  elements.playerDetails.dispatch('click', { currentTarget: elements.playerDetails });
+  assert.equal(elements.stationPage.hidden, false, 'player station identity must open the dedicated station page');
+  assert.equal(elements.stationPageTitle.textContent, 'Radio A');
+  assert.equal(playCalls, playCallsBeforePlayerDetails, 'opening details from the player must not start playback');
+  elements.stationBack.dispatch('click');
 
   const stationRow = new Element('station-row');
   stationRow.dataset.key = 'station-a';

@@ -34,16 +34,18 @@
       <button id="heroPlay" class="primaryButton" type="button" disabled>▶ Slušaj</button>
     </section>
 
-    <nav class="quickAreas" aria-label="Glavna navigacija">
-      <button id="quickAll" class="quickAreaButton" type="button">⌂ Sve</button>
-      <button id="quickTop" class="quickAreaButton" type="button">🔥 Top</button>
-      <button id="quickRecent" class="quickAreaButton" type="button">◷ Nedavno</button>
-      <button id="quickCountries" class="quickAreaButton" type="button">🌍 Zemlje</button>
-      <button id="quickGenres" class="quickAreaButton" type="button">♫ Žanrovi</button>
-      <button id="quickDiaspora" class="quickAreaButton" type="button">◎ Dijaspora</button>
-      <button id="quickForeign" class="quickAreaButton" type="button">◉ Strano</button>
-      <button id="quickFolk" class="quickAreaButton" type="button">♫ Narodna</button>
-      <button id="quickPop" class="quickAreaButton" type="button">♪ Pop &amp; Rock</button>
+    <nav class="quickAreas" aria-label="Glavno pregledavanje">
+      <button id="quickTop" class="quickAreaButton primaryBrowseButton" type="button">🔥 Top</button>
+      <button id="quickGenres" class="quickAreaButton primaryBrowseButton" type="button">♫ Žanrovi</button>
+      <button id="quickCountries" class="quickAreaButton primaryBrowseButton" type="button">🌍 Zemlje</button>
+    </nav>
+    <nav class="discoveryRail" aria-label="Brzi odabir">
+      <button id="quickAll" class="discoveryChip" type="button">⌂ Početna</button>
+      <button id="quickRecent" class="discoveryChip" type="button">◷ Nedavno</button>
+      <button id="quickDiaspora" class="discoveryChip" type="button">◎ Dijaspora</button>
+      <button id="quickForeign" class="discoveryChip" type="button">◉ Strano</button>
+      <button id="quickFolk" class="discoveryChip" type="button">♫ Narodna</button>
+      <button id="quickPop" class="discoveryChip" type="button">♪ Pop &amp; Rock</button>
     </nav>
 
     <section class="browseIntro" aria-labelledby="browseTitle">
@@ -157,12 +159,14 @@
     </section>
 
     <footer class="player" aria-label="Reprodukcija">
-      <img id="playerLogo" src="icon48.png" alt="" width="52" height="52" referrerpolicy="no-referrer">
-      <div class="playerCopy">
-        <small id="playerState" role="status" aria-live="polite">Spremno</small>
-        <strong id="playerName">Nije odabrano</strong>
-        <span id="playerMeta">Odaberi stanicu</span>
-      </div>
+      <button id="playerDetails" class="playerStationButton" type="button" aria-label="Otvori detalje trenutačne stanice" disabled>
+        <img id="playerLogo" src="icon48.png" alt="" width="52" height="52" referrerpolicy="no-referrer">
+        <span class="playerCopy">
+          <small id="playerState" role="status" aria-live="polite">Spremno</small>
+          <strong id="playerName">Nije odabrano</strong>
+          <span id="playerMeta">Odaberi stanicu</span>
+        </span>
+      </button>
       <button id="playerFav" class="playerIcon" type="button" aria-label="Dodaj u omiljene" aria-pressed="false" disabled>♡</button>
       <div class="playerTransport" role="group" aria-label="Kontrole reprodukcije">
         <button id="playerPrev" class="transportButton" type="button" aria-label="Prethodna stanica" disabled>◀</button>

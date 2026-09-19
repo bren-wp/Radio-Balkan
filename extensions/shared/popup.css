@@ -40,9 +40,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .primaryButton { flex: 0 0 auto; min-width: 104px; height: 44px; padding: 0 14px; border: 1px solid #ffca72; border-radius: 13px; background: linear-gradient(180deg, var(--accent-strong), var(--accent)); color: #1d140b; font-weight: 800; cursor: pointer; box-shadow: 0 8px 20px #ff9b2830; }
 .primaryButton:hover:not(:disabled) { filter: brightness(1.04); }
 .browsePage { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; }
-.quickAreas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 0 12px 8px; }
-.quickAreaButton { height: 34px; border: 1px solid #33404f; border-radius: 11px; background: #101720; color: #cbd2dc; cursor: pointer; font-size: 11px; font-weight: 700; }
-.quickAreaButton:hover, .quickAreaButton[aria-pressed="true"] { border-color: #9b6630; background: #221b16; color: #ffba55; }
+.quickAreas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; padding: 0 12px 7px; }
+.quickAreaButton { height: 39px; border: 1px solid #33404f; border-radius: 12px; background: linear-gradient(180deg, #121a24, #0e151d); color: #d8dee6; cursor: pointer; font-size: 11.5px; font-weight: 800; }
+.quickAreaButton:hover, .quickAreaButton[aria-pressed="true"] { border-color: #a06a31; background: #211a15; color: #ffbd58; }
+.discoveryRail { display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; padding: 0 12px 8px; }
+.discoveryRail::-webkit-scrollbar { display: none; }
+.discoveryChip { flex: 0 0 auto; min-width: 82px; height: 31px; padding: 0 10px; border: 1px solid #2d3947; border-radius: 999px; background: #0f161f; color: #aeb8c5; cursor: pointer; font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+.discoveryChip:hover, .discoveryChip[aria-pressed="true"] { border-color: #8d5d2c; background: #241b14; color: #ffc15b; }
 .browseIntro { min-height: 42px; display: flex; align-items: center; padding: 2px 14px 7px; }
 .browseIntro > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .browseIntro h2 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 1.2; }
@@ -134,8 +138,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .adminStation strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .adminStation span, #adminMessage, #adminControlMessage { color: #98a3af; font-size: 10.5px; line-height: 1.4; }
 .dangerButton { color: #ff907f; border-color: #5d302b; }
-.player { position: absolute; left: 0; right: 0; bottom: 0; height: 82px; display: grid; grid-template-columns: 52px minmax(0, 1fr) 42px minmax(168px, auto); align-items: center; gap: 7px; padding: 9px 12px; border-top: 1px solid #694522; background: linear-gradient(90deg, #17110e, #0e141c 46%, #091017); box-shadow: 0 -12px 30px #0009; }
-.player > img { width: 52px; height: 52px; border-radius: 11px; object-fit: cover; background: #202832; }
+.player { position: absolute; left: 0; right: 0; bottom: 0; height: 82px; display: grid; grid-template-columns: minmax(0, 1fr) 42px minmax(168px, auto); align-items: center; gap: 7px; padding: 9px 12px; border-top: 1px solid #694522; background: linear-gradient(90deg, #17110e, #0e141c 46%, #091017); box-shadow: 0 -12px 30px #0009; }
+.playerStationButton { min-width: 0; height: 62px; display: grid; grid-template-columns: 52px minmax(0, 1fr); align-items: center; gap: 7px; padding: 5px 6px; border: 1px solid transparent; border-radius: 13px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.playerStationButton:hover:not(:disabled), .playerStationButton:focus-visible { border-color: #57422f; background: #ffffff07; outline: none; }
+.playerStationButton:disabled { opacity: 1; cursor: default; }
+.playerStationButton > img { width: 52px; height: 52px; border-radius: 11px; object-fit: cover; background: #202832; }
 .playerCopy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .playerCopy small { color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: .045em; text-transform: uppercase; }
 .playerCopy strong, .playerCopy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -159,10 +166,13 @@ button:disabled { cursor: default; opacity: .46; box-shadow: none; }
   .primaryButton { min-width: 92px; padding: 0 10px; }
   .brandCopy span { font-size: 9.5px; }
   .quickAreas { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
-  .quickAreaButton { padding: 0 4px; font-size: 9.5px; }
+  .quickAreaButton { padding: 0 4px; font-size: 10px; }
+  .discoveryRail { gap: 5px; padding-inline: 10px; }
+  .discoveryChip { min-width: 76px; padding: 0 8px; font-size: 9.5px; }
   .stationPageActions { grid-template-columns: 1fr; }
   .stationPageHero { grid-template-columns: 72px minmax(0, 1fr); padding: 13px; }
   .stationPageHero > img { width: 72px; height: 72px; }
   .player { grid-template-columns: minmax(0, 1fr) 42px minmax(168px, auto); }
-  .player > img { display: none; }
+  .playerStationButton { grid-template-columns: minmax(0, 1fr); }
+  .playerStationButton > img { display: none; }
 }

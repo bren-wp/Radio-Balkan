@@ -2475,7 +2475,7 @@ func drawPopularCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStati
 	drawCountryFlag(hdc, l+12, imageBottom+34, l+32, imageBottom+47, stationFlagCode(s))
 	selectFont(hdc, app.hFontSmall)
 	meta := stationAreaLabel(s)
-	genre := firstTag(s.Tags)
+	genre := firstPublicTag(s.Tags)
 	if genre != "" && meta != "" {
 		meta += " · " + genre
 	}
@@ -2704,16 +2704,6 @@ func drawStationDetailPage(hdc syscall.Handle, cr RECT) {
 	}
 }
 
-func firstTag(tags string) string {
-	for _, raw := range strings.Split(tags, ",") {
-		v := strings.TrimSpace(raw)
-		if len([]rune(v)) >= 2 && len([]rune(v)) <= 18 {
-			return v
-		}
-	}
-	return ""
-}
-
 func drawStationCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStation) {
 	key := stationKey(s)
 	app.mu.RLock()
@@ -2735,7 +2725,7 @@ func drawStationCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStati
 	drawCountryFlag(hdc, artR+15, t+45, artR+37, t+59, stationFlagCode(s))
 	selectFont(hdc, app.hFontSmall)
 	meta := stationAreaLabel(s)
-	g := firstTag(s.Tags)
+	g := firstPublicTag(s.Tags)
 	if g != "" && meta != "" {
 		meta += " · " + g
 	}
@@ -2847,8 +2837,11 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	} else {
 		text(hdc, meta, artR+16, t+43, 430, t+70, rgb(168, 176, 186), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 	}
+	if currentIdx >= 0 {
+		app.hits = append(app.hits, HitRegion{R: RECT{artL, t + 8, 382, t + 86}, Kind: hitStationDetails, Index: currentIdx, Value: stationKey(current)})
+	}
 	if np != "" {
-		app.hits = append(app.hits, HitRegion{R: RECT{artR + 16, t + 42, 430, t + 71}, Kind: hitCopyNowPlaying, Index: -1})
+		app.hits = append(app.hits, HitRegion{R: RECT{artR + 16, t + 42, 382, t + 71}, Kind: hitCopyNowPlaying, Index: -1})
 	}
 	if currentIdx >= 0 {
 		heart := "♡"

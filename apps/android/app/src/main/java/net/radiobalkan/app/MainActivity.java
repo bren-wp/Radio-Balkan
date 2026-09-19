@@ -82,7 +82,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private EditText search;
     private TextView heroName, heroMeta, stationsTitle, statusText, playerName, playerMeta;
     private ImageView playerArtwork;
-    private View searchBox;
+    private View searchBox, playerStationInfo;
     private EqualizerView playerEqualizer;
     private Button heroPlay, playerPrev, playerPlay, playerStop, playerNext;
     private ListView list;
@@ -403,6 +403,10 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         playerArtwork.setImageResource(R.drawable.ic_radio_balkan);
         playerArtwork.setBackground(rounded(0xFF20262F, 0xFF3C4653, 16));
         playerArtwork.setClipToOutline(true);
+        playerArtwork.setClickable(true);
+        playerArtwork.setFocusable(true);
+        playerArtwork.setContentDescription("Otvori detalje trenutačne stanice");
+        playerArtwork.setOnClickListener(v -> openCurrentStationDetails());
         player.addView(playerArtwork, new LinearLayout.LayoutParams(dp(68), dp(68)));
 
         LinearLayout info = new LinearLayout(this);
@@ -416,6 +420,11 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         info.addView(playerName, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(27)));
         info.addView(playerMeta, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(21)));
         info.addView(statusText, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(17)));
+        info.setClickable(true);
+        info.setFocusable(true);
+        info.setContentDescription("Otvori detalje trenutačne stanice");
+        info.setOnClickListener(v -> openCurrentStationDetails());
+        playerStationInfo = info;
         player.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
 
         boolean compactPlayer = isCompactWidth();
@@ -565,7 +574,20 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         item.setContentDescription(text.getText() + (selected ? ", odabrano" : ""));
     }
 
+    private void openCurrentStationDetails() {
+        RadioStation station = stationByKey(currentKey);
+        if (station == null) station = featured;
+        if (station != null) onDetails(station);
+    }
+
     private void updatePlaybackControls() {
+        RadioStation detailsStation = stationByKey(currentKey);
+        if (detailsStation == null) detailsStation = featured;
+        String detailsLabel = detailsStation == null
+                ? "Odaberi radio stanicu"
+                : "Otvori detalje: " + detailsStation.name;
+        if (playerArtwork != null) playerArtwork.setContentDescription(detailsLabel);
+        if (playerStationInfo != null) playerStationInfo.setContentDescription(detailsLabel);
         if (heroPlay != null) {
             boolean hasFeatured = featured != null;
             boolean featuredCurrent = hasFeatured && featured.key().equals(currentKey);
