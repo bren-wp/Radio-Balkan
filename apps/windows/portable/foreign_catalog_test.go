@@ -156,3 +156,51 @@ func TestNormalizeDiasporaCatalogFiltersSortsAndCaps(t *testing.T) {
 		}
 	}
 }
+
+
+func TestSupplementalCatalogCountryMatching(t *testing.T) {
+	if !matchesCatalogCountry(foreignCatalogCode, "DE", "DE") {
+		t.Fatal("foreign recovery must accept its saved source country")
+	}
+	if !matchesCatalogCountry(diasporaCatalogCode, "AT", "AT") {
+		t.Fatal("diaspora recovery must accept its saved source country")
+	}
+	if matchesCatalogCountry(diasporaCatalogCode, "AT", "HR") {
+		t.Fatal("diaspora recovery must reject regional API rows")
+	}
+	if matchesCatalogCountry(foreignCatalogCode, "DE", "US") {
+		t.Fatal("supplemental recovery with known source country must reject another country")
+	}
+	if !matchesCatalogCountry(diasporaCatalogCode, "", "CH") {
+		t.Fatal("legacy diaspora cache without source metadata must still accept a non-regional UUID result")
+	}
+}
+
+func TestDiasporaWinsDedupAndKeepsSourceCountry(t *testing.T) {
+	base := RadioStation{
+		StationUUID:       "same-uuid",
+		Name:              "Radio Diaspora",
+		URLResolved:       "https://diaspora.example/live",
+		Country:           "Germany",
+		CountryCode:       foreignCatalogCode,
+		SourceCountryCode: "DE",
+		Tags:              "hits",
+		LastCheckOK:       1,
+	}
+	diaspora := base
+	diaspora.CountryCode = diasporaCatalogCode
+	diaspora.Tags = "hits,dijaspora"
+	got := dedupeStations([]RadioStation{base, diaspora})
+	if len(got) != 1 {
+		t.Fatalf("dedupe length = %d; want 1", len(got))
+	}
+	if got[0].CountryCode != diasporaCatalogCode {
+		t.Fatalf("deduped country code = %q; want DIA", got[0].CountryCode)
+	}
+	if got[0].SourceCountryCode != "DE" {
+		t.Fatalf("deduped source country = %q; want DE", got[0].SourceCountryCode)
+	}
+	if stationFlagCode(got[0]) != "DE" {
+		t.Fatalf("flag code = %q; want DE", stationFlagCode(got[0]))
+	}
+}
