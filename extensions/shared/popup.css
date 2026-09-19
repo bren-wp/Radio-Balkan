@@ -25,6 +25,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .brandCopy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .brandCopy strong { font-size: 16px; line-height: 1.1; }
 .brandCopy span { color: var(--muted); font-size: 10.5px; white-space: nowrap; }
+.topbarActions { display: flex; align-items: center; gap: 4px; }
 .iconButton, .playerIcon { width: 44px; height: 44px; border: 0; border-radius: 12px; color: #d5dbe3; background: transparent; cursor: pointer; font-size: 22px; }
 .iconButton:hover:not(:disabled), .playerIcon:hover:not(:disabled) { background: #ffffff0d; }
 .iconButton[aria-busy="true"] { color: var(--accent); animation: rb-spin .8s linear infinite; }
@@ -74,6 +75,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .emptyAction { min-width: 138px; height: 40px; margin-top: 14px; padding: 0 16px; border: 1px solid #76502d; border-radius: 12px; background: linear-gradient(180deg, #201a16, #17191d); color: #ffc15b; font-weight: 800; cursor: pointer; }
 .emptyAction:hover:not(:disabled) { border-color: #c17d32; background: #241c16; }
 .emptyAction:active:not(:disabled) { transform: translateY(1px) scale(.985); }
+.adminPanel { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: #05080dcc; backdrop-filter: blur(5px); }
+.adminCard { width: 100%; max-width: 388px; max-height: 560px; overflow: auto; border: 1px solid #6f4a29; border-radius: 18px; background: linear-gradient(180deg, #171b22, #0d1219); box-shadow: 0 24px 60px #000c; }
+.adminHeader { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 16px; border-bottom: 1px solid #27323f; }
+.adminHeader > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.adminHeader strong { font-size: 15px; }
+.adminHeader span { color: var(--muted); font-size: 10.5px; }
+.adminBody { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px 16px; }
+.adminBody label { display: flex; flex-direction: column; gap: 5px; color: #aab3bf; font-size: 10.5px; font-weight: 700; }
+.adminBody input { width: 100%; height: 42px; padding: 0 11px; border: 1px solid #354252; border-radius: 11px; outline: 0; background: #0d141d; color: #f7f8fa; font-size: 12px; }
+.adminBody input:focus { border-color: #a76c31; box-shadow: 0 0 0 1px #a76c3128; }
+.adminBody input[readonly] { color: #9fa9b5; background: #0b1118; }
+.adminPrimary { width: 100%; }
+.adminButtons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.adminStation { display: flex; flex-direction: column; gap: 2px; padding: 9px 10px; border: 1px solid #303a47; border-radius: 11px; background: #121922; }
+.adminStation strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.adminStation span, #adminMessage, #adminControlMessage { color: #98a3af; font-size: 10.5px; line-height: 1.4; }
+.dangerButton { color: #ff907f; border-color: #5d302b; }
 .player { position: absolute; left: 0; right: 0; bottom: 0; height: 82px; display: grid; grid-template-columns: 52px minmax(0, 1fr) 42px minmax(168px, auto); align-items: center; gap: 7px; padding: 9px 12px; border-top: 1px solid #694522; background: linear-gradient(90deg, #17110e, #0e141c 46%, #091017); box-shadow: 0 -12px 30px #0009; }
 .player > img { width: 52px; height: 52px; border-radius: 11px; object-fit: cover; background: #202832; }
 .playerCopy { min-width: 0; display: flex; flex-direction: column; gap: 2px; }

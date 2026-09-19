@@ -77,7 +77,11 @@ function deferred() {
 const ids = [
   'search', 'country', 'genre', 'stations', 'status', 'refresh', 'heroPlay',
   'playerToggle', 'playerPrev', 'playerStop', 'playerNext', 'favoritesOnly', 'clearFilters', 'playerFav', 'playerState',
-  'playerName', 'playerMeta', 'heroName', 'heroMeta', 'playerLogo'
+  'playerName', 'playerMeta', 'heroName', 'heroMeta', 'playerLogo',
+  'adminToggle', 'adminPanel', 'adminClose', 'adminRole', 'adminLoginView', 'adminControls',
+  'adminUsername', 'adminPassword', 'adminLogin', 'adminMessage', 'adminStationName',
+  'adminSource', 'adminSaveSource', 'adminResetSource', 'adminHomepage', 'adminOpenWeb',
+  'adminLogout', 'adminControlMessage'
 ];
 const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 
@@ -122,6 +126,7 @@ let stopCalls = 0;
 let playCalls = 0;
 let lastPlayedStation = null;
 let favoriteStore = {};
+let adminOverrides = {};
 const toggleQueue = [];
 const stopQueue = [];
 
@@ -205,6 +210,14 @@ const context = {
     },
     async setUiPreferences() {
       return {};
+    },
+    async adminOverrideFor(key) {
+      return adminOverrides[key] || '';
+    },
+    async setAdminOverride(key, value) {
+      if (value) adminOverrides[key] = value;
+      else delete adminOverrides[key];
+      return value || '';
     }
   }
 };

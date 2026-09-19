@@ -17,7 +17,10 @@
           <span>Balkan + 50 stranih · radio uživo</span>
         </div>
       </div>
-      <button id="refresh" class="iconButton" type="button" aria-label="Osvježi katalog" title="Osvježi katalog">↻</button>
+      <div class="topbarActions">
+        <button id="adminToggle" class="iconButton" type="button" aria-label="Admin prijava" title="Admin prijava">♙</button>
+        <button id="refresh" class="iconButton" type="button" aria-label="Osvježi katalog" title="Osvježi katalog">↻</button>
+      </div>
     </header>
 
     <section class="hero" aria-labelledby="heroName">
@@ -66,6 +69,33 @@
     </div>
 
     <section id="stations" class="stations" role="list" aria-label="Radio stanice"></section>
+
+    <section id="adminPanel" class="adminPanel" aria-label="Administratorske kontrole" hidden>
+      <div class="adminCard">
+        <div class="adminHeader">
+          <div><strong>Administrator</strong><span id="adminRole">Prijava za napredne kontrole</span></div>
+          <button id="adminClose" class="iconButton" type="button" aria-label="Zatvori admin panel">×</button>
+        </div>
+        <div id="adminLoginView" class="adminBody">
+          <label>Korisničko ime<input id="adminUsername" type="text" autocomplete="username" spellcheck="false"></label>
+          <label>Lozinka<input id="adminPassword" type="password" autocomplete="current-password"></label>
+          <button id="adminLogin" class="primaryButton adminPrimary" type="button">Prijavi se</button>
+          <small id="adminMessage" role="status" aria-live="polite"></small>
+        </div>
+        <div id="adminControls" class="adminBody" hidden>
+          <div class="adminStation"><strong id="adminStationName">Nije odabrano</strong><span>Napredne kontrole izvora</span></div>
+          <label>Izvor reprodukcije<input id="adminSource" type="url" inputmode="url" placeholder="https://stream…"></label>
+          <div class="adminButtons">
+            <button id="adminSaveSource" class="primaryButton adminPrimary" type="button">Spremi izvor</button>
+            <button id="adminResetSource" class="textButton" type="button">Automatski izvor</button>
+          </div>
+          <label>Web stranica<input id="adminHomepage" type="url" readonly></label>
+          <button id="adminOpenWeb" class="textButton" type="button">Otvori web stranicu</button>
+          <button id="adminLogout" class="textButton dangerButton" type="button">Odjavi administratora</button>
+          <small id="adminControlMessage" role="status" aria-live="polite"></small>
+        </div>
+      </div>
+    </section>
 
     <footer class="player" aria-label="Reprodukcija">
       <img id="playerLogo" src="icon48.png" alt="" width="52" height="52" referrerpolicy="no-referrer">
