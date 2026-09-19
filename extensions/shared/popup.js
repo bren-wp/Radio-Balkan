@@ -321,7 +321,7 @@
     updateFavoritesFilterButton();
     search.value = '';
     country.value = '';
-    if (genre) genre.value = [...genre.options].some(option => option.value === value) ? value : '';
+    if (genre) genre.value = value;
     queueUiPreferencesSave();
     apply();
     updateQuickNavigation();
