@@ -2727,6 +2727,12 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 		selectFont(hdc, app.hFontBold)
 		text(hdc, "+", cr.Right-106, t+27, cr.Right-74, t+59, rgb(91, 98, 108), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	}
+
+	// Production attribution: only the Brendigo word is interactive.
+	selectFont(hdc, app.hFontSmall)
+	text(hdc, "Built with", cr.Right-244, t+66, cr.Right-188, t+90, rgb(106, 116, 128), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
+	text(hdc, "Brendigo", cr.Right-182, t+66, cr.Right-112, t+90, rgb(218, 164, 91), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+	app.hits = append(app.hits, HitRegion{R: RECT{cr.Right - 184, t + 66, cr.Right - 110, t + 91}, Kind: hitBrendigo, Index: -1, Value: "https://brendigo.com/"})
 }
 
 func drawEqualizerBars(hdc syscall.Handle, l, t, r, b int32, active bool) {
