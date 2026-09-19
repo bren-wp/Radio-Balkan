@@ -166,7 +166,7 @@ public final class StationAdapter extends BaseAdapter {
             String v = raw.trim();
             if (v.length() >= 2 && v.length() <= 18) {
                 String lower = v.toLowerCase(Locale.ROOT);
-                if (!lower.contains("radio") && !lower.contains("music")) return Character.toUpperCase(v.charAt(0)) + v.substring(1);
+                if (!"dijaspora".equals(lower) && !lower.contains("radio") && !lower.contains("music")) return Character.toUpperCase(v.charAt(0)) + v.substring(1);
             }
         }
         return "";
