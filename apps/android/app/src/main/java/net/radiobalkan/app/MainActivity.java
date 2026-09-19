@@ -898,9 +898,14 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     }
 
     @Override public void onFavorite(RadioStation s) {
+        if (s == null) return;
         boolean on = state.toggleFavorite(s.key());
         Toast.makeText(this, on ? "Dodano u omiljene" : "Uklonjeno iz omiljenih", Toast.LENGTH_SHORT).show();
-        if ("favorites".equals(tab)) applyFilterAsync();
+        if ("favorites".equals(tab)) {
+            applyFilterAsync();
+        } else if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
     }
 
     @Override public void onMore(RadioStation s) {

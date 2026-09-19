@@ -403,6 +403,7 @@ def main() -> None:
         "runtime.LockOSThread()",
         "defer runtime.UnlockOSThread()",
         "func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleAction",
+        "func transportAvailability(current, stationCount int, stopped bool)",
         "playbackToggleReconnect",
         "Kind: hitPlayerStop",
         "playStationByKey(currentKey, current)",

@@ -114,6 +114,7 @@ def main() -> int:
         "playerPrev.setOnClickListener",
         "playerNext.setOnClickListener",
         "PlaybackLifecycle.adjacentIndex",
+        "adapter.notifyDataSetChanged()",
         "StreamResolver.isSafeHttp(s.homepage)",
         "ui.removeCallbacksAndMessages(null)",
         "setSearchVisible(",
@@ -187,6 +188,9 @@ def main() -> int:
         'heroLabel = "▶  Nastavi"',
         'playLabel = "Ⅱ"',
         "Kind: hitPlayerStop",
+        "transportAvailability(currentIdx, stationCount, stopped)",
+        "drawIconButtonState",
+        "refreshBusy := refreshRunning || loading",
         '"■"',
     ):
         require(errors, windows, needle, "Windows UI")

@@ -1766,6 +1766,7 @@ func drawHeader(hdc syscall.Handle, cr RECT) {
 	app.mu.RLock()
 	countryCode, genre := app.country, app.genre
 	countryOpen, genreOpen := app.countryMenuOpen, app.genreMenuOpen
+	healthRunning, refreshRunning, loading := app.healthRunning, app.refreshRunning, app.loading
 	app.mu.RUnlock()
 	countryLabel := countryNameByCode(countryCode)
 	if countryCode == "" || countryLabel == "" {
@@ -1779,23 +1780,35 @@ func drawHeader(hdc syscall.Handle, cr RECT) {
 	drawSelectBox(hdc, genreL, 20, genreR, 72, genreLabel, genreOpen)
 	app.hits = append(app.hits, HitRegion{R: RECT{countryL, 20, countryR, 72}, Kind: hitCountryDropdown})
 	app.hits = append(app.hits, HitRegion{R: RECT{genreL, 20, genreR, 72}, Kind: hitGenreDropdown})
-	app.mu.RLock()
-	healthRunning := app.healthRunning
-	app.mu.RUnlock()
 	checkLabel := "✓ Sve"
 	if healthRunning {
 		checkLabel = "…"
 	}
-	drawIconButton(hdc, checkL, 20, checkR, 72, checkLabel, healthRunning)
-	app.hits = append(app.hits, HitRegion{R: RECT{checkL, 20, checkR, 72}, Kind: hitCheckAll, Index: -1})
-	drawIconButton(hdc, refreshL, 20, refreshR, 72, "↻", false)
-	app.hits = append(app.hits, HitRegion{R: RECT{refreshL, 20, refreshR, 72}, Kind: hitRefresh, Index: -1})
+	drawIconButtonState(hdc, checkL, 20, checkR, 72, checkLabel, !healthRunning, false)
+	if !healthRunning {
+		app.hits = append(app.hits, HitRegion{R: RECT{checkL, 20, checkR, 72}, Kind: hitCheckAll, Index: -1})
+	}
+	refreshBusy := refreshRunning || loading
+	refreshLabel := "↻"
+	if refreshBusy {
+		refreshLabel = "…"
+	}
+	drawIconButtonState(hdc, refreshL, 20, refreshR, 72, refreshLabel, !refreshBusy, false)
+	if !refreshBusy {
+		app.hits = append(app.hits, HitRegion{R: RECT{refreshL, 20, refreshR, 72}, Kind: hitRefresh, Index: -1})
+	}
 }
 
 func drawIconButton(hdc syscall.Handle, l, t, r, b int32, label string, accent bool) {
+	drawIconButtonState(hdc, l, t, r, b, label, true, accent)
+}
+
+func drawIconButtonState(hdc syscall.Handle, l, t, r, b int32, label string, enabled, accent bool) {
 	fill, border := color(17, 25, 35), color(43, 53, 66)
 	tc := rgb(199, 205, 214)
-	if accent {
+	if !enabled {
+		fill, border, tc = color(13, 18, 25), color(34, 41, 51), rgb(96, 105, 118)
+	} else if accent {
 		fill, border, tc = color(255, 170, 50), color(255, 193, 91), rgb(22, 23, 26)
 	}
 	drawRounded(hdc, l, t, r, b, 13, fill, border)
@@ -2436,6 +2449,8 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	np := ""
 	currentCountry := ""
 	playing := false
+	stopped := true
+	stationCount := 0
 	currentIdx := -1
 	var current RadioStation
 	app.mu.RLock()
@@ -2450,6 +2465,8 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 		}
 	}
 	playing = app.playing
+	stopped = app.audioStopped
+	stationCount = len(app.stations)
 	app.mu.RUnlock()
 	app.stateMu.RLock()
 	vol := app.state.Volume
@@ -2494,22 +2511,39 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 
 	// Center transport controls.
 	cx := cr.Right / 2
+	canPlay, canStop, canNavigate := transportAvailability(currentIdx, stationCount, stopped)
+	navColor := rgb(96, 105, 118)
+	if canNavigate {
+		navColor = rgb(193, 199, 207)
+	}
 	selectFont(hdc, app.hFontBold)
-	text(hdc, "◀", cx-112, t+21, cx-74, t+59, rgb(193, 199, 207), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	app.hits = append(app.hits, HitRegion{R: RECT{cx - 116, t + 17, cx - 70, t + 63}, Kind: hitPlayerPrev, Index: -1})
+	text(hdc, "◀", cx-112, t+21, cx-74, t+59, navColor, DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	if canNavigate {
+		app.hits = append(app.hits, HitRegion{R: RECT{cx - 116, t + 17, cx - 70, t + 63}, Kind: hitPlayerPrev, Index: -1})
+	}
 	label := "▶"
 	if playing {
 		label = "Ⅱ"
 	}
-	drawCircle(hdc, cx-31, t+10, cx+31, t+72, color(255, 174, 52), color(255, 197, 95))
+	playFill, playBorder, playText := color(31, 37, 47), color(58, 67, 79), rgb(102, 111, 123)
+	if canPlay {
+		playFill, playBorder, playText = color(255, 174, 52), color(255, 197, 95), rgb(20, 21, 24)
+	}
+	drawCircle(hdc, cx-31, t+10, cx+31, t+72, playFill, playBorder)
 	selectFont(hdc, app.hFontTitle)
-	text(hdc, label, cx-28, t+10, cx+28, t+72, rgb(20, 21, 24), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	app.hits = append(app.hits, HitRegion{R: RECT{cx - 35, t + 7, cx + 35, t + 76}, Kind: hitPlayerPlay, Index: -1})
-	drawIconButton(hdc, cx+48, t+25, cx+88, t+65, "■", false)
-	app.hits = append(app.hits, HitRegion{R: RECT{cx + 44, t + 21, cx + 92, t + 69}, Kind: hitPlayerStop, Index: -1})
+	text(hdc, label, cx-28, t+10, cx+28, t+72, playText, DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	if canPlay {
+		app.hits = append(app.hits, HitRegion{R: RECT{cx - 35, t + 7, cx + 35, t + 76}, Kind: hitPlayerPlay, Index: -1})
+	}
+	drawIconButtonState(hdc, cx+48, t+25, cx+88, t+65, "■", canStop, false)
+	if canStop {
+		app.hits = append(app.hits, HitRegion{R: RECT{cx + 44, t + 21, cx + 92, t + 69}, Kind: hitPlayerStop, Index: -1})
+	}
 	selectFont(hdc, app.hFontBold)
-	text(hdc, "▶", cx+112, t+21, cx+150, t+59, rgb(193, 199, 207), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	app.hits = append(app.hits, HitRegion{R: RECT{cx + 108, t + 17, cx + 154, t + 63}, Kind: hitPlayerNext, Index: -1})
+	text(hdc, "▶", cx+112, t+21, cx+150, t+59, navColor, DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	if canNavigate {
+		app.hits = append(app.hits, HitRegion{R: RECT{cx + 108, t + 17, cx + 154, t + 63}, Kind: hitPlayerNext, Index: -1})
+	}
 	// Live line underneath transport.
 	lineL := cx - 150
 	lineR := cx + 150
@@ -2914,6 +2948,13 @@ func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleActi
 		return playbackToggleReconnect
 	}
 	return playbackToggleResume
+}
+
+func transportAvailability(current, stationCount int, stopped bool) (canPlay, canStop, canNavigate bool) {
+	canPlay = current >= 0 && current < stationCount
+	canStop = canPlay && !stopped
+	canNavigate = stationCount > 1
+	return
 }
 
 func toggleCurrentPlayback() {
