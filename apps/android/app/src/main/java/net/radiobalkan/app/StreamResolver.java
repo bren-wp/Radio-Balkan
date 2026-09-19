@@ -176,7 +176,7 @@ public final class StreamResolver {
         String requested = safe(requestedCountry).toUpperCase(Locale.ROOT);
         String actual = safe(actualCountry).toUpperCase(Locale.ROOT);
         if (requested.isEmpty() || actual.isEmpty()) return false;
-        if (RadioRepository.FOREIGN_CODE.equals(requested)) {
+        if (RadioRepository.FOREIGN_CODE.equals(requested) || RadioRepository.DIASPORA_CODE.equals(requested)) {
             return !RadioRepository.isSupportedCountry(actual);
         }
         return requested.equals(actual) && RadioRepository.isSupportedCountry(actual);
