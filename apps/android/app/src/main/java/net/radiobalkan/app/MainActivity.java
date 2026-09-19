@@ -495,7 +495,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         if (navigationCount == 0) {
             synchronized (dataLock) { navigationCount = allStations.size(); }
         }
-        boolean canNavigate = navigationCount > 1;
+        boolean canNavigate = PlaybackLifecycle.canNavigate(navigationCount, !currentKey.isEmpty());
         if (playerPrev != null) playerPrev.setEnabled(canNavigate);
         if (playerNext != null) playerNext.setEnabled(canNavigate);
         if (playerStop != null) {

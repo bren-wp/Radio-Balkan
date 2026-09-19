@@ -39,6 +39,13 @@ public final class PlaybackLifecycleTest {
                 PlaybackLifecycle.uiCommand(true, false, false));
     }
 
+    @Test public void navigationRequiresCurrentStationAndMultipleCandidates() {
+        assertFalse(PlaybackLifecycle.canNavigate(0, false));
+        assertFalse(PlaybackLifecycle.canNavigate(2, false));
+        assertFalse(PlaybackLifecycle.canNavigate(1, true));
+        assertTrue(PlaybackLifecycle.canNavigate(2, true));
+    }
+
     @Test public void adjacentNavigationWrapsAndHandlesMissingSelection() {
         assertEquals(1, PlaybackLifecycle.adjacentIndex(3, 0, 1));
         assertEquals(0, PlaybackLifecycle.adjacentIndex(3, 2, 1));

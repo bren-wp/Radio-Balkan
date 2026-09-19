@@ -353,6 +353,13 @@ async function main() {
   assert.equal(elements.playerName.textContent, 'Nije odabrano', 'authoritative cold state must clear the optimistic catalog selection');
   assert.equal(elements.playerToggle.disabled, true, 'cold player state must not expose a fake selected-station toggle');
   assert.equal(elements.playerFav.disabled, true, 'cold player state must not favorite a station the user never selected');
+  assert.equal(elements.playerPrev.disabled, true, 'cold player state must not expose previous navigation without a current station');
+  assert.equal(elements.playerNext.disabled, true, 'cold player state must not expose next navigation without a current station');
+  const coldAdjacentCalls = playCalls;
+  elements.playerNext.dispatch('click');
+  elements.playerPrev.dispatch('click');
+  await flush();
+  assert.equal(playCalls, coldAdjacentCalls, 'cold adjacent controls must not start playback without a current station');
   assert.equal(elements.heroPlay.disabled, false, 'hero play must remain available and may start the first visible station');
 
   console.log('Browser popup state and UI regression tests OK');
