@@ -276,22 +276,27 @@ const RB = (() => {
     for (const base of serverList) {
       try {
         const mapped = [];
-        for (const [field, value] of queries) {
-          const url = `${base}/json/stations/search?${field}=${encodeURIComponent(value)}&hidebroken=true&order=votes&reverse=true&limit=${DIASPORA_QUERY_LIMIT}`;
-          const response = await fetchWithTimeout(url, { cache: 'no-store', redirect: 'error' }, 9000);
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const page = await readJsonLimited(response, 3 * 1024 * 1024);
-          if (!Array.isArray(page)) continue;
-          for (const raw of page) {
-            const station = normalize(raw);
-            const sourceCode = station.countrycode;
-            if (!sourceCode || BALKAN_ALLOWED.has(sourceCode) || station.lastcheckok !== 1) continue;
-            if (!station.name || (!safeHttp(station.url) && !safeHttp(station.url_resolved))) continue;
-            station.sourcecountrycode = sourceCode;
-            station.countrycode = DIASPORA_CODE;
-            station.tags = station.tags ? `dijaspora,${station.tags}` : 'dijaspora';
-            if (!station.country) station.country = 'Dijaspora';
-            mapped.push(station);
+        for (let offset = 0; offset < queries.length; offset += 3) {
+          const batch = queries.slice(offset, offset + 3);
+          const pages = await Promise.all(batch.map(async ([field, value]) => {
+            const requestUrl = `${base}/json/stations/search?${field}=${encodeURIComponent(value)}&hidebroken=true&order=votes&reverse=true&limit=${DIASPORA_QUERY_LIMIT}`;
+            const response = await fetchWithTimeout(requestUrl, { cache: 'no-store', redirect: 'error' }, 9000);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const page = await readJsonLimited(response, 3 * 1024 * 1024);
+            return Array.isArray(page) ? page : [];
+          }));
+          for (const page of pages) {
+            for (const raw of page) {
+              const station = normalize(raw);
+              const sourceCode = station.countrycode;
+              if (!sourceCode || BALKAN_ALLOWED.has(sourceCode) || station.lastcheckok !== 1) continue;
+              if (!station.name || (!safeHttp(station.url) && !safeHttp(station.url_resolved))) continue;
+              station.sourcecountrycode = sourceCode;
+              station.countrycode = DIASPORA_CODE;
+              station.tags = station.tags ? `dijaspora,${station.tags}` : 'dijaspora';
+              if (!station.country) station.country = 'Dijaspora';
+              mapped.push(station);
+            }
           }
         }
         const unique = dedupe(mapped)
@@ -301,33 +306,6 @@ const RB = (() => {
       } catch (error) { lastError = error; }
     }
     throw lastError || new Error('Katalog dijaspore nije dostupan');
-  }
-
-  async function storageGet(keys) {
-    const api = ext.storage.local;
-    try {
-      const result = api.get(keys);
-      if (result && typeof result.then === 'function') return await result;
-    } catch { }
-    return await new Promise((resolve, reject) => {
-      try { api.get(keys, value => ext.runtime?.lastError ? reject(new Error(ext.runtime.lastError.message)) : resolve(value || {})); }
-      catch (error) { reject(error); }
-    });
-  }
-
-  async function storageSet(values) {
-    const api = ext.storage.local;
-    try {
-      const result = api.set(values);
-      if (result && typeof result.then === 'function') {
-        await result;
-        return;
-      }
-    } catch { }
-    await new Promise((resolve, reject) => {
-      try { api.set(values, () => ext.runtime?.lastError ? reject(new Error(ext.runtime.lastError.message)) : resolve()); }
-      catch (error) { reject(error); }
-    });
   }
 
   function mergeMissingCountries(online, cached) {
