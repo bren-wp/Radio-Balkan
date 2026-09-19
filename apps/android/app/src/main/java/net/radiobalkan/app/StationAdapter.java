@@ -22,6 +22,7 @@ import java.util.Locale;
 public final class StationAdapter extends BaseAdapter {
     public interface Actions {
         void onPlay(RadioStation s);
+        void onDetails(RadioStation s);
         void onFavorite(RadioStation s);
         void onMore(RadioStation s);
     }
@@ -103,7 +104,7 @@ public final class StationAdapter extends BaseAdapter {
         row.root.setContentDescription(s.name + ", " + countryAndGenre(s) + ", " + statusLine(s) + (active ? ", trenutno odabrana" : ""));
         row.play.setOnClickListener(v -> actions.onPlay(s));
         row.more.setOnClickListener(v -> actions.onMore(s));
-        row.root.setOnClickListener(v -> actions.onPlay(s));
+        row.root.setOnClickListener(v -> actions.onDetails(s));
         row.root.setOnLongClickListener(v -> { actions.onMore(s); return true; });
         return convertView;
     }
