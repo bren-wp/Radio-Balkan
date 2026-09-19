@@ -17,14 +17,14 @@ Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrva
 
 ## Što donosi v0.0.25
 
-- **Potpuniji transport UI** — Windows player sada izlaže stvarni Stop gumb, Android stalni player ima Prev / Play-Pause / Stop / Next, a browser popup dobiva zaseban Stop control.
-- **Ispravan Stop → Play UX u browseru** — popup razlikuje pauziranu od zaustavljene sesije; glavni Play nakon Stop-a pokreće novi `RB_PLAY` umjesto Toggle-a prema umirovljenoj sesiji.
-- **Automatski oporavak zastarjelih browser streamova** — nakon iscrpljenja lokalnih kandidata Chromium i Firefox jednom po sesiji pokušavaju dohvatiti svježi URL po station UUID-u.
-- **Bounded i sigurniji refresh** — refresh koristi fiksne Radio Browser API hostove, 512 KiB limit odgovora, 4-sekundni per-request timeout i ukupni 9-sekundni recovery budžet; regionalna/INT country pravila ostaju zaključana.
-- **Stale-session zaštita** — STOP ili nova reprodukcijska sesija poništavaju zakašnjeli catalog refresh tako da stari async rezultat ne može ponovno pokrenuti audio.
-- **UI/UX popravci** — Windows `Prikaži sve →` uz Žanrove ima stvarni hit target, Android `Radio` navigacija više nije no-op, a Stop kontrole imaju jasna disabled/busy/accessibility stanja.
-- **Prošireni regression contracti** — testovi zaključavaju duplicate Stop single-flight, Stop → fresh Play, Android Prev/Next wrap, UUID refresh safety, oversized-response fail-closed i Stop tijekom catalog recoveryja.
-- **Bez novog telemetryja ili širih dozvola** — nema analytics SDK-a, trackinga, novog backenda ni dodatnih Android/browser dozvola.
+- **State-aware Windows kontrole** — Play, Stop, Prev i Next više nemaju aktivne hit-zone kada akcija nije valjana; Prev/Next zahtijevaju odabranu stanicu, a Stop je neaktivan nakon terminalnog zaustavljanja.
+- **Jasniji background statusi** — Windows globalni health-check i osvježavanje kataloga imaju stvarna disabled/busy stanja dok je posao već u tijeku, umjesto dodatnih klikova bez učinka.
+- **Responsive Windows station kartice** — red akcija se prilagođava širini kartice i ne preklapa Favorite/Play kontrole ni na minimalnoj podržanoj širini prozora; Web akcija se prikazuje samo za valjanu javnu homepage adresu.
+- **Brži Android Favorite UX** — svaki red stanice dobiva izravni `♡ / ♥` gumb s accessibility opisom; favorite-set se predaje adapteru kao snapshot umjesto ponovnog čitanja postavki za svaki bind.
+- **Bolji Android compact layout** — na ekranima užim od 390 dp artwork i desne kontrole koriste kompaktnije dimenzije kako naziv, metadata i status stanice ostanu čitljivi.
+- **Tvrđi Android UUID recovery** — station UUID mora proći strogi format/length guard prije API zahtjeva, a višestruki Radio Browser pokušaji dijele ukupni 12-sekundni recovery budžet.
+- **Jači regression contracti** — Go/JVM/UI/security provjere zaključavaju responsive action-row, transport availability, direct Favorite wiring, compact Android layout i nevaljane UUID ulaze.
+- **Bez novih dozvola ili trackinga** — nema novog backenda, analyticsa, telemetryja ni dodatnih Android/browser dozvola.
 
 ## Zašto Radio Balkan
 

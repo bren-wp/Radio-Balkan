@@ -1,17 +1,17 @@
-# Radio Balkan 0.0.24 — Android
+# Radio Balkan 0.0.25 — Android
 
 Nativni Android klijent (`minSdk 26`, `targetSdk 36`) bez telemetry SDK-a i bez vlastitog backend servisa za reprodukciju.
 
-## Produkcijski fokus u 0.0.24
+## Produkcijski fokus u 0.0.25
 
-- stalni player bar sada izlaže **Prev / Play-Pause / Stop / Next**
-- Prev/Next koriste `PlaybackLifecycle.adjacentIndex` s testiranim wrap-around ponašanjem
-- Stop šalje postojeći `ACTION_STOP`; nakon eksplicitnog Stop-a ista stanica i dalje koristi svježi `PLAY`, ne `RESUME`
-- donji `Radio` više nije no-op nego vraća puni katalog i vrh liste
-- pokretanje stanice iz Favorita više ne postavlja lažno odabrani Radio tab
-- foreground fail-closed, `MediaPlayer.prepareAsync()` watchdog, fallback kandidati, audio focus, MediaSession i noisy-headset lifecycle ostaju aktivni
-- startup health scan ostaje odgođen i ograničen; URL/DNS/redirect i response limiti ostaju aktivni
-- nema novih dozvola, telemetryja ili trackinga
+- svaki station row dobiva izravni **♡ / ♥** Favorite gumb umjesto obaveznog otvaranja `⋮` izbornika
+- favorite-set se adapteru predaje kao memorijski snapshot; nema SharedPreferences čitanja za svaki row bind
+- Favorite kontrola ima dinamičan accessibility opis i UI se odmah osvježava nakon promjene
+- na ekranima užim od 390 dp artwork i desne kontrole koriste kompaktnije dimenzije kako naziv, metadata i status ostanu čitljivi
+- UUID stream recovery prihvaća samo ograničeni identifikator `[A-Za-z0-9._:-]` duljine do 128 znakova i odbija path/query/oversized input
+- višestruki Radio Browser UUID pokušaji dijele ukupni 12-sekundni recovery budžet; connect/read timeout svakog pokušaja ostaje unutar preostalog budžeta
+- postojeći Prev / Play-Pause / Stop / Next, foreground fail-closed, MediaPlayer watchdog, audio focus, MediaSession i URL/DNS/redirect zaštite ostaju aktivni
+- nema novih dozvola, telemetryja ni trackinga
 
 ## Produkcijski build
 

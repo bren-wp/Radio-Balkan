@@ -1,16 +1,16 @@
-# Radio Balkan 0.0.24 — Windows
+# Radio Balkan 0.0.25 — Windows
 
 Nativna Windows x64 aplikacija i installer bez Electrona, ugrađenog browser runtimea ili telemetry SDK-a.
 
-## Produkcijski fokus u 0.0.24
+## Produkcijski fokus u 0.0.25
 
-- donji player sada izlaže stvarni **Stop** transport control; postojeći handler više nije skriven od korisnika
-- `Prikaži sve →` uz Žanrove ima stvarni hit target i otvara postojeći genre selector
-- Prev/Next, Play/Pause, volume, favorite, health provjere i replacement-source funkcije ostaju aktivne
-- Portable i Setup i dalje drže Win32 prozor/message loop na istom OS threadu
-- PresentationCore helper zadržava `READY` + `OK/ERR`, bounded ACK čekanja i helper reset prije MCI fallbacka
-- CI i dalje stvarno izvršava lokalni `Play → Pause → Volume → Resume → Stop → Play → Stop` te 15-sekundni Portable runtime soak
-- Go vet/test/build fail-fast i clean-worktree gateovi ostaju obavezni
+- Player transport sada je **state-aware**: Play, Stop, Prev i Next nemaju aktivnu hit-zonu kada odgovarajuća akcija nije valjana.
+- Prev/Next zahtijevaju stvarno odabranu stanicu i više ne mogu neočekivano pokrenuti prvu/sljedeću postaju iz praznog player stanja.
+- Stop je neaktivan nakon terminalnog zaustavljanja ili bez odabrane stanice.
+- Globalni health-check i refresh katalog gumbi prikazuju busy/disabled stanje dok njihov posao traje.
+- Station `Web` akcija prikazuje se samo za sigurnu javnu HTTP/HTTPS homepage adresu.
+- Station-card action row koristi kompaktne metrike na užim karticama; regression test potvrđuje da ostaje unutar kartice od 390 px nadalje.
+- Postojeći Play/Pause/Resume/Stop/replay lifecycle, ACK timeout isolation, thread-affinity i stvarni Portable runtime soak ostaju aktivni.
 
 ## Build
 
@@ -19,4 +19,4 @@ cd apps/windows
 ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
 ```
 
-Rezultat su `RadioBalkan-Portable-v0.0.24.exe`, `RadioBalkan-Setup-v0.0.24.exe` i SHA-256 manifest.
+Rezultat su `RadioBalkan-Portable-v0.0.25.exe`, `RadioBalkan-Setup-v0.0.25.exe` i SHA-256 manifest.

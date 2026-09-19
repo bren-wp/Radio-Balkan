@@ -1,5 +1,26 @@
 # Izdavanja
 
+## 0.0.25
+
+Izdanje 0.0.25 nastavlja produkcijski UI/UX i recovery audit nakon 0.0.24. Fokus je na uklanjanju preostalih “mrtvih” kontrola, responsivnosti minimalnih širina i ograničavanju Android recovery mrežnih putanja, bez novih dozvola, telemetryja, analyticsa ili backenda.
+
+- Windows Play, Stop, Prev i Next kontrole prikazuju disabled stanje i nemaju hit-region kada odgovarajuća akcija nije valjana
+- Prev/Next više ne mogu implicitno pokrenuti stanicu dok nijedna nije odabrana
+- Windows globalni health-check i refresh katalog gumbi postaju neklikabilni dok njihov posao već traje i prikazuju busy indikator
+- station `Web` akcija prikazuje se samo kada homepage prolazi sigurnu javnu HTTP/HTTPS validaciju
+- Windows station-card action row ima kompaktni layout na uskim karticama; Go regresija potvrđuje da ne prelazi granice kartice već od 390 px
+- Android svaki station row dobiva izravni `♡ / ♥` Favorite gumb, dinamičan accessibility opis i trenutačno osvježavanje nakon promjene
+- favorite stanje se adapteru šalje kao memorijski snapshot, bez SharedPreferences čitanja za svaki row bind
+- Android compact prikaz ispod 390 dp smanjuje artwork i širine desnih kontrola kako metadata i naziv ostanu čitljivi
+- Android UUID stream repair prihvaća samo ograničeni `[A-Za-z0-9._:-]` identifikator do 128 znakova te odbija path/query/oversized input
+- UUID API pokušaji dijele ukupni 12-sekundni recovery budžet, a connect/read timeout svakog pokušaja ostaje unutar preostalog budžeta
+- production UI/security contracti ažurirani su na responsivni layout umjesto starih hardkodiranih širina
+- postojeći v0.0.24 browser Stop → Play, stale-session i UUID stream-refresh hardening ostaje nepromijenjen
+- Windows runtime soak, Go fail-fast build, Android unit/lint/release build, browser regression testovi, clean-worktree i version/checksum gateovi ostaju obavezni
+- verzija je sinkronizirana na `0.0.25`, uz Android `versionCode 25`
+
+Ovi popravci smanjuju potvrđene UI i recovery rizike, ali ne tvrde da svaki third-party radio stream mora uvijek biti dostupan niti da je moguće jamčiti apsolutno crash-free ponašanje na svakoj kombinaciji OS-a, uređaja, drivera i mreže.
+
 ## 0.0.24
 
 Izdanje 0.0.24 fokusirano je na konkretan UI/UX polish i playback recovery probleme pronađene nakon v0.0.23, bez novih dozvola, analyticsa, telemetryja, korisničkog računa ili novog backenda.
