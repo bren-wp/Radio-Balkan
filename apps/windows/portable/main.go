@@ -2459,7 +2459,7 @@ func drawStationScrollBar(hdc syscall.Handle, cr RECT, top, bottom int32, count,
 
 func drawPopularCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStation, theme int) {
 	border := color(50, 58, 70)
-	if hovered(hitPlay, idx, stationKey(s)) {
+	if hovered(hitPlay, idx, stationKey(s)) || hovered(hitStationDetails, idx, stationKey(s)) {
 		border = color(133, 88, 40)
 	}
 	drawRounded(hdc, l, t, r, b, 12, color(18, 24, 33), border)
@@ -2492,7 +2492,9 @@ func drawPopularCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStati
 	text(hdc, bitrate, l+12, b-25, r-48, b-6, rgb(130, 140, 151), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 	drawCircle(hdc, r-40, b-42, r-12, b-14, color(49, 56, 66), color(92, 69, 37))
 	text(hdc, "▶", r-38, b-41, r-14, b-14, rgb(248, 249, 250), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitPlay, Index: idx, Value: stationKey(s)})
+	key := stationKey(s)
+	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitStationDetails, Index: idx, Value: key})
+	app.hits = append(app.hits, HitRegion{R: RECT{r - 44, b - 46, r - 8, b - 10}, Kind: hitPlay, Index: idx, Value: key})
 }
 
 func firstTag(tags string) string {
