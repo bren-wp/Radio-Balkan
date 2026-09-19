@@ -319,7 +319,7 @@ func normalizeDiasporaCatalog(rows []RadioStation) []RadioStation {
 			if strings.TrimSpace(station.Tags) == "" {
 				station.Tags = "dijaspora"
 			} else {
-				station.Tags = "dijaspora," + station.Tags
+				station.Tags = station.Tags + ",dijaspora"
 			}
 		}
 		out = append(out, station)
