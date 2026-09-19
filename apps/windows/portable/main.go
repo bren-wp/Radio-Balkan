@@ -1793,7 +1793,23 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 		drawRounded(hdc, x, 31+(42-h)/2, x+4, 31+(42+h)/2, 2, color(255, 170, 50), color(255, 170, 50))
 	}
 	selectFont(hdc, app.hFontBold)
-	text(hdc, "Radio Balkan", 82, 25, sidebarWidth-18, 62, rgb(247, 248, 250), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+	text(hdc, "Radio Balkan", 82, 25, sidebarWidth-18, 55, rgb(247, 248, 250), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+	admin := adminModeEnabled()
+	adminLabel := "Admin prijava"
+	adminIcon := "♙"
+	adminValue := "login"
+	if admin {
+		adminLabel = "brendigo · odjava"
+		adminIcon = "♛"
+		adminValue = "logout"
+	}
+	selectFont(hdc, app.hFontSmall)
+	adminColor := rgb(150, 139, 132)
+	if admin {
+		adminColor = rgb(255, 177, 55)
+	}
+	text(hdc, adminIcon+"  "+adminLabel, 82, 52, sidebarWidth-18, 82, adminColor, DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+	app.hits = append(app.hits, HitRegion{R: RECT{76, 52, sidebarWidth - 14, 84}, Kind: hitAdmin, Index: -1, Value: adminValue})
 
 	app.mu.RLock()
 	tab, genre := app.tab, strings.ToLower(strings.TrimSpace(app.genre))
@@ -1822,7 +1838,6 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 	y += 42
 	drawSidebarItem(hdc, y, "♫", "Jazz", genre == "jazz", hitTab, "genre:jazz")
 
-	admin := adminModeEnabled()
 	toolsY := y + 60
 	if admin && cr.Bottom-playerHeight > toolsY+110 {
 		drawSidebarLabel(hdc, "UPRAVLJANJE", toolsY)
@@ -1832,25 +1847,12 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 		drawSidebarItem(hdc, toolsY, "!", "Nedostupne", tab == "broken", hitTab, "broken")
 	}
 
-	adminY := cr.Bottom - playerHeight - 46
-	if adminY > y+20 {
-		label := "Admin prijava"
-		icon := "♙"
-		value := "login"
-		if admin {
-			label = "Odjava · brendigo"
-			icon = "♛"
-			value = "logout"
-		}
-		drawSidebarItem(hdc, adminY, icon, label, admin, hitAdmin, value)
-	}
-
-	// Warm footer quote ostaje samo kada ne kolidira s admin kontrolom.
-	quoteTop := adminY - 102
+	// Warm footer quote remains decorative and may collapse on compact heights.
+	quoteTop := cr.Bottom - playerHeight - 118
 	if quoteTop > y+28 {
-		drawRounded(hdc, 14, quoteTop, sidebarWidth-14, adminY-10, 16, color(28, 24, 22), color(54, 43, 37))
+		drawRounded(hdc, 14, quoteTop, sidebarWidth-14, quoteTop+92, 16, color(28, 24, 22), color(54, 43, 37))
 		selectFont(hdc, app.hFontSmall)
-		text(hdc, "Isti ljudi. Ista glazba.\nBliži nego ikad.", 28, quoteTop+16, sidebarWidth-28, adminY-36, rgb(235, 171, 91), DT_LEFT|DT_WORDBREAK)
+		text(hdc, "Isti ljudi. Ista glazba.\nBliži nego ikad.", 28, quoteTop+18, sidebarWidth-28, quoteTop+68, rgb(235, 171, 91), DT_LEFT|DT_WORDBREAK)
 	}
 }
 
