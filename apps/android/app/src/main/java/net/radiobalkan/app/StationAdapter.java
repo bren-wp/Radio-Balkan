@@ -87,7 +87,7 @@ public final class StationAdapter extends BaseAdapter {
 
         row.name.setText(s.name);
         row.meta.setText(countryAndGenre(s));
-        CountryFlagDrawable flag = new CountryFlagDrawable(s.countryCode);
+        CountryFlagDrawable flag = new CountryFlagDrawable(s.flagCode());
         flag.setBounds(0, 0, dp(22), dp(14));
         row.meta.setCompoundDrawablePadding(dp(6));
         row.meta.setCompoundDrawables(flag, null, null, null);
