@@ -1,5 +1,28 @@
 # Izdavanja
 
+## 0.0.28
+
+Izdanje 0.0.28 proširuje katalog i poboljšava discovery, station-detail UX i cross-platform playback recovery bez dodavanja analyticsa, telemetryja, novog korisničkog računa, novog backenda ili širih browser dozvola.
+
+- Windows, Android, Chrome/Edge/Opera i Firefox dobivaju zasebnu **Dijaspora** kategoriju za relevantne Balkan/Ex-Yu i regionalne jezične stanice izvan matičnih balkanskih država
+- postojeći **Strano** katalog proširen je s do 50 na do 120 stanica, a Dijaspora ima zaseban limit do 120; mrežni dohvat ostaje bounded timeoutima, response-size limitima, sigurnim HTTP(S) provjerama, deduplikacijom i `hidebroken=true`
+- browser Dijaspora discovery radi u ograničenim batchovima umjesto nekontroliranog paralelnog fan-outa
+- Windows Dijaspora + Strano koriste objedinjeni supplemental catalog lifecycle s jednim merge/cache/UI refresh ciklusom
+- klik na station karticu na Androidu, browserima i Windowsu otvara javni detail prikaz; zasebni ▶ ostaje eksplicitna playback akcija i koristi postojeći player/recovery pipeline
+- javni detail prikazi ne izlažu stream URL, homepage ni administratorske health/maintenance podatke
+- Android početna dobiva kompaktniji hero i brze `Popularno / Dijaspora / Strano` akcije, browser dobiva `Sve / Dijaspora / Strano` quick filtere, a Windows sidebar stvarnu Dijaspora stavku
+- `sourceCountryCode` se čuva odvojeno od aplikacijskih pseudo-kodova `DIA` i `INT`, pa Dijaspora/Strano stanice mogu prikazati stvarnu zastavu države izvora i pouzdanije obnoviti stream po UUID-u ili nazivu
+- browser playback allowlist i refresh pravila eksplicitno podržavaju `DIA`; Android UUID recovery također prihvaća samo odgovarajuće non-regional rezultate
+- Windows recovery popravljen je i za raniji `INT` slučaj gdje Radio Browser API vraća stvarnu državu, a ne pseudo-kod `INT`
+- deduplikacija daje prednost Dijaspora klasifikaciji kada se ista stanica pojavi i u globalnom Strano skupu, bez gubitka stvarnog source-country metadata
+- sintetički `dijaspora` marker ne prikazuje se korisniku kao lažni glazbeni žanr
+- dodan je **Built with Brendigo** attribution s poveznicom na `https://brendigo.com/` u javnim klijentima
+- browser executable regression test potvrđuje da klik na karticu otvara detalje bez implicitnog playbacka, da detail Play delegira postojećem playeru i da javni opis ne izlaže stream URL
+- Android i Windows testovi zaključavaju DIA/INT recovery, source-country metadata, dedupe i supplemental country matching
+- development exact-head CI prije verzijskog bumpa prošao je `versions`, `browser`, `android` i `windows`, uključujući stvarni Windows startup runtime soak i clean-worktree provjere
+
+Dostupnost pojedinog radio streama i dalje ovisi o third-party infrastrukturi. Aplikacija filtrira poznato neispravne zapise i ima timeout/fallback/recovery putanje, ali ne tvrdi da svaka vanjska stanica mora biti dostupna u svakom trenutku.
+
 ## 0.0.27
 
 Izdanje 0.0.27 uvodi lokalni administratorski sloj bez promjene osnovnog modela korištenja: običan korisnik i dalje ne treba račun za slušanje radija. Nisu dodani analytics, telemetry, oglasni SDK, remote executable code, novi account backend niti šire browser dozvole.
