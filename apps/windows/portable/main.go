@@ -3550,18 +3550,16 @@ func handleClick(x, y int32) {
 			app.mu.Lock()
 			app.detailKey = ""
 			app.tab = h.Value
-			if h.Value == "all" {
-				app.genre = ""
-			}
+			app.country = ""
+			app.genre = ""
 			app.scroll = 0
 			app.countryMenuOpen = false
 			app.genreMenuOpen = false
 			app.mu.Unlock()
 			app.stateMu.Lock()
 			app.state.Tab = h.Value
-			if h.Value == "all" {
-				app.state.Genre = ""
-			}
+			app.state.CountryCode = ""
+			app.state.Genre = ""
 			app.stateMu.Unlock()
 			scheduleStateSave()
 			rebuildGenres()
@@ -3625,8 +3623,10 @@ func handleClick(x, y int32) {
 			toggleAdminSession()
 		case hitStationDetails:
 			if idx := stationIndexFromHit(h); idx >= 0 {
-				showStationDetails(idx)
+				openStationDetails(idx)
 			}
+		case hitStationBack:
+			closeStationDetails()
 		case hitBrendigo:
 			shellOpen("https://brendigo.com/")
 		case hitRefresh:
@@ -3655,12 +3655,14 @@ func selectCountry(code string) {
 	}
 	app.mu.Lock()
 	app.detailKey = ""
+	app.tab = "all"
 	app.country = code
 	app.scroll = 0
 	app.countryMenuOpen = false
 	app.genreMenuOpen = false
 	app.mu.Unlock()
 	app.stateMu.Lock()
+	app.state.Tab = "all"
 	app.state.CountryCode = code
 	app.stateMu.Unlock()
 	scheduleStateSave()
@@ -3673,12 +3675,14 @@ func selectGenre(genre string) {
 	genre = strings.TrimSpace(genre)
 	app.mu.Lock()
 	app.detailKey = ""
+	app.tab = "all"
 	app.genre = genre
 	app.scroll = 0
 	app.countryMenuOpen = false
 	app.genreMenuOpen = false
 	app.mu.Unlock()
 	app.stateMu.Lock()
+	app.state.Tab = "all"
 	app.state.Genre = genre
 	app.stateMu.Unlock()
 	scheduleStateSave()
@@ -3992,58 +3996,24 @@ func copyStationLink(idx int) {
 	}
 	invalidate()
 }
-func showStationDetails(idx int) {
-	app.mu.RLock()
+func openStationDetails(idx int) {
+	app.mu.Lock()
 	if idx < 0 || idx >= len(app.stations) {
-		app.mu.RUnlock()
+		app.mu.Unlock()
 		return
 	}
-	station := app.stations[idx]
-	app.mu.RUnlock()
+	app.detailKey = stationKey(app.stations[idx])
+	app.countryMenuOpen = false
+	app.genreMenuOpen = false
+	app.mu.Unlock()
+	invalidate()
+}
 
-	area := strings.TrimSpace(station.Country)
-	switch strings.ToUpper(strings.TrimSpace(station.CountryCode)) {
-	case diasporaCatalogCode:
-		if area == "" {
-			area = "Dijaspora"
-		} else {
-			area = "Dijaspora · " + area
-		}
-	case foreignCatalogCode:
-		if area == "" {
-			area = "Strana postaja"
-		}
-	default:
-		if area == "" {
-			area = countryNameByCode(station.CountryCode)
-		}
-	}
-	if area == "" {
-		area = "Radio uživo"
-	}
-	genre := firstTag(strings.ReplaceAll(station.Tags, "dijaspora,", ""))
-	description := station.Name + " je radio stanica iz područja " + area + "."
-	if genre != "" {
-		description += "\nProgram: " + genre + "."
-	}
-	if strings.TrimSpace(station.Language) != "" {
-		description += "\nJezik: " + strings.TrimSpace(station.Language) + "."
-	}
-	facts := make([]string, 0, 4)
-	if strings.TrimSpace(station.Codec) != "" {
-		facts = append(facts, strings.ToUpper(strings.TrimSpace(station.Codec)))
-	}
-	if station.Bitrate > 0 {
-		facts = append(facts, fmt.Sprintf("%d kbps", station.Bitrate))
-	}
-	if station.LastCheckOK == 1 {
-		facts = append(facts, "zadnja provjera: dostupna")
-	}
-	if len(facts) > 0 {
-		description += "\n\n" + strings.Join(facts, " · ")
-	}
-	description += "\n\nZa slušanje koristi ▶ na kartici ili u donjem playeru. Stream URL i maintenance podaci ostaju skriveni izvan Admin načina rada."
-	messageBox(hwndOrZero(), station.Name, description, MB_ICONINFORMATION)
+func closeStationDetails() {
+	app.mu.Lock()
+	app.detailKey = ""
+	app.mu.Unlock()
+	invalidate()
 }
 
 func openStationWeb(idx int) {
