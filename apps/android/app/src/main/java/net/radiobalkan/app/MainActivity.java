@@ -70,6 +70,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private final AtomicBoolean healthRunning = new AtomicBoolean();
     private final AtomicBoolean autoHealthStarted = new AtomicBoolean();
     private final AtomicBoolean catalogRefreshRunning = new AtomicBoolean();
+    private final AtomicBoolean adminAuthRunning = new AtomicBoolean();
     private final Object dataLock = new Object();
     private List<RadioStation> allStations = new ArrayList<>();
     private List<RadioStation> visibleStations = new ArrayList<>();
@@ -624,6 +625,10 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                     password.setError("Prijava je zaključana još " + seconds + " s.");
                     return;
                 }
+                if (!adminAuthRunning.compareAndSet(false, true)) {
+                    password.setError("Provjera prijave je već u tijeku");
+                    return;
+                }
 
                 String candidateUsername = username.getText().toString();
                 String candidatePassword = password.getText().toString();
@@ -634,10 +639,11 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 try {
                     ioWorker.execute(() -> {
                         boolean accepted = AdminAuth.matches(candidateUsername, candidatePassword);
+                        long completedAt = System.currentTimeMillis();
+                        if (!accepted) adminRateLimiter.recordFailure(completedAt);
+                        adminAuthRunning.set(false);
                         ui.post(() -> {
                             if (destroyed) return;
-                            long completedAt = System.currentTimeMillis();
-                            if (!accepted) adminRateLimiter.recordFailure(completedAt);
                             if (!dialog.isShowing()) return;
                             loginButton.setEnabled(true);
                             loginButton.setText("Prijavi se");
@@ -660,6 +666,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                         });
                     });
                 } catch (RejectedExecutionException rejected) {
+                    adminAuthRunning.set(false);
                     loginButton.setEnabled(true);
                     loginButton.setText("Prijavi se");
                     password.setError("Prijava trenutačno nije dostupna");
