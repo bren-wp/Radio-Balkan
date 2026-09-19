@@ -160,6 +160,22 @@ func TestTransportAvailabilityUsesVisibleStationCount(t *testing.T) {
 	if !canStopPlayback(0, false) {
 		t.Fatal("stop must be enabled for an active or paused current station")
 	}
+
+	if canAdjustVolume(0, -5) {
+		t.Fatal("volume down must disable at 0 percent")
+	}
+	if !canAdjustVolume(5, -5) {
+		t.Fatal("volume down must enable above 0 percent")
+	}
+	if canAdjustVolume(100, 5) {
+		t.Fatal("volume up must disable at 100 percent")
+	}
+	if !canAdjustVolume(95, 5) {
+		t.Fatal("volume up must enable below 100 percent")
+	}
+	if canAdjustVolume(50, 0) {
+		t.Fatal("zero volume delta must not expose a control action")
+	}
 }
 
 func TestDefaultPlaybackIndexLocked(t *testing.T) {

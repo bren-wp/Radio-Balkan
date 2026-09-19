@@ -256,6 +256,7 @@ def main() -> None:
         "if (!allowEpochChange) return false;",
         "function synchronizePlayerState()",
         "if (stopped) return play(current);",
+        "else if (!value.sessionId && !value.playing) current = null;",
         "ext.runtime.sendMessage({ type: 'RB_GET_STATE' })",
         "void synchronizePlayerState();",
         "if (revision < lastRevision) return false;",
@@ -293,6 +294,7 @@ def main() -> None:
         "previous from Radio B must select the preceding visible station",
         "next control must start the adjacent station",
         "main play control after stop must send a fresh RB_PLAY command",
+        "authoritative cold state must clear the optimistic catalog selection",
     )
     require(
         "scripts/test_chromium_player_contract.js",
@@ -548,6 +550,16 @@ def main() -> None:
         "Generate and verify checksums",
         'python scripts/generate_release_checksums.py release-assets "$VERSION"',
         'sha256sum -c "RadioBalkan-v${VERSION}-SHA256.txt"',
+        "paths:",
+        "- VERSION",
+    )
+    forbid(
+        ".github/workflows/publish.yml",
+        "- apps/**",
+        "- extensions/**",
+        "- scripts/check_clean_worktree.py",
+        "- scripts/generate_release_checksums.py",
+        "- .github/workflows/publish.yml",
     )
     require(
         ".github/workflows/screenshots.yml",

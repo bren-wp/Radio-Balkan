@@ -1,5 +1,26 @@
 # Izdavanja
 
+## 0.0.25
+
+Izdanje 0.0.25 nastavlja UI/UX i transport hardening nakon v0.0.24 te zatvara release-integrity problem pronađen nakon mergea PR-a #25. Nisu dodane nove dozvole, analytics, telemetry, korisnički račun niti novi backend.
+
+- browser popup izlaže Previous / Stop / Play-Pause / Next kontrole i drži Prev/Next unutar aktivnog filtriranog skupa stanica
+- promjena filtera odmah sinkronizira enabled/disabled stanje browser Prev/Next kontrola
+- compact popup skriva samo dekorativni artwork kako naziv stanice i puni transport ne bi bili zgnječeni
+- browser cold-state bez stvarne remote stanice čisti optimistični `current`, pa player više ne izgleda kao da je prva stanica već odabrana
+- executable browser test provjerava konkretan Previous/Next station payload, Stop → fresh Play, cold-state cleanup i postojeće session/epoch/revision zaštite
+- Windows Stop više nema hit-region kad nema aktivne/pausirane stanice ili je player terminalno zaustavljen
+- Windows Prev/Next se onemogućuju kada vidljivi skup nema barem dvije stanice; availability pravila su izdvojena u testirane pure helper funkcije
+- veliki Windows Play bez prethodnog odabira pokreće prvu filtriranu stanicu ili prvu stanicu iz kataloga umjesto no-op ponašanja
+- Windows volume `−` na 0% i `+` na 100% sada su vizualno disabled i nemaju klikabilni hit-region
+- Android transport ostaje disabled dok player state nije spreman, a neuspjeli odabir čisti zastarjeli player artwork
+- automatski Publish workflow na `main` sada se pokreće samo promjenom `VERSION`; obične promjene u aplikacijama, ekstenzijama ili workflow helperima više ne pokušavaju ponovno objaviti već postojeći tag
+- postojeća tag/SHA zaštita u Publish koraku i dalje odbija pokušaj objave istog taga s drugog commita
+- CI prije bumpa prošao je versions, browser, Android i Windows uključujući stvarni Windows runtime soak
+- verzija je sinkronizirana na `0.0.25`, uz Android `versionCode 25`
+
+Ovo izdanje dodatno smanjuje no-op, stale-state i release-pipeline rizike. Dostupnost stvarnih radio streamova i dalje ovisi o third-party infrastrukturi, pa se ne tvrdi da svaka stanica mora uvijek biti dostupna niti da je moguće jamčiti apsolutno crash-free ponašanje na svakoj kombinaciji OS-a, uređaja, drivera i mreže.
+
 ## 0.0.24
 
 Izdanje 0.0.24 fokusirano je na konkretan UI/UX polish i playback recovery probleme pronađene nakon v0.0.23, bez novih dozvola, analyticsa, telemetryja, korisničkog računa ili novog backenda.
