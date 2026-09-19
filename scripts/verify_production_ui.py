@@ -114,7 +114,8 @@ def main() -> int:
         "playerPrev.setOnClickListener",
         "playerNext.setOnClickListener",
         "PlaybackLifecycle.adjacentIndex",
-        "adapter.notifyDataSetChanged()",
+        "adapter.setFavorites(state.favorites())",
+        "adapter.setSnapshot(out, currentKey, playing, favorites)",
         "StreamResolver.isSafeHttp(s.homepage)",
         "ui.removeCallbacksAndMessages(null)",
         "setSearchVisible(",
@@ -142,8 +143,11 @@ def main() -> int:
 
     for needle in (
         'row.more.setContentDescription("Više opcija za " + s.name)',
+        'row.favorite.setContentDescription',
+        'row.favorite.setOnClickListener(v -> actions.onFavorite(s))',
         'row.more.setOnClickListener(v -> actions.onMore(s))',
         'root.setFocusable(true)',
+        'root.addView(r.favorite',
         'root.addView(r.more',
         'dp(104)',
         '"Popularnost · " + value + " glasova"',

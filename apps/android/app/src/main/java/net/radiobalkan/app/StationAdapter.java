@@ -16,8 +16,10 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public final class StationAdapter extends BaseAdapter {
     public interface Actions {
@@ -30,6 +32,7 @@ public final class StationAdapter extends BaseAdapter {
     private final Actions actions;
     private final ImageLoader images;
     private List<RadioStation> items = new ArrayList<>();
+    private Set<String> favorites = new HashSet<>();
     private String currentKey = "";
     private boolean playing;
 
@@ -47,10 +50,16 @@ public final class StationAdapter extends BaseAdapter {
         notifyDataSetChanged();
     }
 
-    public void setSnapshot(List<RadioStation> value, String key, boolean isPlaying) {
+    public void setSnapshot(List<RadioStation> value, String key, boolean isPlaying, Set<String> favoriteKeys) {
         items = value == null ? new ArrayList<>() : new ArrayList<>(value);
+        favorites = favoriteKeys == null ? new HashSet<>() : new HashSet<>(favoriteKeys);
         currentKey = key == null ? "" : key;
         playing = isPlaying;
+        notifyDataSetChanged();
+    }
+
+    public void setFavorites(Set<String> favoriteKeys) {
+        favorites = favoriteKeys == null ? new HashSet<>() : new HashSet<>(favoriteKeys);
         notifyDataSetChanged();
     }
 
@@ -84,7 +93,9 @@ public final class StationAdapter extends BaseAdapter {
         row.meta.setCompoundDrawablePadding(dp(6));
         row.meta.setCompoundDrawables(flag, null, null, null);
         row.listeners.setText(statusLine(s));
+        boolean favorite = favorites.contains(key);
         row.play.setText(active && playing ? "Ⅱ" : "▶");
+        row.favorite.setText(favorite ? "♥" : "♡");
         row.root.setSelected(active);
         row.root.setBackground(interactiveRounded(active ? 0xFF171C24 : 0xFF11171F, active ? 0xFFFFA52E : 0xFF303845, 18, 0x26FFFFFF));
 
@@ -92,9 +103,12 @@ public final class StationAdapter extends BaseAdapter {
         images.load(s.favicon, row.logo, null);
         String action = active && playing ? "Pauziraj " : "Slušaj ";
         row.play.setContentDescription(action + s.name);
+        row.favorite.setContentDescription((favorite ? "Ukloni iz omiljenih: " : "Dodaj u omiljene: ") + s.name);
+        row.favorite.setSelected(favorite);
         row.more.setContentDescription("Više opcija za " + s.name);
         row.root.setContentDescription(s.name + ", " + countryAndGenre(s) + ", " + statusLine(s) + (active ? ", trenutno odabrana" : ""));
         row.play.setOnClickListener(v -> actions.onPlay(s));
+        row.favorite.setOnClickListener(v -> actions.onFavorite(s));
         row.more.setOnClickListener(v -> actions.onMore(s));
         row.root.setOnClickListener(v -> actions.onPlay(s));
         row.root.setOnLongClickListener(v -> { actions.onMore(s); return true; });
@@ -136,8 +150,11 @@ public final class StationAdapter extends BaseAdapter {
         info.addView(r.listeners, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(23)));
         root.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
 
+        r.favorite = smallButton("♡", false, 22);
+        root.addView(r.favorite, new LinearLayout.LayoutParams(dp(40), dp(48)));
+
         r.more = smallButton("⋮", false, 24);
-        root.addView(r.more, new LinearLayout.LayoutParams(dp(46), dp(48)));
+        root.addView(r.more, new LinearLayout.LayoutParams(dp(42), dp(48)));
 
         r.play = smallButton("▶", true, 18);
         root.addView(r.play, new LinearLayout.LayoutParams(dp(56), dp(56)));
@@ -224,6 +241,6 @@ public final class StationAdapter extends BaseAdapter {
         LinearLayout root;
         ImageView logo;
         TextView name, meta, listeners;
-        Button play, more;
+        Button play, favorite, more;
     }
 }
