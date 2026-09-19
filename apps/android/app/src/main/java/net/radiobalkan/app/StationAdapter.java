@@ -117,6 +117,7 @@ public final class StationAdapter extends BaseAdapter {
 
     private Row createRow() {
         Row r = new Row();
+        boolean compact = isCompactWidth();
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.HORIZONTAL);
         root.setGravity(Gravity.CENTER_VERTICAL);
@@ -135,13 +136,13 @@ public final class StationAdapter extends BaseAdapter {
         ImageView logo = new ImageView(context);
         logo.setScaleType(ImageView.ScaleType.CENTER_CROP);
         artBox.addView(logo, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        root.addView(artBox, new LinearLayout.LayoutParams(dp(104), ViewGroup.LayoutParams.MATCH_PARENT));
+        root.addView(artBox, new LinearLayout.LayoutParams(dp(compact ? 88 : 104), ViewGroup.LayoutParams.MATCH_PARENT));
         r.logo = logo;
 
         LinearLayout info = new LinearLayout(context);
         info.setOrientation(LinearLayout.VERTICAL);
         info.setGravity(Gravity.CENTER_VERTICAL);
-        info.setPadding(dp(13), 0, dp(6), 0);
+        info.setPadding(dp(compact ? 9 : 13), 0, dp(compact ? 3 : 6), 0);
         r.name = text(17, Color.WHITE, true);
         r.meta = text(12, 0xFFBEC4CD, false);
         r.listeners = text(11, 0xFF98A2AF, false);
@@ -150,14 +151,14 @@ public final class StationAdapter extends BaseAdapter {
         info.addView(r.listeners, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(23)));
         root.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
 
-        r.favorite = smallButton("♡", false, 22);
-        root.addView(r.favorite, new LinearLayout.LayoutParams(dp(40), dp(48)));
+        r.favorite = smallButton("♡", false, compact ? 20 : 22);
+        root.addView(r.favorite, new LinearLayout.LayoutParams(dp(compact ? 36 : 40), dp(48)));
 
-        r.more = smallButton("⋮", false, 24);
-        root.addView(r.more, new LinearLayout.LayoutParams(dp(42), dp(48)));
+        r.more = smallButton("⋮", false, compact ? 22 : 24);
+        root.addView(r.more, new LinearLayout.LayoutParams(dp(compact ? 38 : 42), dp(48)));
 
         r.play = smallButton("▶", true, 18);
-        root.addView(r.play, new LinearLayout.LayoutParams(dp(56), dp(56)));
+        root.addView(r.play, new LinearLayout.LayoutParams(dp(compact ? 50 : 56), dp(56)));
         r.root = root;
         return r;
     }
@@ -233,6 +234,11 @@ public final class StationAdapter extends BaseAdapter {
         GradientDrawable content = rounded(fill, stroke, radiusDp);
         GradientDrawable mask = rounded(Color.WHITE, 0x00000000, radiusDp);
         return new RippleDrawable(ColorStateList.valueOf(rippleColor), content, mask);
+    }
+
+    private boolean isCompactWidth() {
+        float density = context.getResources().getDisplayMetrics().density;
+        return context.getResources().getDisplayMetrics().widthPixels / Math.max(1f, density) < 390f;
     }
 
     private int dp(int v) { return (int) (v * context.getResources().getDisplayMetrics().density + 0.5f); }
