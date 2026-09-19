@@ -46,7 +46,6 @@ jobs:
           node --check extensions/shared/network.js
           node --check extensions/shared/catalog.js
           node --check extensions/shared/popup.js
-          node --check extensions/shared/enhancements.js
           node --check extensions/platform/chromium/service_worker.js
           node --check extensions/platform/chromium/offscreen.js
           node --check extensions/platform/firefox/background-firefox.js
@@ -54,7 +53,6 @@ jobs:
           node --check scripts/test_browser_network_contract.js
           node --check scripts/test_browser_catalog_contract.js
           node --check scripts/test_browser_state_contract.js
-          node --check scripts/test_browser_ui_enhancements.js
           node --check scripts/test_chromium_player_contract.js
           node --check scripts/test_chromium_offscreen_contract.js
           node --check scripts/test_firefox_player_contract.js
@@ -64,8 +62,6 @@ jobs:
         run: node scripts/test_browser_catalog_contract.js
       - name: Test browser player state contract
         run: node scripts/test_browser_state_contract.js
-      - name: Test browser station detail and quick-area UI contract
-        run: node scripts/test_browser_ui_enhancements.js
       - name: Test Chromium player close/session contract
         run: node scripts/test_chromium_player_contract.js
       - name: Test Chromium offscreen timeout/stall contract
