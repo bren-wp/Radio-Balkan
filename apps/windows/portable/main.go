@@ -282,6 +282,7 @@ const (
 	hitAbout
 	hitAdmin
 	hitStationDetails
+	hitStationBack
 	hitBrendigo
 )
 
@@ -299,6 +300,7 @@ type App struct {
 	filtered                                 []int
 	hits                                     []HitRegion
 	hoverToken                               string
+	detailKey                                string
 	mu                                       sync.RWMutex
 	stateMu                                  sync.RWMutex
 	state                                    PersistedState
@@ -1844,30 +1846,24 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 	tab, genre, country := app.tab, strings.ToLower(strings.TrimSpace(app.genre)), strings.ToUpper(strings.TrimSpace(app.country))
 	app.mu.RUnlock()
 	y := int32(91)
-	drawSidebarItem(hdc, y, "⌂", "Početna", tab == "all" && genre == "", hitTab, "all")
+	drawSidebarItem(hdc, y, "⌂", "Početna", tab == "all" && genre == "" && country == "", hitTab, "all")
 	y += 44
-	drawSidebarItem(hdc, y, "⌕", "Pretraga", false, hitTab, "searchfocus")
+	drawSidebarItem(hdc, y, "★", "Top", tab == "popular", hitTab, "popular")
 	y += 44
-	drawSidebarItem(hdc, y, "▦", "Pregledaj", false, hitTab, "browse")
+	drawSidebarItem(hdc, y, "◉", "Zemlje", isRegionalCatalogCode(country), hitCountryDropdown, "")
 	y += 44
-	drawSidebarItem(hdc, y, "♡", "Omiljene", tab == "favorites", hitTab, "favorites")
-	y += 44
-	drawSidebarItem(hdc, y, "◷", "Nedavno slušano", tab == "recent", hitTab, "recent")
+	drawSidebarItem(hdc, y, "♫", "Žanrovi", genre != "", hitGenreDropdown, "")
 	y += 44
 	drawSidebarItem(hdc, y, "◎", "Dijaspora", country == diasporaCatalogCode, hitCountryChoice, diasporaCatalogCode)
+	y += 44
+	drawSidebarItem(hdc, y, "◌", "Strano", country == foreignCatalogCode, hitCountryChoice, foreignCatalogCode)
 
-	y += 56
-	drawSidebarLabel(hdc, "BRZI ODABIR", y)
-	y += 30
-	drawSidebarItem(hdc, y, "♫", "Popularne", tab == "popular", hitTab, "popular")
+	y += 54
+	drawSidebarLabel(hdc, "BIBLIOTEKA", y)
+	y += 28
+	drawSidebarItem(hdc, y, "♡", "Omiljene", tab == "favorites", hitTab, "favorites")
 	y += 42
-	drawSidebarItem(hdc, y, "♫", "Pop & Rock", genre == "pop", hitTab, "genre:pop")
-	y += 42
-	drawSidebarItem(hdc, y, "♫", "Narodna", genre == "folk", hitTab, "genre:folk")
-	y += 42
-	drawSidebarItem(hdc, y, "♫", "Elektronička", genre == "electronic", hitTab, "genre:electronic")
-	y += 42
-	drawSidebarItem(hdc, y, "♫", "Jazz", genre == "jazz", hitTab, "genre:jazz")
+	drawSidebarItem(hdc, y, "◷", "Nedavno", tab == "recent", hitTab, "recent")
 
 	toolsY := y + 60
 	if admin && cr.Bottom-playerHeight > toolsY+110 {
@@ -3314,19 +3310,6 @@ func handleClick(x, y int32) {
 		case hitGenreChoice:
 			selectGenre(h.Value)
 		case hitTab:
-			if h.Value == "searchfocus" {
-				procSetFocus.Call(uintptr(app.edit))
-				break
-			}
-			if h.Value == "browse" {
-				app.mu.Lock()
-				app.countryMenuOpen = true
-				app.genreMenuOpen = false
-				app.countryMenuIndex = countryIndexLocked(app.country)
-				app.mu.Unlock()
-				invalidate()
-				break
-			}
 			if strings.HasPrefix(h.Value, "genre:") {
 				g := strings.TrimPrefix(h.Value, "genre:")
 				app.mu.Lock()
@@ -3347,6 +3330,7 @@ func handleClick(x, y int32) {
 				break
 			}
 			app.mu.Lock()
+			app.detailKey = ""
 			app.tab = h.Value
 			if h.Value == "all" {
 				app.genre = ""
@@ -3452,6 +3436,7 @@ func selectCountry(code string) {
 		code = ""
 	}
 	app.mu.Lock()
+	app.detailKey = ""
 	app.country = code
 	app.scroll = 0
 	app.countryMenuOpen = false
@@ -3469,6 +3454,7 @@ func selectCountry(code string) {
 func selectGenre(genre string) {
 	genre = strings.TrimSpace(genre)
 	app.mu.Lock()
+	app.detailKey = ""
 	app.genre = genre
 	app.scroll = 0
 	app.countryMenuOpen = false
