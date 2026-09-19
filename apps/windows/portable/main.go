@@ -2993,7 +2993,7 @@ func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleActi
 func transportAvailability(current, stationCount int, stopped bool) (canPlay, canStop, canNavigate bool) {
 	canPlay = current >= 0 && current < stationCount
 	canStop = canPlay && !stopped
-	canNavigate = stationCount > 1
+	canNavigate = canPlay && stationCount > 1
 	return
 }
 

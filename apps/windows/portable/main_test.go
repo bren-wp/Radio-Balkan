@@ -176,7 +176,7 @@ func TestTransportAvailability(t *testing.T) {
 		play, stop, navigate         bool
 	}{
 		{name: "empty catalog", current: -1, stationCount: 0},
-		{name: "no selection", current: -1, stationCount: 3, navigate: true},
+		{name: "no selection", current: -1, stationCount: 3},
 		{name: "single selected playing", current: 0, stationCount: 1, play: true, stop: true},
 		{name: "single selected stopped", current: 0, stationCount: 1, stopped: true, play: true},
 		{name: "multiple selected playing", current: 1, stationCount: 3, play: true, stop: true, navigate: true},
