@@ -2412,23 +2412,27 @@ func drawGenreTile(hdc syscall.Handle, l, t, r, b int32, label, value string, sl
 }
 
 func drawRegionCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStation, slot int) {
+	key := stationKey(s)
 	border := color(49, 57, 68)
-	if hovered(hitPlay, idx, stationKey(s)) {
+	if hovered(hitPlay, idx, key) || hovered(hitStationDetails, idx, key) {
 		border = color(133, 88, 40)
 	}
 	drawRounded(hdc, l, t, r, b, 10, color(20, 25, 33), border)
 	artR := l + 58
 	drawStationArtwork(hdc, l+6, t+7, artR-5, b-7, s, slot)
 	selectFont(hdc, app.hFontBold)
-	text(hdc, trimName(s.Name), artR+5, t+6, r-8, t+31, rgb(244, 246, 248), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+	text(hdc, trimName(s.Name), artR+5, t+6, r-40, t+31, rgb(244, 246, 248), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 	drawCountryFlag(hdc, artR+5, t+35, artR+25, t+48, s.CountryCode)
 	selectFont(hdc, app.hFontSmall)
 	meta := countryNameByCode(strings.ToUpper(s.CountryCode))
 	if meta == "" {
 		meta = s.Country
 	}
-	text(hdc, meta, artR+31, t+31, r-8, t+54, rgb(160, 168, 178), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitPlay, Index: idx, Value: stationKey(s)})
+	text(hdc, meta, artR+31, t+31, r-40, t+54, rgb(160, 168, 178), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+	drawCircle(hdc, r-34, t+18, r-10, t+42, color(45, 49, 57), color(105, 74, 40))
+	text(hdc, "▶", r-32, t+18, r-12, t+42, rgb(246, 248, 250), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitStationDetails, Index: idx, Value: key})
+	app.hits = append(app.hits, HitRegion{R: RECT{r - 38, t + 14, r - 6, t + 46}, Kind: hitPlay, Index: idx, Value: key})
 }
 
 func drawStationScrollBar(hdc syscall.Handle, cr RECT, top, bottom int32, count, scroll, step int) {
