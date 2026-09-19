@@ -92,8 +92,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private String currentCountryCode = "";
     private boolean playing;
     private boolean adminMode;
-    private int adminFailures;
-    private long adminLockedUntilMs;
+    private final AdminRateLimiter adminRateLimiter = new AdminRateLimiter(5, 30_000L);
     private boolean playbackStopped = true;
     private RadioStation featured;
     private Runnable searchRunnable;
@@ -619,8 +618,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             Runnable submit = () -> {
                 if (!loginButton.isEnabled()) return;
                 long clickNow = System.currentTimeMillis();
-                if (clickNow < adminLockedUntilMs) {
-                    long seconds = Math.max(1L, (adminLockedUntilMs - clickNow + 999L) / 1000L);
+                if (adminRateLimiter.isLocked(clickNow)) {
+                    long seconds = adminRateLimiter.remainingSeconds(clickNow);
                     password.setText("");
                     password.setError("Prijava je zaključana još " + seconds + " s.");
                     return;
@@ -636,24 +635,23 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                     ioWorker.execute(() -> {
                         boolean accepted = AdminAuth.matches(candidateUsername, candidatePassword);
                         ui.post(() -> {
-                            if (destroyed || !dialog.isShowing()) return;
+                            if (destroyed) return;
+                            long completedAt = System.currentTimeMillis();
+                            if (!accepted) adminRateLimiter.recordFailure(completedAt);
+                            if (!dialog.isShowing()) return;
                             loginButton.setEnabled(true);
                             loginButton.setText("Prijavi se");
                             if (accepted) {
                                 adminMode = true;
                                 if (adapter != null) adapter.setAdminMode(true);
                                 updateAdminIndicator();
-                                adminFailures = 0;
-                                adminLockedUntilMs = 0;
+                                adminRateLimiter.recordSuccess();
                                 statusText.setText("Admin način rada · brendigo");
                                 Toast.makeText(this, "Administrator je prijavljen", Toast.LENGTH_SHORT).show();
                                 dialog.dismiss();
                                 return;
                             }
-                            adminFailures++;
-                            if (adminFailures >= 5) {
-                                adminFailures = 0;
-                                adminLockedUntilMs = System.currentTimeMillis() + 30_000L;
+                            if (adminRateLimiter.isLocked(completedAt)) {
                                 password.setError("Previše pokušaja. Prijava je privremeno zaključana.");
                             } else {
                                 password.setError("Neispravno korisničko ime ili lozinka");
