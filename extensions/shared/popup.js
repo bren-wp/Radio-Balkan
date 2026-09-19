@@ -25,7 +25,12 @@
   let stateEpoch = '';
   let lastRevision = -1;
   let stateSyncPromise = null;
+  let adminMode = false;
+  let adminFailures = 0;
+  let adminLockedUntil = 0;
+  let adminDetailsGeneration = 0;
   const retiredEpochs = new Set();
+  const ADMIN_DIGEST = '79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0';
 
   const search = $('search');
   const country = $('country');
@@ -33,6 +38,88 @@
   const list = $('stations');
   const status = $('status');
   const refresh = $('refresh');
+
+
+  async function adminCredentialsValid(username, password) {
+    if (String(username || '').trim().toLowerCase() !== 'brendigo' || typeof password !== 'string') return false;
+    if (!globalThis.crypto?.subtle || typeof TextEncoder !== 'function') return false;
+    const bytes = new TextEncoder().encode('RadioBalkanAdmin:v1:' + password);
+    const digest = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes));
+    const expected = new Uint8Array(ADMIN_DIGEST.match(/../g).map(x => Number.parseInt(x, 16)));
+    if (digest.length !== expected.length) return false;
+    let different = 0;
+    for (let i = 0; i < digest.length; i += 1) different |= digest[i] ^ expected[i];
+    return different === 0;
+  }
+
+  function setAdminMessage(message, controls = false) {
+    const target = controls ? $('adminControlMessage') : $('adminMessage');
+    target.textContent = message || '';
+  }
+
+  function updateAdminUi() {
+    $('adminToggle').textContent = adminMode ? '♛' : '♙';
+    $('adminToggle').setAttribute('aria-label', adminMode ? 'Admin prijavljen' : 'Admin prijava');
+    $('adminToggle').title = adminMode ? 'Admin · brendigo' : 'Admin prijava';
+    $('adminLoginView').hidden = adminMode;
+    $('adminControls').hidden = !adminMode;
+    $('adminRole').textContent = adminMode ? 'Prijavljen: brendigo' : 'Prijava za napredne kontrole';
+    if (!adminMode) {
+      $('adminPassword').value = '';
+      $('adminSource').value = '';
+      $('adminHomepage').value = '';
+      $('adminStationName').textContent = 'Nije odabrano';
+    } else {
+      void refreshAdminDetails();
+    }
+  }
+
+  function openAdminPanel() {
+    $('adminPanel').hidden = false;
+    updateAdminUi();
+    if (adminMode) $('adminSource').focus();
+    else $('adminUsername').focus();
+  }
+
+  function closeAdminPanel() {
+    $('adminPanel').hidden = true;
+    $('adminPassword').value = '';
+    $('adminToggle').focus();
+  }
+
+  async function refreshAdminDetails() {
+    if (!adminMode) return;
+    const generation = ++adminDetailsGeneration;
+    const station = current;
+    $('adminStationName').textContent = station?.name || 'Nije odabrano';
+    if (!station) {
+      $('adminSource').value = '';
+      $('adminHomepage').value = '';
+      $('adminSaveSource').disabled = true;
+      $('adminResetSource').disabled = true;
+      $('adminOpenWeb').disabled = true;
+      return;
+    }
+    const key = RB.key(station);
+    const override = await RB.adminOverrideFor(key).catch(() => '');
+    if (generation !== adminDetailsGeneration || !adminMode || current !== station) return;
+    $('adminSource').value = override || station.url_resolved || station.url || '';
+    $('adminHomepage').value = RB.safeHttp(station.homepage) ? station.homepage : '';
+    $('adminSaveSource').disabled = false;
+    $('adminResetSource').disabled = !override;
+    $('adminOpenWeb').disabled = !RB.safeHttp(station.homepage);
+  }
+
+  function logoutAdmin() {
+    adminMode = false;
+    adminDetailsGeneration += 1;
+    setAdminMessage('');
+    setAdminMessage('');
+    updateAdminUi();
+    closeAdminPanel();
+    playerStatus = 'Administrator je odjavljen';
+    updatePlayer();
+  }
 
   function stationCountry(station) {
     if (station?.countrycode === RB.FOREIGN_CODE) return station.country ? `Strano · ${station.country}` : 'Strano';
@@ -370,7 +457,10 @@
     updatePlayer();
     syncStationPlaybackUi();
     try {
-      const result = await ext.runtime.sendMessage({ type: 'RB_PLAY', station });
+      const override = await RB.adminOverrideFor(RB.key(station)).catch(() => '');
+      if (token !== commandGeneration) return;
+      const playableStation = override ? { ...station, url_resolved: override } : station;
+      const result = await ext.runtime.sendMessage({ type: 'RB_PLAY', station: playableStation });
       if (token !== commandGeneration) return;
       await applyCommandResult(result, token);
       if (token !== commandGeneration) return;
@@ -499,6 +589,7 @@
     $('playerNext').disabled = !canNavigate;
     $('playerPrev').setAttribute('aria-busy', String(commandBusy));
     $('playerNext').setAttribute('aria-busy', String(commandBusy));
+    if (adminMode && !$('adminPanel').hidden) void refreshAdminDetails();
   }
 
   list.addEventListener('click', event => {
@@ -532,6 +623,84 @@
   });
   country.addEventListener('change', () => { apply(); queueUiPreferencesSave(); });
   genre?.addEventListener('change', () => { apply(); queueUiPreferencesSave(); });
+  $('adminToggle').addEventListener('click', openAdminPanel);
+  $('adminClose').addEventListener('click', closeAdminPanel);
+  $('adminPanel').addEventListener('click', event => { if (event.target === $('adminPanel')) closeAdminPanel(); });
+  $('adminPanel').addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeAdminPanel();
+    }
+  });
+  $('adminLogin').addEventListener('click', async () => {
+    const now = Date.now();
+    if (now < adminLockedUntil) {
+      setAdminMessage(`Previše pokušaja. Pokušaj ponovno za ${Math.max(1, Math.ceil((adminLockedUntil - now) / 1000))} s.`);
+      return;
+    }
+    $('adminLogin').disabled = true;
+    setAdminMessage('Provjeravam…');
+    try {
+      const ok = await adminCredentialsValid($('adminUsername').value, $('adminPassword').value);
+      $('adminPassword').value = '';
+      if (ok) {
+        adminMode = true;
+        adminFailures = 0;
+        adminLockedUntil = 0;
+        setAdminMessage('');
+        updateAdminUi();
+        setAdminMessage('Admin kontrole su otključane.', true);
+        return;
+      }
+      adminFailures += 1;
+      if (adminFailures >= 5) {
+        adminFailures = 0;
+        adminLockedUntil = Date.now() + 30000;
+        setAdminMessage('Previše neuspjelih pokušaja. Prijava je zaključana 30 s.');
+      } else {
+        setAdminMessage('Neispravno korisničko ime ili lozinka.');
+      }
+      $('adminPassword').focus();
+    } finally {
+      $('adminLogin').disabled = false;
+    }
+  });
+  $('adminLogout').addEventListener('click', logoutAdmin);
+  $('adminSaveSource').addEventListener('click', async () => {
+    if (!adminMode || !current) return;
+    const value = String($('adminSource').value || '').trim();
+    if (value && !RB.safeHttp(value)) {
+      setAdminMessage('Izvor mora biti sigurna javna http/https poveznica.', true);
+      return;
+    }
+    try {
+      await RB.setAdminOverride(RB.key(current), value);
+      setAdminMessage(value ? 'Admin izvor je spremljen · ponovno povezujem…' : 'Vraćen je automatski izvor · ponovno povezujem…', true);
+      const station = current;
+      await refreshAdminDetails();
+      if (station && current === station) await play(station);
+    } catch {
+      setAdminMessage('Izvor nije moguće spremiti.', true);
+    }
+  });
+  $('adminResetSource').addEventListener('click', async () => {
+    if (!adminMode || !current) return;
+    try {
+      await RB.setAdminOverride(RB.key(current), '');
+      setAdminMessage('Vraćen je automatski izvor · ponovno povezujem…', true);
+      const station = current;
+      await refreshAdminDetails();
+      if (station && current === station) await play(station);
+    } catch {
+      setAdminMessage('Izvor nije moguće vratiti.', true);
+    }
+  });
+  $('adminOpenWeb').addEventListener('click', () => {
+    if (!adminMode || !current || !RB.safeHttp(current.homepage)) return;
+    const result = ext.tabs?.create?.({ url: current.homepage });
+    if (result?.catch) result.catch(() => setAdminMessage('Web stranicu nije moguće otvoriti.', true));
+  });
+
   refresh.addEventListener('click', () => void load(true));
   $('clearFilters').addEventListener('click', resetFilters);
   $('heroPlay').addEventListener('click', () => void toggle());
@@ -606,6 +775,7 @@
     }
   }
 
+  updateAdminUi();
   updatePlayer();
   void load(false);
 })();

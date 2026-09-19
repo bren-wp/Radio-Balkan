@@ -374,12 +374,40 @@ const RB = (() => {
     return f;
   }
 
+  async function adminOverrideFor(stationKey) {
+    stationKey = clean(stationKey).slice(0, 512);
+    if (!stationKey) return '';
+    const x = await storageGet(['rbAdminOverrides']);
+    const map = x.rbAdminOverrides && typeof x.rbAdminOverrides === 'object' ? x.rbAdminOverrides : {};
+    const value = clean(map[stationKey]);
+    return safeHttp(value) ? value : '';
+  }
+
+  async function setAdminOverride(stationKey, value) {
+    stationKey = clean(stationKey).slice(0, 512);
+    if (!stationKey) throw new Error('Stanica nije odabrana');
+    value = clean(value);
+    const x = await storageGet(['rbAdminOverrides']);
+    const map = x.rbAdminOverrides && typeof x.rbAdminOverrides === 'object' ? { ...x.rbAdminOverrides } : {};
+    if (!value) delete map[stationKey];
+    else {
+      if (!safeHttp(value)) throw new Error('Izvor mora biti sigurna javna http/https poveznica');
+      map[stationKey] = value;
+    }
+    const keys = Object.keys(map);
+    if (keys.length > 512) {
+      for (const oldKey of keys.slice(0, keys.length - 512)) delete map[oldKey];
+    }
+    await storageSet({ rbAdminOverrides: map });
+    return value;
+  }
+
   function key(station) {
     return station.stationuuid || identity(station) || `${station.countrycode}|${fold(station.name)}|${station.url_resolved || station.url}`;
   }
 
   return {
-    load, favorites, setFavorite, uiPreferences, setUiPreferences, key, fold, safeHttp, ext,
+    load, favorites, setFavorite, uiPreferences, setUiPreferences, adminOverrideFor, setAdminOverride, key, fold, safeHttp, ext,
     COUNTRIES, BALKAN_COUNTRIES, ALLOWED, BALKAN_ALLOWED, FOREIGN_CODE, MAX_FOREIGN
   };
 })();

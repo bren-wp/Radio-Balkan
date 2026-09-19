@@ -55,6 +55,11 @@ def main() -> int:
         'id="playerPrev"',
         'id="playerStop"',
         'id="playerNext"',
+        'id="adminToggle"',
+        'id="adminPanel"',
+        'role="dialog" aria-modal="true"',
+        'id="adminPassword" type="password"',
+        'id="adminSource"',
         'id="clearFilters"',
         'disabled>▶</button>',
         'Nije odabrano',
@@ -82,6 +87,11 @@ def main() -> int:
         "navigationStations()",
         "render();\n    updatePlayer();",
         "ext.runtime.sendMessage({ type: 'RB_STOP' })",
+        "async function adminCredentialsValid",
+        "RB.adminOverrideFor(RB.key(station))",
+        "RB.setAdminOverride(RB.key(current), value)",
+        "if (event.key === 'Escape')",
+        "await play(station)",
         "button.disabled = !!activeCommandToken && active",
         "function renderEmptyState(",
         "'Pokušaj ponovno'",
@@ -126,6 +136,10 @@ def main() -> int:
         "playerArtwork.setImageResource(R.drawable.ic_radio_balkan)",
         "playerPrev.setOnClickListener",
         "playerNext.setOnClickListener",
+        "showAdminLogin()",
+        "if (adminMode) {",
+        "if (!requireAdmin()) return;",
+        "applyAdminSourceChange(s,",
         "PlaybackLifecycle.canNavigate(navigationCount, !currentKey.isEmpty())",
         "PlaybackLifecycle.adjacentIndex",
         "StreamResolver.isSafeHttp(s.homepage)",
@@ -146,12 +160,15 @@ def main() -> int:
 
     on_create = method_body(android, "@Override protected void onCreate(Bundle savedInstanceState)")
     on_play = method_body(android, "@Override public void onPlay(RadioStation s)")
+    start_playback = method_body(android, "private boolean startStationPlayback(RadioStation s, boolean requestPermission)")
     if not on_create:
         errors.append("Android MainActivity: onCreate body not found")
     elif "requestNotificationPermission();" in on_create:
         errors.append("Android MainActivity: notification permission must not be requested at cold start")
-    if not on_play or "requestNotificationPermission();" not in on_play:
-        errors.append("Android MainActivity: notification permission must be requested contextually when playback starts")
+    if not on_play or "startStationPlayback(s, true);" not in on_play:
+        errors.append("Android MainActivity: a real PLAY must use the contextual playback start path")
+    if not start_playback or "if (requestPermission) requestNotificationPermission();" not in start_playback:
+        errors.append("Android MainActivity: notification permission must be requested only by a real playback start")
 
     for needle in (
         'row.more.setContentDescription("Više opcija za " + s.name)',
@@ -203,6 +220,10 @@ def main() -> int:
         'heroLabel = "▶  Nastavi"',
         'playLabel = "Ⅱ"',
         "Kind: hitPlayerStop",
+        "hitAdmin",
+        "if adminModeEnabled()",
+        "if !requireAdmin()",
+        "restartCurrentStationIfPlaying",
         "canStopPlayback(currentIdx, stopped)",
         "canAdjustVolume(vol, -5)",
         "canAdjustVolume(vol, 5)",

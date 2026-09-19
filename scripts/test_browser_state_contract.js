@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { createHash } = require('node:crypto');
+const { TextEncoder } = require('node:util');
 
 class Element {
   constructor(id = '') {
@@ -77,7 +79,11 @@ function deferred() {
 const ids = [
   'search', 'country', 'genre', 'stations', 'status', 'refresh', 'heroPlay',
   'playerToggle', 'playerPrev', 'playerStop', 'playerNext', 'favoritesOnly', 'clearFilters', 'playerFav', 'playerState',
-  'playerName', 'playerMeta', 'heroName', 'heroMeta', 'playerLogo'
+  'playerName', 'playerMeta', 'heroName', 'heroMeta', 'playerLogo',
+  'adminToggle', 'adminPanel', 'adminClose', 'adminRole', 'adminLoginView', 'adminControls',
+  'adminUsername', 'adminPassword', 'adminLogin', 'adminMessage', 'adminStationName',
+  'adminSource', 'adminSaveSource', 'adminResetSource', 'adminHomepage', 'adminOpenWeb',
+  'adminLogout', 'adminControlMessage'
 ];
 const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 
@@ -122,6 +128,7 @@ let stopCalls = 0;
 let playCalls = 0;
 let lastPlayedStation = null;
 let favoriteStore = {};
+let adminOverrides = {};
 const toggleQueue = [];
 const stopQueue = [];
 
@@ -164,6 +171,16 @@ const context = {
   setTimeout,
   clearTimeout,
   Promise,
+  crypto: {
+    subtle: {
+      async digest(algorithm, bytes) {
+        assert.equal(String(algorithm).toUpperCase(), 'SHA-256');
+        const digest = createHash('sha256').update(Buffer.from(bytes)).digest();
+        return Uint8Array.from(digest).buffer;
+      }
+    }
+  },
+  TextEncoder,
   document: {
     getElementById(id) {
       if (!elements[id]) throw new Error(`Unknown element id: ${id}`);
@@ -205,6 +222,14 @@ const context = {
     },
     async setUiPreferences() {
       return {};
+    },
+    async adminOverrideFor(key) {
+      return adminOverrides[key] || '';
+    },
+    async setAdminOverride(key, value) {
+      if (value) adminOverrides[key] = value;
+      else delete adminOverrides[key];
+      return value || '';
     }
   }
 };
@@ -230,6 +255,21 @@ async function main() {
   assert.equal(elements.playerStop.disabled, false, 'player stop must be enabled after a station is available');
   assert.equal(elements.playerFav.disabled, false, 'favorite control must be enabled after a station is available');
   assert.equal(elements.playerFav.attributes['aria-pressed'], 'false', 'favorite state must be announced accessibly');
+  assert.equal(elements.adminControls.hidden, true, 'advanced source controls must stay hidden before admin login');
+  elements.adminToggle.dispatch('click');
+  assert.equal(elements.adminPanel.hidden, false, 'admin toggle must open the login dialog');
+  assert.equal(elements.adminLoginView.hidden, false, 'login form must be visible before authentication');
+  elements.adminUsername.value = 'brendigo';
+  elements.adminPassword.value = 'brendigo' + String(2025);
+  elements.adminLogin.dispatch('click');
+  await flush();
+  assert.equal(elements.adminControls.hidden, false, 'configured administrator credentials must unlock advanced controls');
+  assert.equal(elements.adminLoginView.hidden, true, 'login form must hide after successful authentication');
+  assert.equal(elements.adminPassword.value, '', 'administrator password field must be cleared after authentication');
+  elements.adminLogout.dispatch('click');
+  await flush();
+  assert.equal(elements.adminPanel.hidden, true, 'logout must close the administrator panel');
+  assert.equal(elements.adminControls.hidden, true, 'logout must immediately hide advanced controls');
 
   elements.genre.value = 'jazz';
   elements.genre.dispatch('change');
@@ -377,6 +417,14 @@ async function main() {
   await flush();
   assert.equal(playCalls, coldAdjacentCalls, 'cold adjacent controls must not start playback without a current station');
   assert.equal(elements.heroPlay.disabled, false, 'hero play must remain available and may start the first visible station');
+
+  adminOverrides['station-a'] = 'https://override.example/live';
+  const overrideCallsBefore = playCalls;
+  getState = { epoch: 'epoch-b', revision: 10, station: stationA, playing: true, sessionId: 'session-admin-override' };
+  elements.heroPlay.dispatch('click');
+  await flush();
+  assert.equal(playCalls, overrideCallsBefore + 1, 'hero play must remain functional with an admin-configured source override');
+  assert.equal(lastPlayedStation?.url_resolved, 'https://override.example/live', 'saved admin source override must be applied without exposing it in the normal UI');
 
   console.log('Browser popup state and UI regression tests OK');
 }

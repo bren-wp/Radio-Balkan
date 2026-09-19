@@ -21,6 +21,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
+import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
@@ -88,6 +89,9 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private String currentKey = "";
     private String currentCountryCode = "";
     private boolean playing;
+    private boolean adminMode;
+    private int adminFailures;
+    private long adminLockedUntilMs;
     private boolean playbackStopped = true;
     private RadioStation featured;
     private Runnable searchRunnable;
@@ -138,6 +142,10 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         }
         genre = state.genre();
         tab = validTab(state.tab()) ? state.tab() : "all";
+        if ("replaced".equals(tab) || "broken".equals(tab)) {
+            tab = "all";
+            state.setTab("all");
+        }
         navSelection = navSelectionForTab(tab);
         images = new ImageLoader();
         repository = new RadioRepository(this);
@@ -512,27 +520,112 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     }
 
     private void showAppMenu() {
-        String[] items = {"Pretraži", "Filtriraj stanice", "Poništi filtre", "Osvježi popis", "Provjeri prikazane stanice", "Rezervni izvori", "Nedostupne stanice", "O aplikaciji"};
-        new AlertDialog.Builder(this).setTitle("Radio Balkan").setItems(items, (d, which) -> {
+        List<String> itemList = new ArrayList<>();
+        itemList.add("Pretraži");
+        itemList.add("Filtriraj stanice");
+        itemList.add("Poništi filtre");
+        itemList.add("Osvježi popis");
+        itemList.add("Provjeri prikazane stanice");
+        if (adminMode) {
+            itemList.add("Rezervni izvori");
+            itemList.add("Nedostupne stanice");
+            itemList.add("Odjava administratora");
+        } else {
+            itemList.add("Admin prijava");
+        }
+        itemList.add("O aplikaciji");
+        String[] items = itemList.toArray(new String[0]);
+        new AlertDialog.Builder(this).setTitle(adminMode ? "Radio Balkan · Admin" : "Radio Balkan").setItems(items, (d, which) -> {
             String chosen = items[which];
-            if ("Pretraži".equals(chosen)) {
-                setSearchVisible(true);
-            } else if ("Filtriraj stanice".equals(chosen)) {
-                showBrowseDialog();
-            } else if ("Poništi filtre".equals(chosen)) {
-                resetBrowseFilters();
-            } else if ("Osvježi popis".equals(chosen)) {
-                refreshCatalog();
-            } else if ("Provjeri prikazane stanice".equals(chosen)) {
-                checkVisibleStreams();
-            } else if ("Rezervni izvori".equals(chosen)) {
-                tab = "replaced"; state.setTab(tab); selectBottomNav("radio"); applyFilterAsync();
-            } else if ("Nedostupne stanice".equals(chosen)) {
-                tab = "broken"; state.setTab(tab); selectBottomNav("radio"); applyFilterAsync();
-            } else {
-                showAboutDialog();
-            }
+            if ("Pretraži".equals(chosen)) setSearchVisible(true);
+            else if ("Filtriraj stanice".equals(chosen)) showBrowseDialog();
+            else if ("Poništi filtre".equals(chosen)) resetBrowseFilters();
+            else if ("Osvježi popis".equals(chosen)) refreshCatalog();
+            else if ("Provjeri prikazane stanice".equals(chosen)) checkVisibleStreams();
+            else if ("Rezervni izvori".equals(chosen) && requireAdmin()) { tab = "replaced"; state.setTab(tab); selectBottomNav("radio"); applyFilterAsync(); }
+            else if ("Nedostupne stanice".equals(chosen) && requireAdmin()) { tab = "broken"; state.setTab(tab); selectBottomNav("radio"); applyFilterAsync(); }
+            else if ("Admin prijava".equals(chosen)) showAdminLogin();
+            else if ("Odjava administratora".equals(chosen)) logoutAdmin();
+            else if ("O aplikaciji".equals(chosen)) showAboutDialog();
         }).show();
+    }
+
+    private boolean requireAdmin() {
+        if (adminMode) return true;
+        Toast.makeText(this, "Ova opcija dostupna je samo administratoru", Toast.LENGTH_SHORT).show();
+        return false;
+    }
+
+    private void logoutAdmin() {
+        adminMode = false;
+        if ("replaced".equals(tab) || "broken".equals(tab)) {
+            tab = "all";
+            state.setTab(tab);
+            selectBottomNav("all");
+            applyFilterAsync();
+        }
+        statusText.setText("Administrator je odjavljen");
+        Toast.makeText(this, "Admin način rada je isključen", Toast.LENGTH_SHORT).show();
+    }
+
+    private void showAdminLogin() {
+        long now = System.currentTimeMillis();
+        if (now < adminLockedUntilMs) {
+            long seconds = Math.max(1L, (adminLockedUntilMs - now + 999L) / 1000L);
+            Toast.makeText(this, "Previše neuspjelih pokušaja. Pokušaj ponovno za " + seconds + " s.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(18), dp(8), dp(18), 0);
+        EditText username = new EditText(this);
+        username.setSingleLine(true);
+        username.setHint("Korisničko ime");
+        username.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+        panel.addView(username, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+        EditText password = new EditText(this);
+        password.setSingleLine(true);
+        password.setHint("Lozinka");
+        password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        panel.addView(password, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Admin prijava")
+                .setMessage("Administratorske kontrole otključavaju web stranicu stanice i upravljanje izvorima.")
+                .setView(panel)
+                .setPositiveButton("Prijavi se", null)
+                .setNegativeButton("Odustani", null)
+                .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            long clickNow = System.currentTimeMillis();
+            if (clickNow < adminLockedUntilMs) {
+                long seconds = Math.max(1L, (adminLockedUntilMs - clickNow + 999L) / 1000L);
+                password.setText("");
+                password.setError("Prijava je zaključana još " + seconds + " s.");
+                return;
+            }
+            if (AdminAuth.matches(username.getText().toString(), password.getText().toString())) {
+                adminMode = true;
+                adminFailures = 0;
+                adminLockedUntilMs = 0;
+                password.setText("");
+                statusText.setText("Admin način rada · brendigo");
+                Toast.makeText(this, "Administrator je prijavljen", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+                return;
+            }
+            password.setText("");
+            adminFailures++;
+            if (adminFailures >= 5) {
+                adminFailures = 0;
+                adminLockedUntilMs = System.currentTimeMillis() + 30_000L;
+                password.setError("Previše pokušaja. Prijava je privremeno zaključana.");
+            } else {
+                password.setError("Neispravno korisničko ime ili lozinka");
+            }
+            password.requestFocus();
+        }));
+        dialog.show();
     }
 
     private void showBrowseDialog() {
@@ -854,7 +947,6 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     @Override public void onPlay(RadioStation s) {
         if (s == null) return;
         hideKeyboard();
-        requestNotificationPermission();
         String key = s.key();
         PlaybackLifecycle.UiCommand command = PlaybackLifecycle.uiCommand(key.equals(currentKey), playing, playbackStopped);
         if (command != PlaybackLifecycle.UiCommand.PLAY) {
@@ -863,11 +955,19 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                     : RadioPlayerService.ACTION_RESUME);
             return;
         }
+        startStationPlayback(s, true);
+    }
+
+    private boolean startStationPlayback(RadioStation s, boolean requestPermission) {
+        if (s == null) return false;
+        if (requestPermission) requestNotificationPermission();
+        String key = s.key();
         Intent i = new Intent(this, RadioPlayerService.class).setAction(RadioPlayerService.ACTION_PLAY);
         i.putExtra(RadioPlayerService.EXTRA_KEY, key); i.putExtra(RadioPlayerService.EXTRA_NAME, s.name); i.putExtra(RadioPlayerService.EXTRA_META, s.meta());
-        i.putExtra(RadioPlayerService.EXTRA_URL, s.url); i.putExtra(RadioPlayerService.EXTRA_RESOLVED, s.urlResolved); i.putExtra(RadioPlayerService.EXTRA_UUID, s.stationUuid); i.putExtra(RadioPlayerService.EXTRA_HOMEPAGE, s.homepage); i.putExtra(RadioPlayerService.EXTRA_COUNTRY, s.countryCode);
+        String resolvedForPlayback = !safe(s.activeUrl).isEmpty() ? s.activeUrl : s.urlResolved;
+        i.putExtra(RadioPlayerService.EXTRA_URL, s.url); i.putExtra(RadioPlayerService.EXTRA_RESOLVED, resolvedForPlayback); i.putExtra(RadioPlayerService.EXTRA_UUID, s.stationUuid); i.putExtra(RadioPlayerService.EXTRA_HOMEPAGE, s.homepage); i.putExtra(RadioPlayerService.EXTRA_COUNTRY, s.countryCode);
         try { if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i); }
-        catch (Throwable t) { AppLog.e(this, "player-play", t); Toast.makeText(this, "Reprodukciju nije moguće pokrenuti", Toast.LENGTH_LONG).show(); return; }
+        catch (Throwable t) { AppLog.e(this, "player-play", t); Toast.makeText(this, "Reprodukciju nije moguće pokrenuti", Toast.LENGTH_LONG).show(); return false; }
         currentKey = key;
         state.addRecent(key);
         state.setLastStation(key, s.name, s.meta());
@@ -879,6 +979,16 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         playbackStopped = false;
         updatePlaybackControls();
         adapter.setPlayback(currentKey, false);
+        return true;
+    }
+
+    private void applyAdminSourceChange(RadioStation s, String successMessage) {
+        boolean restart = s != null && s.key().equals(currentKey) && playing;
+        if (restart && startStationPlayback(s, false)) {
+            statusText.setText(successMessage + " · ponovno povezujem");
+        } else {
+            statusText.setText(successMessage + (s != null && s.key().equals(currentKey) && !playbackStopped ? " · primijenit će se pri nastavku" : ""));
+        }
     }
 
     private void playAdjacent(int delta) {
@@ -912,38 +1022,42 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         List<String> options = new ArrayList<>();
         options.add("▶ Slušaj");
         options.add(state.favorites().contains(s.key()) ? "Ukloni iz omiljenih" : "Dodaj u omiljene");
-        if (StreamResolver.isHttp(s.homepage)) options.add("Web stranica");
-        options.add("Kopiraj poveznicu za reprodukciju");
-        options.add("Odaberi drugi izvor");
         options.add("Provjeri dostupnost");
-        if (state.manualReplacement(s.key()).isEmpty() && (!state.autoReplacement(s.key()).isEmpty() || !state.backups(s.key()).isEmpty())) options.add("Vrati automatski odabir");
+        if (adminMode) {
+            if (StreamResolver.isHttp(s.homepage)) options.add("Web stranica");
+            options.add("Kopiraj poveznicu za reprodukciju");
+            options.add("Odaberi drugi izvor");
+            if (state.manualReplacement(s.key()).isEmpty() && (!state.autoReplacement(s.key()).isEmpty() || !state.backups(s.key()).isEmpty())) options.add("Vrati automatski odabir");
+        }
         String[] array = options.toArray(new String[0]);
         new AlertDialog.Builder(this).setTitle(s.name).setItems(array, (d, which) -> {
             String chosen = array[which];
             if (chosen.startsWith("▶")) onPlay(s);
             else if (chosen.equals("Dodaj u omiljene") || chosen.equals("Ukloni iz omiljenih")) onFavorite(s);
-            else if (chosen.equals("Web stranica")) openWeb(s);
-            else if (chosen.equals("Kopiraj poveznicu za reprodukciju")) copyText(s.activeUrl);
-            else if (chosen.equals("Odaberi drugi izvor")) showSourceDialog(s);
+            else if (chosen.equals("Web stranica") && requireAdmin()) openWeb(s);
+            else if (chosen.equals("Kopiraj poveznicu za reprodukciju") && requireAdmin()) copyText(s.activeUrl);
+            else if (chosen.equals("Odaberi drugi izvor") && requireAdmin()) showSourceDialog(s);
             else if (chosen.equals("Provjeri dostupnost")) checkOne(s);
-            else if (chosen.equals("Vrati automatski odabir")) {
+            else if (chosen.equals("Vrati automatski odabir") && requireAdmin()) {
                 state.clearAutomaticSources(s.key());
                 String manual = state.manualReplacement(s.key());
                 s.replaced = !manual.isEmpty();
                 s.activeUrl = !manual.isEmpty() ? manual : (!s.urlResolved.isEmpty() ? s.urlResolved : s.url);
                 adapter.notifyDataSetChanged();
-                statusText.setText(manual.isEmpty() ? "Vraćen automatski odabir izvora" : "Ručni izvor ostaje aktivan");
+                applyAdminSourceChange(s, manual.isEmpty() ? "Vraćen automatski odabir izvora" : "Ručni izvor ostaje aktivan");
             }
         }).setNegativeButton("Zatvori", null).show();
     }
 
     private void openWeb(RadioStation s) {
+        if (!requireAdmin()) return;
         if (!StreamResolver.isSafeHttp(s.homepage)) { Toast.makeText(this, "Web stranica nije dostupna", Toast.LENGTH_SHORT).show(); return; }
         try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(s.homepage))); }
         catch (Throwable t) { AppLog.e(this, "open-web", t); Toast.makeText(this, "Nije moguće otvoriti web stranicu", Toast.LENGTH_SHORT).show(); }
     }
 
     private void showSourceDialog(RadioStation s) {
+        if (!requireAdmin()) return;
         final EditText input = new EditText(this); input.setSingleLine(true);
         String existing = state.manualReplacement(s.key()); input.setText(existing.isEmpty() ? s.activeUrl : existing);
         input.setTextColor(Color.WHITE); input.setHintTextColor(0xFF85756D); input.setHint("https://stream…"); input.setBackground(rounded(0xFF2A211D, 0xFF4B3A31, 10)); input.setPadding(dp(12), 0, dp(12), 0);
@@ -960,6 +1074,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                     s.replaced = !state.autoReplacement(s.key()).isEmpty();
                     s.activeUrl = !state.autoReplacement(s.key()).isEmpty() ? state.autoReplacement(s.key()) : (!s.urlResolved.isEmpty() ? s.urlResolved : s.url);
                     adapter.notifyDataSetChanged();
+                    applyAdminSourceChange(s, "Vraćen automatski odabir izvora");
                     dialog.dismiss();
                     return;
                 }
@@ -999,7 +1114,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                             s.activeUrl = checkedUrl;
                             s.health = "ok";
                             adapter.notifyDataSetChanged();
-                            statusText.setText("Izvor je provjeren i spremljen");
+                            applyAdminSourceChange(s, "Izvor je provjeren i spremljen");
                             dialog.dismiss();
                         });
                     });

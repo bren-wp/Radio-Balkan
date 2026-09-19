@@ -13,6 +13,37 @@ import (
 	"time"
 )
 
+func TestAdminCredentialsAcceptOnlyConfiguredAdministrator(t *testing.T) {
+	password := fmt.Sprintf("%s%d", "brendigo", 2025)
+	if !adminCredentialsValid("brendigo", password) {
+		t.Fatal("configured administrator credentials were rejected")
+	}
+	if !adminCredentialsValid(" BRENDIGO ", password) {
+		t.Fatal("administrator username normalization regressed")
+	}
+	if adminCredentialsValid("user", password) {
+		t.Fatal("non-admin username was accepted")
+	}
+	if adminCredentialsValid("brendigo", "wrong") {
+		t.Fatal("wrong administrator password was accepted")
+	}
+}
+
+func TestSourceChangeRestartDecision(t *testing.T) {
+	if shouldRestartAfterSourceChange("", "station", true) {
+		t.Fatal("missing current station must not restart")
+	}
+	if shouldRestartAfterSourceChange("station", "station", false) {
+		t.Fatal("paused player must not restart after admin source change")
+	}
+	if shouldRestartAfterSourceChange("other", "station", true) {
+		t.Fatal("unrelated playing station must not restart")
+	}
+	if !shouldRestartAfterSourceChange("station", "station", true) {
+		t.Fatal("active changed station must restart onto the new source")
+	}
+}
+
 func TestSafeHTTPURLRejectsPrivateAndCredentialedTargets(t *testing.T) {
 	tests := []string{
 		"",

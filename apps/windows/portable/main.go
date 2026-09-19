@@ -6,6 +6,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	_ "embed"
 	"encoding/base64"
 	"encoding/binary"
@@ -73,6 +75,7 @@ const (
 	WS_TABSTOP          = 0x00010000
 	WS_BORDER           = 0x00800000
 	ES_AUTOHSCROLL      = 0x0080
+	ES_PASSWORD         = 0x0020
 	EM_SETCUEBANNER     = 0x1501
 
 	SW_SHOW       = 5
@@ -275,6 +278,7 @@ const (
 	hitCountryChoice
 	hitGenreChoice
 	hitAbout
+	hitAdmin
 )
 
 type HitRegion struct {
@@ -311,6 +315,9 @@ type App struct {
 	countryMenuIndex                         int
 	genreMenuIndex                           int
 	safeMode                                 bool
+	adminMode                                bool
+	adminFailures                            int
+	adminLockedUntil                         time.Time
 	searchTimer                              *time.Timer
 	searchSeq                                uint64
 	scroll                                   int
@@ -374,6 +381,103 @@ type inputDialogState struct {
 var inputDialogClassOnce sync.Once
 var inputDialogClassErr error
 var activeInputDialog *inputDialogState
+
+var adminPasswordDigest = [32]byte{0x79, 0xcf, 0x89, 0x3d, 0xcf, 0xdb, 0x18, 0xec, 0xc6, 0xeb, 0xa5, 0x91, 0x89, 0x6f, 0x89, 0x6c, 0x5d, 0xd3, 0xea, 0xb9, 0x53, 0x54, 0xd4, 0xe7, 0xe4, 0x50, 0x3d, 0x13, 0x29, 0x2f, 0xe9, 0xa0}
+
+func adminCredentialsValid(username, password string) bool {
+	if !strings.EqualFold(strings.TrimSpace(username), "brendigo") {
+		return false
+	}
+	sum := sha256.Sum256([]byte("RadioBalkanAdmin:v1:" + password))
+	return subtle.ConstantTimeCompare(sum[:], adminPasswordDigest[:]) == 1
+}
+
+func adminModeEnabled() bool {
+	app.mu.RLock()
+	enabled := app.adminMode
+	app.mu.RUnlock()
+	return enabled
+}
+
+func requireAdmin() bool {
+	if adminModeEnabled() {
+		return true
+	}
+	setStatus("Ova opcija dostupna je samo administratoru")
+	invalidate()
+	return false
+}
+
+func logoutAdmin() {
+	app.mu.Lock()
+	app.adminMode = false
+	if app.tab == "replaced" || app.tab == "broken" {
+		app.tab = "all"
+		app.scroll = 0
+	}
+	app.mu.Unlock()
+	app.stateMu.Lock()
+	if app.state.Tab == "replaced" || app.state.Tab == "broken" {
+		app.state.Tab = "all"
+	}
+	app.stateMu.Unlock()
+	scheduleStateSave()
+	rebuildFilter()
+	setStatus("Administrator je odjavljen")
+	invalidate()
+}
+
+func showAdminLogin() {
+	app.mu.RLock()
+	lockedUntil := app.adminLockedUntil
+	app.mu.RUnlock()
+	if time.Now().Before(lockedUntil) {
+		remaining := time.Until(lockedUntil).Round(time.Second)
+		setStatus("Admin prijava privremeno je zaključana · " + remaining.String())
+		invalidate()
+		return
+	}
+	username, ok := inputDialog(app.hwnd, "Admin prijava", "Korisničko ime", "")
+	if !ok {
+		return
+	}
+	password, ok := passwordDialog(app.hwnd, "Admin prijava", "Lozinka")
+	if !ok {
+		return
+	}
+	if adminCredentialsValid(username, password) {
+		app.mu.Lock()
+		app.adminMode = true
+		app.adminFailures = 0
+		app.adminLockedUntil = time.Time{}
+		app.mu.Unlock()
+		setStatus("Admin način rada · brendigo")
+		invalidate()
+		return
+	}
+	app.mu.Lock()
+	app.adminFailures++
+	if app.adminFailures >= 5 {
+		app.adminFailures = 0
+		app.adminLockedUntil = time.Now().Add(30 * time.Second)
+	}
+	locked := !app.adminLockedUntil.IsZero() && time.Now().Before(app.adminLockedUntil)
+	app.mu.Unlock()
+	if locked {
+		setStatus("Previše neuspjelih prijava · pokušaj ponovno za 30 s")
+	} else {
+		setStatus("Neispravno korisničko ime ili lozinka")
+	}
+	invalidate()
+}
+
+func toggleAdminSession() {
+	if adminModeEnabled() {
+		logoutAdmin()
+		return
+	}
+	showAdminLogin()
+}
 
 type CountryDef struct {
 	Code string
@@ -919,6 +1023,10 @@ func main() {
 	app.genre = app.state.Genre
 	if isValidTab(app.state.Tab) {
 		app.tab = app.state.Tab
+	}
+	if app.tab == "replaced" || app.tab == "broken" {
+		app.tab = "all"
+		app.state.Tab = "all"
 	}
 	if app.safeMode {
 		// A previous launch did not finish cleanly. Start conservatively and avoid
@@ -1685,7 +1793,23 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 		drawRounded(hdc, x, 31+(42-h)/2, x+4, 31+(42+h)/2, 2, color(255, 170, 50), color(255, 170, 50))
 	}
 	selectFont(hdc, app.hFontBold)
-	text(hdc, "Radio Balkan", 82, 25, sidebarWidth-18, 62, rgb(247, 248, 250), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+	text(hdc, "Radio Balkan", 82, 25, sidebarWidth-18, 55, rgb(247, 248, 250), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+	admin := adminModeEnabled()
+	adminLabel := "Admin prijava"
+	adminIcon := "♙"
+	adminValue := "login"
+	if admin {
+		adminLabel = "brendigo · odjava"
+		adminIcon = "♛"
+		adminValue = "logout"
+	}
+	selectFont(hdc, app.hFontSmall)
+	adminColor := rgb(150, 139, 132)
+	if admin {
+		adminColor = rgb(255, 177, 55)
+	}
+	text(hdc, adminIcon+"  "+adminLabel, 82, 52, sidebarWidth-18, 82, adminColor, DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+	app.hits = append(app.hits, HitRegion{R: RECT{76, 52, sidebarWidth - 14, 84}, Kind: hitAdmin, Index: -1, Value: adminValue})
 
 	app.mu.RLock()
 	tab, genre := app.tab, strings.ToLower(strings.TrimSpace(app.genre))
@@ -1715,7 +1839,7 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 	drawSidebarItem(hdc, y, "♫", "Jazz", genre == "jazz", hitTab, "genre:jazz")
 
 	toolsY := y + 60
-	if cr.Bottom-playerHeight > toolsY+110 {
+	if admin && cr.Bottom-playerHeight > toolsY+110 {
 		drawSidebarLabel(hdc, "UPRAVLJANJE", toolsY)
 		toolsY += 28
 		drawSidebarItem(hdc, toolsY, "⇄", "Rezervni izvori", tab == "replaced", hitTab, "replaced")
@@ -1723,13 +1847,12 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 		drawSidebarItem(hdc, toolsY, "!", "Nedostupne", tab == "broken", hitTab, "broken")
 	}
 
-	// Warm footer quote as in the reference artwork.
+	// Warm footer quote remains decorative and may collapse on compact heights.
 	quoteTop := cr.Bottom - playerHeight - 118
 	if quoteTop > y+28 {
 		drawRounded(hdc, 14, quoteTop, sidebarWidth-14, quoteTop+92, 16, color(28, 24, 22), color(54, 43, 37))
 		selectFont(hdc, app.hFontSmall)
 		text(hdc, "Isti ljudi. Ista glazba.\nBliži nego ikad.", 28, quoteTop+18, sidebarWidth-28, quoteTop+68, rgb(235, 171, 91), DT_LEFT|DT_WORDBREAK)
-		text(hdc, "♡", sidebarWidth-55, quoteTop+57, sidebarWidth-25, quoteTop+84, rgb(255, 177, 55), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	}
 }
 
@@ -2387,10 +2510,12 @@ func drawStationCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStati
 		app.hits = append(app.hits, HitRegion{R: RECT{x, y, x + w, y + 23}, Kind: kind, Index: idx, Value: key})
 		x += w + 6
 	}
-	action("Web", 40, hitWeb)
-	action("Kopiraj", 54, hitLink)
+	if adminModeEnabled() {
+		action("Web", 40, hitWeb)
+		action("Kopiraj", 54, hitLink)
+		action("Izvor", 46, hitReplace)
+	}
 	action("✓", 26, hitCheckStation)
-	action("Izvor", 46, hitReplace)
 	app.stateMu.RLock()
 	fav := app.state.Favorites[key]
 	app.stateMu.RUnlock()
@@ -3207,20 +3332,26 @@ func handleClick(x, y int32) {
 				activateStation(idx)
 			}
 		case hitLink:
-			if idx := stationIndexFromHit(h); idx >= 0 {
-				copyStationLink(idx)
+			if requireAdmin() {
+				if idx := stationIndexFromHit(h); idx >= 0 {
+					copyStationLink(idx)
+				}
 			}
 		case hitWeb:
-			if idx := stationIndexFromHit(h); idx >= 0 {
-				openStationWeb(idx)
+			if requireAdmin() {
+				if idx := stationIndexFromHit(h); idx >= 0 {
+					openStationWeb(idx)
+				}
 			}
 		case hitFavorite:
 			if idx := stationIndexFromHit(h); idx >= 0 {
 				toggleFavorite(idx)
 			}
 		case hitReplace:
-			if idx := stationIndexFromHit(h); idx >= 0 {
-				replaceStation(idx)
+			if requireAdmin() {
+				if idx := stationIndexFromHit(h); idx >= 0 {
+					replaceStation(idx)
+				}
 			}
 		case hitCheckStation:
 			if idx := stationIndexFromHit(h); idx >= 0 {
@@ -3245,7 +3376,9 @@ func handleClick(x, y int32) {
 			postUI()
 			safeGo("manual-health", healthCheckAll)
 		case hitAbout:
-			messageBox(hwndOrZero(), "Radio Balkan", "Radio Balkan "+appVersion+"\n\nRadio stanice samo iz Hrvatske, Bosne i Hercegovine, Srbije, Slovenije, Sjeverne Makedonije, Albanije i Crne Gore.\nFavoriti, povijest slušanja, automatska provjera dostupnosti i zamjenski izvori rade lokalno na tvojem računalu.", MB_ICONINFORMATION)
+			messageBox(hwndOrZero(), "Radio Balkan", "Radio Balkan "+appVersion+"\n\nRadio stanice samo iz Hrvatske, Bosne i Hercegovine, Srbije, Slovenije, Sjeverne Makedonije, Albanije i Crne Gore.\nFavoriti i povijest slušanja rade lokalno na tvojem računalu. Napredne kontrole izvora dostupne su samo u Admin načinu rada.", MB_ICONINFORMATION)
+		case hitAdmin:
+			toggleAdminSession()
 		case hitRefresh:
 			app.mu.Lock()
 			app.countryMenuOpen = false
@@ -3584,6 +3717,9 @@ func rememberReplacement(idx int, key, u string) {
 	scheduleStateSave()
 }
 func copyStationLink(idx int) {
+	if !requireAdmin() {
+		return
+	}
 	app.mu.RLock()
 	if idx < 0 || idx >= len(app.stations) {
 		app.mu.RUnlock()
@@ -3605,6 +3741,9 @@ func copyStationLink(idx int) {
 	invalidate()
 }
 func openStationWeb(idx int) {
+	if !requireAdmin() {
+		return
+	}
 	app.mu.RLock()
 	if idx < 0 || idx >= len(app.stations) {
 		app.mu.RUnlock()
@@ -3634,7 +3773,25 @@ func toggleFavorite(idx int) {
 	rebuildFilter()
 	invalidate()
 }
+func shouldRestartAfterSourceChange(currentKey, changedKey string, playing bool) bool {
+	return playing && currentKey != "" && currentKey == changedKey
+}
+
+func restartCurrentStationIfPlaying(key string, fallback int) bool {
+	app.mu.RLock()
+	restart := shouldRestartAfterSourceChange(app.currentKey, key, app.playing)
+	app.mu.RUnlock()
+	if !restart {
+		return false
+	}
+	playStationByKey(key, fallback)
+	return true
+}
+
 func replaceStation(idx int) {
+	if !requireAdmin() {
+		return
+	}
 	app.mu.RLock()
 	if idx < 0 || idx >= len(app.stations) {
 		app.mu.RUnlock()
@@ -3651,7 +3808,11 @@ func replaceStation(idx int) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		clearReplacement(idx, key)
-		setStatus("Vraćen automatski odabir · " + s.Name)
+		if restartCurrentStationIfPlaying(key, idx) {
+			setStatus("Vraćen automatski odabir · ponovno povezujem")
+		} else {
+			setStatus("Vraćen automatski odabir · " + s.Name)
+		}
 		postUI()
 		return
 	}
@@ -3667,7 +3828,11 @@ func replaceStation(idx int) {
 		}
 		rememberReplacement(idx, key, resolved)
 		rebuildFilter()
-		setStatus("Izvor promijenjen · " + s.Name)
+		if restartCurrentStationIfPlaying(key, idx) {
+			setStatus("Izvor promijenjen · ponovno povezujem")
+		} else {
+			setStatus("Izvor promijenjen · " + s.Name)
+		}
 		postUI()
 	})
 }
@@ -6080,6 +6245,94 @@ func finishInputDialog(ok bool) {
 	if st.hwnd != 0 {
 		procDestroyWindow.Call(uintptr(st.hwnd))
 	}
+}
+
+func passwordDialog(parent syscall.Handle, title, prompt string) (string, bool) {
+	if err := ensureInputDialogClass(); err != nil {
+		logError("password-dialog-class", err)
+		return "", false
+	}
+	if activeInputDialog != nil {
+		return "", false
+	}
+	st := &inputDialogState{}
+	activeInputDialog = st
+	defer func() { activeInputDialog = nil }()
+
+	hInst, _, _ := kernel32.NewProc("GetModuleHandleW").Call(0)
+	x, y := int32(360), int32(220)
+	if parent != 0 {
+		var pr RECT
+		if r, _, _ := procGetWindowRect.Call(uintptr(parent), uintptr(unsafe.Pointer(&pr))); r != 0 {
+			x = pr.Left + (pr.Right-pr.Left-620)/2
+			y = pr.Top + (pr.Bottom-pr.Top-285)/2
+		}
+	}
+	h, _, e := procCreateWindowEx.Call(
+		WS_EX_DLGMODALFRAME,
+		uintptr(unsafe.Pointer(u16(inputDialogClassName))),
+		uintptr(unsafe.Pointer(u16(title))),
+		WS_POPUP|WS_CAPTION|WS_SYSMENU|WS_VISIBLE,
+		uintptr(x), uintptr(y), 620, 285,
+		uintptr(parent), 0, hInst, 0,
+	)
+	if h == 0 {
+		logError("password-dialog-create", fmt.Errorf("CreateWindowExW: %v", e))
+		return "", false
+	}
+	st.hwnd = syscall.Handle(h)
+	enableImmersiveDark(st.hwnd)
+
+	label, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("STATIC"))), uintptr(unsafe.Pointer(u16(prompt))), WS_CHILD|WS_VISIBLE, 24, 22, 566, 92, h, 0, hInst, 0)
+	edit, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("EDIT"))), uintptr(unsafe.Pointer(u16(""))), WS_CHILD|WS_VISIBLE|WS_TABSTOP|WS_BORDER|ES_AUTOHSCROLL|ES_PASSWORD, 24, 122, 566, 34, h, 2201, hInst, 0)
+	cancelBtn, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("BUTTON"))), uintptr(unsafe.Pointer(u16("Odustani"))), WS_CHILD|WS_VISIBLE|WS_TABSTOP, 382, 180, 96, 38, h, 2102, hInst, 0)
+	okBtn, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("BUTTON"))), uintptr(unsafe.Pointer(u16("Prijavi se"))), WS_CHILD|WS_VISIBLE|WS_TABSTOP, 488, 180, 102, 38, h, 2101, hInst, 0)
+	if edit == 0 || label == 0 || cancelBtn == 0 || okBtn == 0 {
+		logError("password-dialog-controls", errors.New("nije moguće izraditi sve kontrole dijaloga"))
+		procDestroyWindow.Call(h)
+		return "", false
+	}
+	st.edit = syscall.Handle(edit)
+	for _, ch := range []uintptr{label, edit, cancelBtn, okBtn} {
+		procSendMessage.Call(ch, 0x0030, uintptr(app.hFontSmall), 1)
+		procSetWindowTheme.Call(ch, uintptr(unsafe.Pointer(u16("DarkMode_CFD"))), 0)
+	}
+	procSetFocus.Call(edit)
+	procEnableWindow.Call(uintptr(parent), 0)
+	defer func() {
+		if parent != 0 {
+			procEnableWindow.Call(uintptr(parent), 1)
+			procSetForegroundWindow.Call(uintptr(parent))
+		}
+	}()
+
+	var m MSG
+	for !st.done {
+		r, _, _ := procGetMessage.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
+		if int32(r) <= 0 {
+			if int32(r) == 0 {
+				procPostQuitMessage.Call(0)
+			}
+			st.done = true
+			break
+		}
+		if m.Message == WM_KEYDOWN {
+			if m.WParam == VK_RETURN {
+				finishInputDialog(true)
+				continue
+			}
+			if m.WParam == VK_ESCAPE {
+				finishInputDialog(false)
+				continue
+			}
+		}
+		if r, _, _ := procIsDialogMessage.Call(h, uintptr(unsafe.Pointer(&m))); r != 0 {
+			continue
+		}
+		procTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
+		procDispatchMessage.Call(uintptr(unsafe.Pointer(&m)))
+	}
+	return st.result, st.ok
 }
 
 func inputDialog(parent syscall.Handle, title, prompt, def string) (string, bool) {

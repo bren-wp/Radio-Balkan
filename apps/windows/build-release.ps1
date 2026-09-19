@@ -18,12 +18,17 @@ function Test-GoFormatting([string]$Path) {
     $temp = [IO.Path]::GetTempFileName()
     try {
         [IO.File]::WriteAllText($temp, $original, [Text.UTF8Encoding]::new($false))
+        $formatDiff = & gofmt -d $temp 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "gofmt provjera nije uspjela za $Path"
+        }
         & gofmt -w $temp
         if ($LASTEXITCODE -ne 0) {
             throw "gofmt provjera nije uspjela za $Path"
         }
         $formatted = [IO.File]::ReadAllText($temp).Replace("`r`n", "`n")
         if ($original -cne $formatted) {
+            if ($formatDiff) { $formatDiff | Write-Host }
             throw "$Path nije gofmt formatiran. Pokreni gofmt prije produkcijskog builda."
         }
     } finally {
