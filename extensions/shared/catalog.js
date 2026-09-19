@@ -308,6 +308,33 @@ const RB = (() => {
     throw lastError || new Error('Katalog dijaspore nije dostupan');
   }
 
+  async function storageGet(keys) {
+    const api = ext.storage.local;
+    try {
+      const result = api.get(keys);
+      if (result && typeof result.then === 'function') return await result;
+    } catch { }
+    return await new Promise((resolve, reject) => {
+      try { api.get(keys, value => ext.runtime?.lastError ? reject(new Error(ext.runtime.lastError.message)) : resolve(value || {})); }
+      catch (error) { reject(error); }
+    });
+  }
+
+  async function storageSet(values) {
+    const api = ext.storage.local;
+    try {
+      const result = api.set(values);
+      if (result && typeof result.then === 'function') {
+        await result;
+        return;
+      }
+    } catch { }
+    await new Promise((resolve, reject) => {
+      try { api.set(values, () => ext.runtime?.lastError ? reject(new Error(ext.runtime.lastError.message)) : resolve()); }
+      catch (error) { reject(error); }
+    });
+  }
+
   function mergeMissingCountries(online, cached) {
     const onlineList = dedupe(online);
     const cacheList = dedupe(cached);
