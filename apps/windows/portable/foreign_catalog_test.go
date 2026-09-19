@@ -52,8 +52,8 @@ func TestCatalogGroupsIncludeSupplementalGroupsExactlyOnce(t *testing.T) {
 }
 
 func TestNormalizeForeignCatalogFiltersSortsAndCaps(t *testing.T) {
-	rows := make([]RadioStation, 0, 72)
-	for i := 0; i < 64; i++ {
+	rows := make([]RadioStation, 0, foreignCatalogLimit+12)
+	for i := 0; i < foreignCatalogLimit+5; i++ {
 		rows = append(rows, RadioStation{
 			StationUUID: fmt.Sprintf("foreign-%02d", i),
 			Name:        fmt.Sprintf("Foreign %02d", i),
@@ -116,7 +116,6 @@ func TestNormalizeForeignCatalogDeduplicatesUUIDs(t *testing.T) {
 	}
 }
 
-
 func TestNormalizeDiasporaCatalogFiltersSortsAndCaps(t *testing.T) {
 	rows := make([]RadioStation, 0, diasporaCatalogLimit+8)
 	for i := 0; i < diasporaCatalogLimit+5; i++ {
@@ -156,7 +155,6 @@ func TestNormalizeDiasporaCatalogFiltersSortsAndCaps(t *testing.T) {
 		}
 	}
 }
-
 
 func TestSupplementalCatalogCountryMatching(t *testing.T) {
 	if !matchesCatalogCountry(foreignCatalogCode, "DE", "DE") {
