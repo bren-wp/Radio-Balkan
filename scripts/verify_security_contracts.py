@@ -74,9 +74,10 @@ def main() -> None:
         'chosen.equals("Web stranica") && requireAdmin()',
         'chosen.equals("Odaberi drugi izvor") && requireAdmin()',
         "if (!requireAdmin()) return;",
-        "adminLockedUntilMs = System.currentTimeMillis() + 30_000L",
+        "private final AdminRateLimiter adminRateLimiter = new AdminRateLimiter(5, 30_000L);",
         'if ("replaced".equals(tab) || "broken".equals(tab))',
-        "if (clickNow < adminLockedUntilMs)",
+        "if (adminRateLimiter.isLocked(clickNow))",
+        "if (!accepted) adminRateLimiter.recordFailure(completedAt)",
         'else if ("Provjeri prikazane stanice".equals(chosen) && requireAdmin()) checkVisibleStreams();',
         'else if (chosen.equals("Provjeri dostupnost") && requireAdmin()) checkOne(s);',
         "private void checkVisibleStreams() {\n        if (!requireAdmin()) return;",
@@ -98,6 +99,19 @@ def main() -> None:
     require(
         "apps/android/app/src/test/java/net/radiobalkan/app/AdminAuthTest.java",
         "acceptsOnlyConfiguredAdministratorCredentials",
+    )
+    require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/AdminRateLimiter.java",
+        "final class AdminRateLimiter",
+        "synchronized void recordFailure(long nowMs)",
+        "synchronized void recordSuccess()",
+        "lockedUntilMs = nowMs + lockoutMs",
+    )
+    require(
+        "apps/android/app/src/test/java/net/radiobalkan/app/AdminRateLimiterTest.java",
+        "locksAfterFiveCompletedFailuresEvenWithoutDialogState",
+        "successClearsFailureAndLockoutState",
+        "expiredLockoutAllowsFreshAttempts",
     )
     forbid(
         "apps/android/app/src/test/java/net/radiobalkan/app/AdminAuthTest.java",
