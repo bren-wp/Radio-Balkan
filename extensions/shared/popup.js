@@ -278,6 +278,53 @@
     setQuickPressed('quickRecent', viewMode === 'recent');
     setQuickPressed('quickDiaspora', value === RB.DIASPORA_CODE);
     setQuickPressed('quickForeign', value === RB.FOREIGN_CODE);
+    setQuickPressed('quickFolk', viewMode === 'all' && !value && genre?.value === 'folk' && !favoritesOnly);
+    setQuickPressed('quickPop', viewMode === 'all' && !value && genre?.value === 'pop' && !favoritesOnly);
+  }
+
+  function updateBrowseIntro() {
+    const title = $('browseTitle');
+    const hint = $('browseHint');
+    if (!title || !hint) return;
+    const area = String(country.value || '').toUpperCase();
+    const genreValue = String(genre?.value || '').toLowerCase();
+    if (viewMode === 'top') {
+      title.textContent = 'Top 50';
+      hint.textContent = 'Najpopularnije provjerene radio stanice';
+    } else if (viewMode === 'recent') {
+      title.textContent = 'Nedavno slušane';
+      hint.textContent = 'Stanice koje si posljednje uspješno pokrenuo';
+    } else if (favoritesOnly) {
+      title.textContent = 'Omiljene';
+      hint.textContent = 'Tvoje lokalno spremljene radio stanice';
+    } else if (area === RB.DIASPORA_CODE) {
+      title.textContent = 'Radio za dijasporu';
+      hint.textContent = 'Balkanski i ex-YU radio izvan matičnih zemalja';
+    } else if (area === RB.FOREIGN_CODE) {
+      title.textContent = 'Strane stanice';
+      hint.textContent = 'Odabrane provjerene postaje izvan Balkana';
+    } else if (genreValue) {
+      title.textContent = GENRE_LABELS.get(genreValue) || 'Žanr';
+      hint.textContent = area ? 'Filtrirano po području i glazbenoj kategoriji' : 'Radio stanice prema odabranoj glazbenoj kategoriji';
+    } else if (area) {
+      title.textContent = country.options?.[country.selectedIndex]?.textContent?.split(' · ')[0] || 'Radio stanice';
+      hint.textContent = 'Provjerene postaje iz odabranog područja';
+    } else {
+      title.textContent = 'Sve stanice';
+      hint.textContent = 'Balkan, dijaspora i odabrane strane postaje';
+    }
+  }
+
+  function selectGenre(value) {
+    viewMode = 'all';
+    favoritesOnly = false;
+    updateFavoritesFilterButton();
+    search.value = '';
+    country.value = '';
+    if (genre) genre.value = [...genre.options].some(option => option.value === value) ? value : '';
+    queueUiPreferencesSave();
+    apply();
+    updateQuickNavigation();
   }
 
   function selectArea(code) {
@@ -610,6 +657,7 @@
       fragment.append(more);
     }
     list.replaceChildren(fragment);
+    updateBrowseIntro();
     const count = Math.min(renderLimit, visible.length);
     const activeArea = country.value ? country.options?.[country.selectedIndex]?.textContent?.split(' · ')[0] : '';
     const activeGenre = genre?.value ? GENRE_LABELS.get(genre.value) : '';
@@ -862,6 +910,8 @@
   $('quickGenres').addEventListener('click', () => genre?.focus());
   $('quickDiaspora').addEventListener('click', () => selectArea(RB.DIASPORA_CODE));
   $('quickForeign').addEventListener('click', () => selectArea(RB.FOREIGN_CODE));
+  $('quickFolk').addEventListener('click', () => selectGenre('folk'));
+  $('quickPop').addEventListener('click', () => selectGenre('pop'));
 
   search.addEventListener('input', () => {
     viewMode = 'all';

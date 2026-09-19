@@ -59,11 +59,11 @@ public final class RadioRepository {
     };
     private static final int PAGE = 250;
     private static final int MAX_PER_COUNTRY = 1800;
-    private static final int MAX_FOREIGN = 180;
-    private static final int MAX_DIASPORA = 180;
-    private static final int FOREIGN_SCAN_LIMIT = 1600;
-    private static final int DIASPORA_QUERY_LIMIT = 140;
-    private static final int MAX_CATALOG = 7360;
+    private static final int MAX_FOREIGN = 240;
+    private static final int MAX_DIASPORA = 240;
+    private static final int FOREIGN_SCAN_LIMIT = 2000;
+    private static final int DIASPORA_QUERY_LIMIT = 160;
+    private static final int MAX_CATALOG = 7480;
     private static final int PRODUCTION_MIN_REGIONAL = 600;
     private static final int MAX_REDIRECTS = 4;
 
@@ -75,6 +75,11 @@ public final class RadioRepository {
     });
     private final ExecutorService countryPool = Executors.newFixedThreadPool(3, r -> {
         Thread t = new Thread(r, "radio-country");
+        t.setPriority(Thread.MIN_PRIORITY);
+        return t;
+    });
+    private final ExecutorService diasporaPool = Executors.newFixedThreadPool(3, r -> {
+        Thread t = new Thread(r, "radio-diaspora");
         t.setPriority(Thread.MIN_PRIORITY);
         return t;
     });
@@ -121,6 +126,7 @@ public final class RadioRepository {
         closed = true;
         worker.shutdownNow();
         countryPool.shutdownNow();
+        diasporaPool.shutdownNow();
     }
 
     private List<RadioStation> fetchAll() throws Exception {
@@ -366,37 +372,30 @@ public final class RadioRepository {
 
     private List<RadioStation> fetchDiaspora() throws Exception {
         final String[] queries = {
-                "tag=diaspora", "tag=balkan", "tag=exyu",
-                "name=balkan", "name=ex%20yu", "name=radio%20diaspora",
+                "tag=diaspora", "tag=balkan", "tag=exyu", "tag=ex-yu",
+                "name=balkan", "name=ex%20yu", "name=ex-yu", "name=radio%20diaspora",
+                "name=yugo", "name=jugoslav",
                 "language=croatian", "language=serbian", "language=bosnian",
                 "language=macedonian", "language=albanian", "language=slovenian",
-                "language=bulgarian"
+                "language=bulgarian", "language=montenegrin", "language=serbo-croatian"
         };
         Exception last = null;
         for (String base : apiBases()) {
             if (closed) throw new InterruptedException("zatvaranje");
+            CompletionService<List<RadioStation>> completion = new ExecutorCompletionService<>(diasporaPool);
+            int submitted = 0;
+            for (String query : queries) {
+                final String currentQuery = query;
+                completion.submit(() -> fetchDiasporaQuery(base, currentQuery));
+                submitted++;
+            }
+
             List<RadioStation> out = new ArrayList<>();
             Exception baseFailure = null;
-            for (String query : queries) {
+            for (int i = 0; i < submitted; i++) {
                 if (closed || Thread.currentThread().isInterrupted()) throw new InterruptedException("zatvaranje");
                 try {
-                    String endpoint = base + "/json/stations/search?" + query
-                            + "&hidebroken=true&order=votes&reverse=true&limit=" + DIASPORA_QUERY_LIMIT;
-                    JSONArray rows = new JSONArray(get(endpoint, 3 * 1024 * 1024));
-                    for (int i = 0; i < rows.length(); i++) {
-                        JSONObject object = rows.optJSONObject(i);
-                        if (object == null) continue;
-                        RadioStation station = RadioStation.fromJson(object);
-                        String originalCode = safe(station.countryCode).toUpperCase(Locale.ROOT);
-                        if (originalCode.isEmpty() || isRegionalCountry(originalCode) || station.lastCheckOk != 1) continue;
-                        if (!StreamResolver.isSafeHttp(station.url) && !StreamResolver.isSafeHttp(station.urlResolved)) continue;
-                        station.sourceCountryCode = originalCode;
-                        station.countryCode = DIASPORA_CODE;
-                        station.tags = safe(station.tags).isEmpty() ? "dijaspora" : "dijaspora," + station.tags;
-                        if (safe(station.country).isEmpty()) station.country = "Dijaspora";
-                        station.refreshIndexes();
-                        out.add(station);
-                    }
+                    out.addAll(completion.take().get());
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     throw e;
@@ -405,6 +404,7 @@ public final class RadioRepository {
                     AppLog.e(context, "diaspora-query-partial", e);
                 }
             }
+
             out = dedupe(out);
             out.sort(Comparator.comparingInt((RadioStation station) -> station.votes).reversed()
                     .thenComparing(station -> RadioStation.fold(station.name)));
@@ -414,6 +414,29 @@ public final class RadioRepository {
         }
         if (last != null) throw last;
         return Collections.emptyList();
+    }
+
+    private List<RadioStation> fetchDiasporaQuery(String base, String query) throws Exception {
+        if (closed || Thread.currentThread().isInterrupted()) throw new InterruptedException("zatvaranje");
+        String endpoint = base + "/json/stations/search?" + query
+                + "&hidebroken=true&order=votes&reverse=true&limit=" + DIASPORA_QUERY_LIMIT;
+        JSONArray rows = new JSONArray(get(endpoint, 3 * 1024 * 1024));
+        List<RadioStation> out = new ArrayList<>();
+        for (int i = 0; i < rows.length(); i++) {
+            JSONObject object = rows.optJSONObject(i);
+            if (object == null) continue;
+            RadioStation station = RadioStation.fromJson(object);
+            String originalCode = safe(station.countryCode).toUpperCase(Locale.ROOT);
+            if (originalCode.isEmpty() || isRegionalCountry(originalCode) || station.lastCheckOk != 1) continue;
+            if (!StreamResolver.isSafeHttp(station.url) && !StreamResolver.isSafeHttp(station.urlResolved)) continue;
+            station.sourceCountryCode = originalCode;
+            station.countryCode = DIASPORA_CODE;
+            station.tags = safe(station.tags).isEmpty() ? "dijaspora" : "dijaspora," + station.tags;
+            if (safe(station.country).isEmpty()) station.country = "Dijaspora";
+            station.refreshIndexes();
+            out.add(station);
+        }
+        return out;
     }
 
     private List<RadioStation> mergeMissingGroups(List<RadioStation> online, List<RadioStation> cached) {

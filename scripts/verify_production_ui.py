@@ -70,6 +70,10 @@ def main() -> int:
         'id="quickCountries"',
         'id="quickGenres"',
         'id="quickDiaspora"',
+        'id="quickFolk"',
+        'id="quickPop"',
+        'id="browseTitle"',
+        'id="browseHint"',
         'href="https://brendigo.com/"',
         'Built with',
         'disabled>▶</button>',
@@ -132,6 +136,8 @@ def main() -> int:
     require(errors, popup_js, "selectArea(RB.FOREIGN_CODE)", "extensions/shared/popup.js")
     require(errors, popup_css, ".builtWith", "extensions/shared/popup.css")
     require(errors, popup_css, ".stationPage", "extensions/shared/popup.css")
+    require(errors, popup_css, ".browseIntro", "extensions/shared/popup.css")
+    require(errors, popup_css, "grid-template-columns: repeat(3, minmax(0, 1fr))", "extensions/shared/popup.css")
     require(errors, popup_css, ".emptyAction", "extensions/shared/popup.css")
     require(errors, popup_css, "@media (max-width: 380px)", "extensions/shared/popup.css")
     require(errors, popup_css, ".player > img { display: none; }", "extensions/shared/popup.css")
@@ -299,7 +305,26 @@ def main() -> int:
     require(errors, android_repository, '"tag=balkan"', "Android RadioRepository")
     require(errors, android_repository, '"name=radio%20diaspora"', "Android RadioRepository")
     require(errors, android_repository, '"language=bulgarian"', "Android RadioRepository")
+    require(errors, android_repository, '"language=montenegrin"', "Android RadioRepository")
+    require(errors, android_repository, '"name=jugoslav"', "Android RadioRepository")
+    require(errors, android_repository, "MAX_FOREIGN = 240", "Android RadioRepository")
+    require(errors, android_repository, "MAX_DIASPORA = 240", "Android RadioRepository")
+    require(errors, android_repository, "FOREIGN_SCAN_LIMIT = 2000", "Android RadioRepository")
+    require(errors, android_repository, "DIASPORA_QUERY_LIMIT = 160", "Android RadioRepository")
+    require(errors, android_repository, 'new Thread(r, "radio-diaspora")', "Android RadioRepository")
+    require(errors, android_repository, "CompletionService<List<RadioStation>> completion = new ExecutorCompletionService<>(diasporaPool)", "Android RadioRepository")
     require(errors, country_flag, 'case "BG":', "Android CountryFlagDrawable")
+
+    windows_catalog = read("apps/windows/portable/foreign_catalog.go")
+    for needle in (
+        "foreignCatalogLimit      = 240",
+        "diasporaCatalogLimit     = 240",
+        "foreignCatalogScanLimit  = 2000",
+        "diasporaQueryLimit       = 160",
+        '{Field: "name", Value: "jugoslav"}',
+        '{Field: "language", Value: "montenegrin"}',
+    ):
+        require(errors, windows_catalog, needle, "Windows supplemental catalog")
 
     windows = read("apps/windows/portable/main.go")
     for needle in (

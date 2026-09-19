@@ -19,12 +19,12 @@ import (
 const (
 	foreignCatalogCode       = "INT"
 	diasporaCatalogCode      = "DIA"
-	foreignCatalogLimit      = 180
-	diasporaCatalogLimit     = 180
-	foreignCatalogScanLimit  = 1600
-	diasporaQueryLimit       = 140
+	foreignCatalogLimit      = 240
+	diasporaCatalogLimit     = 240
+	foreignCatalogScanLimit  = 2000
+	diasporaQueryLimit       = 160
 	supplementalCatalogLimit = foreignCatalogLimit + diasporaCatalogLimit
-	regionalCatalogLimit     = 7360 - supplementalCatalogLimit
+	regionalCatalogLimit     = 7480 - supplementalCatalogLimit
 	foreignCatalogRefresh    = 30 * time.Minute
 	foreignCatalogReadyPoll  = 120 * time.Millisecond
 )
@@ -182,9 +182,13 @@ func fetchDiasporaCatalog() ([]RadioStation, error) {
 		{Field: "tag", Value: "diaspora"},
 		{Field: "tag", Value: "balkan"},
 		{Field: "tag", Value: "exyu"},
+		{Field: "tag", Value: "ex-yu"},
 		{Field: "name", Value: "balkan"},
 		{Field: "name", Value: "ex yu"},
+		{Field: "name", Value: "ex-yu"},
 		{Field: "name", Value: "radio diaspora"},
+		{Field: "name", Value: "yugo"},
+		{Field: "name", Value: "jugoslav"},
 		{Field: "language", Value: "croatian"},
 		{Field: "language", Value: "serbian"},
 		{Field: "language", Value: "bosnian"},
@@ -192,6 +196,8 @@ func fetchDiasporaCatalog() ([]RadioStation, error) {
 		{Field: "language", Value: "albanian"},
 		{Field: "language", Value: "slovenian"},
 		{Field: "language", Value: "bulgarian"},
+		{Field: "language", Value: "montenegrin"},
+		{Field: "language", Value: "serbo-croatian"},
 	}
 	var last error
 	for _, base := range apiBases() {

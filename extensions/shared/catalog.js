@@ -16,11 +16,11 @@ const RB = (() => {
   const ALLOWED = new Set(COUNTRIES.map(x => x[0]));
   const PAGE = 200;
   const MAX_PER_COUNTRY = 1600;
-  const MAX_FOREIGN = 180;
-  const MAX_DIASPORA = 180;
-  const FOREIGN_SCAN_LIMIT = 1600;
-  const DIASPORA_QUERY_LIMIT = 140;
-  const MAX_CATALOG = 7360;
+  const MAX_FOREIGN = 240;
+  const MAX_DIASPORA = 240;
+  const FOREIGN_SCAN_LIMIT = 2000;
+  const DIASPORA_QUERY_LIMIT = 160;
+  const MAX_CATALOG = 7480;
   const CACHE_MS = 12 * 60 * 60 * 1000;
   const MAX_RECENT = 50;
   const MAX_SERVER_RESPONSE_BYTES = 512 * 1024;
@@ -271,11 +271,12 @@ const RB = (() => {
 
   async function fetchDiasporaFromAny(serverList) {
     const queries = [
-      ['tag', 'diaspora'], ['tag', 'balkan'], ['tag', 'exyu'],
-      ['name', 'balkan'], ['name', 'ex yu'], ['name', 'radio diaspora'],
+      ['tag', 'diaspora'], ['tag', 'balkan'], ['tag', 'exyu'], ['tag', 'ex-yu'],
+      ['name', 'balkan'], ['name', 'ex yu'], ['name', 'ex-yu'], ['name', 'radio diaspora'],
+      ['name', 'yugo'], ['name', 'jugoslav'],
       ['language', 'croatian'], ['language', 'serbian'], ['language', 'bosnian'],
       ['language', 'macedonian'], ['language', 'albanian'], ['language', 'slovenian'],
-      ['language', 'bulgarian']
+      ['language', 'bulgarian'], ['language', 'montenegrin'], ['language', 'serbo-croatian']
     ];
     let lastError;
     for (const base of serverList) {

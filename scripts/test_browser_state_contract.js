@@ -84,10 +84,10 @@ const ids = [
   'adminUsername', 'adminPassword', 'adminLogin', 'adminMessage', 'adminStationName',
   'adminSource', 'adminSaveSource', 'adminResetSource', 'adminHomepage', 'adminOpenWeb',
   'adminLogout', 'adminControlMessage',
-  'browsePage', 'stationPage', 'stationBack', 'stationPageTitle', 'stationPageMeta',
+  'browsePage', 'browseTitle', 'browseHint', 'stationPage', 'stationBack', 'stationPageTitle', 'stationPageMeta',
   'stationBreadcrumbArea', 'stationPageDescription', 'stationPageFacts', 'stationPageLogo',
   'stationPagePlay', 'stationPageFavorite', 'stationSimilarList',
-  'quickAll', 'quickTop', 'quickRecent', 'quickCountries', 'quickGenres', 'quickDiaspora', 'quickForeign'
+  'quickAll', 'quickTop', 'quickRecent', 'quickCountries', 'quickGenres', 'quickDiaspora', 'quickForeign', 'quickFolk', 'quickPop'
 ];
 const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 elements.stationPage.hidden = true;
@@ -349,8 +349,10 @@ async function main() {
 
   elements.quickRecent.dispatch('click');
   assert.equal(elements.quickRecent.attributes['aria-pressed'], 'true', 'Nedavno must be a distinct navigation state');
+  assert.equal(elements.browseTitle.textContent, 'Nedavno slušane', 'recent navigation must expose a distinct home heading');
   assert.match(elements.status.textContent, /^1 od 1 prikazano · Nedavno slušane/, 'recent view must contain successfully played stations in newest-first history');
   elements.quickAll.dispatch('click');
+  assert.equal(elements.browseTitle.textContent, 'Sve stanice', 'all navigation must restore the default browse heading');
 
   elements.quickTop.dispatch('click');
   assert.equal(elements.quickTop.attributes['aria-pressed'], 'true', 'Top must be a distinct navigation state');
@@ -362,11 +364,22 @@ async function main() {
   elements.quickDiaspora.dispatch('click');
   assert.equal(elements.country.value, 'DIA', 'Dijaspora must select the DIA catalog group');
   assert.equal(elements.quickDiaspora.attributes['aria-pressed'], 'true');
+  assert.equal(elements.browseTitle.textContent, 'Radio za dijasporu', 'Dijaspora must expose its own browse context');
   elements.quickForeign.dispatch('click');
   assert.equal(elements.country.value, 'INT', 'Strano must select the INT catalog group');
   assert.equal(elements.quickForeign.attributes['aria-pressed'], 'true');
+  assert.equal(elements.browseTitle.textContent, 'Strane stanice', 'Strano must expose its own browse context');
+  elements.quickFolk.dispatch('click');
+  assert.equal(elements.genre.value, 'folk', 'Narodna must select its dedicated genre filter');
+  assert.equal(elements.quickFolk.attributes['aria-pressed'], 'true');
+  assert.equal(elements.browseTitle.textContent, 'Narodna / Folk', 'Narodna must expose its own browse context');
+  elements.quickPop.dispatch('click');
+  assert.equal(elements.genre.value, 'pop', 'Pop & Rock must select its dedicated genre filter');
+  assert.equal(elements.quickPop.attributes['aria-pressed'], 'true');
+  assert.equal(elements.browseTitle.textContent, 'Pop & Rock', 'Pop & Rock must expose its own browse context');
   elements.quickAll.dispatch('click');
   assert.equal(elements.country.value, '', 'Sve must clear the supplemental area filter');
+  assert.equal(elements.genre.value, '', 'Sve must clear thematic filters');
   assert.equal(elements.quickAll.attributes['aria-pressed'], 'true');
 
   elements.adminToggle.dispatch('click');
