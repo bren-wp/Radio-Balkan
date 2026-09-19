@@ -1,5 +1,29 @@
 # Izdavanja
 
+## 0.0.30
+
+Izdanje 0.0.30 dodatno usklađuje Windows, Android i browser klijente oko discovery navigacije, lokalne povijesti slušanja, većeg Balkanskog/diaspora kataloga i bounded mrežnog dohvaćanja. Nisu dodani analytics, telemetry, javni korisnički računi, novi backend niti šire browser dozvole.
+
+- Android uklanja duplicirani **Otkrij** prikaz i uvodi stvarni **Nedavno**; Početna, Top, Nedavno i Omiljene sada su odvojena stanja
+- Android quick discovery red izravno nudi Dijaspora, Strano, Narodna i Pop & Rock bez dupliciranja postojeće Top navigacije
+- browser dobiva lokalni **Nedavno** prikaz; do 50 dedupliciranih ključeva stanica zapisuje se tek nakon potvrđeno uspješnog playback starta u Chromium i Firefox runtimeu
+- browser početna koristi jasnu 3×3 discovery matricu: Sve, Top, Nedavno, Zemlje, Žanrovi, Dijaspora, Strano, Narodna i Pop & Rock
+- browser dinamički mijenja browse naslov i opis za Top, Nedavno, Omiljene, Dijasporu, Strano, žanr i odabranu državu
+- Bugarska (BG) postaje puni regionalni Balkan katalog na Windowsu, Androidu i browserima, uključujući lokalne flag renderere i playback/network allowlist
+- supplemental katalog je kroz v0.0.30 ciklus proširen na konačnih **do 240 Dijaspora + 240 Strano** provjerenih postaja; regionalni kapacitet ostaje 7000
+- Strano discovery sken povećan je na 2000 kandidata, a svaki diaspora query na 160 rezultata, uz zadržane health, URL-safety, response-size, timeout i dedupe filtere
+- diaspora discovery dodatno prepoznaje ex-yu, yugo, jugoslav, montenegrin i serbo-croatian uz postojeće Balkan/Ex-YU i regionalne jezične signale
+- browser diaspora dohvat zadržava bounded batch concurrency i partial-success semantiku; jedan neuspjeli query ne ruši cijeli server rezultat
+- Windows diaspora dohvat zadržava ograničena tri workera, a Android sada također koristi zaseban **3-worker diaspora pool** umjesto serijskog izvođenja svih upita
+- Android station-detail prikaz dodatno je usklađen s desktop/browser iskustvom kroz javne slične stanice i kontroliranu Back navigaciju
+- uklonjeni su preostali definition-only helperi otkriveni u prethodnom v0.0.30 auditu, a produkcijski verifier sprječava vraćanje referentne domene u aplikacijske površine
+- postojeće dedicated station stranice ostaju jedini javni detail UX: klik na karticu otvara detalje, dok eksplicitni ▶ pokreće reprodukciju
+- **Built with Brendigo** i sigurna poveznica na https://brendigo.com/ ostaju dio javnih klijenata
+- private-network blokade, bounded redirects/responses/timeouts, player epoch/session/generation zaštita, local-only admin RBAC i clean-worktree provjere ostaju obavezni
+- feature exact-head CI i post-merge main CI prošli su browser network/catalog/state/Chromium/Firefox suite, Android unit/lint/release build te Windows test/vet/build + stvarni startup runtime soak
+
+Dostupnost svakog pojedinog third-party radio streama ne može se garantirati. Radio Balkan filtrira poznato neispravne katalog zapise, preferira zdrave javne HTTP(S) izvore i koristi bounded fallback/recovery putanje tako da nedostupnost jedne vanjske postaje ne bi trebala narušiti stabilnost aplikacije.
+
 ## 0.0.29
 
 Izdanje 0.0.29 fokusira se na jasniju informacijsku arhitekturu, zasebne station-detail stranice, uklanjanje dupliciranog koda i dodatno lifecycle/security učvršćivanje. Nisu dodani analytics, telemetry, javni korisnički računi, novi backend ni šire browser dozvole.
