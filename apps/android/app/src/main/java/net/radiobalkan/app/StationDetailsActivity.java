@@ -1,12 +1,15 @@
 package net.radiobalkan.app;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.content.pm.PackageManager;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -21,7 +24,6 @@ import org.json.JSONObject;
 /** Dedicated public station page. This Activity is intentionally not exported. */
 public final class StationDetailsActivity extends Activity {
     public static final String EXTRA_STATION_JSON = "net.radiobalkan.app.STATION_JSON";
-    public static final String EXTRA_PLAY_STATION_JSON = "net.radiobalkan.app.PLAY_STATION_JSON";
 
     private StateStore state;
     private ImageLoader images;
@@ -152,15 +154,21 @@ public final class StationDetailsActivity extends Activity {
     }
 
     private void requestPlayback() {
-        Intent intent = new Intent(this, MainActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                .putExtra(EXTRA_PLAY_STATION_JSON, station.toJson().toString());
+        requestNotificationPermission();
+        if (PlaybackStarter.start(this, station, state)) {
+            Toast.makeText(this, "Povezujem · " + station.name, Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Toast.makeText(this, "Reprodukciju trenutačno nije moguće pokrenuti", Toast.LENGTH_SHORT).show();
+    }
+
+    private void requestNotificationPermission() {
         try {
-            startActivity(intent);
-            finish();
+            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1002);
+            }
         } catch (Throwable error) {
-            AppLog.e(this, "station-details-play", error);
-            Toast.makeText(this, "Reprodukciju trenutačno nije moguće pokrenuti", Toast.LENGTH_SHORT).show();
+            AppLog.e(this, "station-details-notification-permission", error);
         }
     }
 
