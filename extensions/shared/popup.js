@@ -71,6 +71,7 @@
   }
 
   function updateAdminUi() {
+    $('adminStatusBadge').hidden = !adminMode;
     $('adminToggle').textContent = adminMode ? '♛' : '♙';
     $('adminToggle').setAttribute('aria-label', adminMode ? 'Admin prijavljen' : 'Admin prijava');
     $('adminToggle').title = adminMode ? 'Admin · brendigo' : 'Admin prijava';

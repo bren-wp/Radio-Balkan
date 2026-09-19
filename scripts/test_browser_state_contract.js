@@ -80,7 +80,7 @@ const ids = [
   'search', 'country', 'genre', 'stations', 'status', 'refresh', 'heroPlay',
   'playerToggle', 'playerPrev', 'playerStop', 'playerNext', 'favoritesOnly', 'clearFilters', 'playerFav', 'playerState',
   'playerName', 'playerMeta', 'heroName', 'heroMeta', 'playerLogo',
-  'adminToggle', 'adminPanel', 'adminClose', 'adminRole', 'adminLoginView', 'adminControls',
+  'adminToggle', 'adminStatusBadge', 'adminPanel', 'adminClose', 'adminRole', 'adminLoginView', 'adminControls',
   'adminUsername', 'adminPassword', 'adminLogin', 'adminMessage', 'adminStationName',
   'adminSource', 'adminSaveSource', 'adminResetSource', 'adminHomepage', 'adminOpenWeb',
   'adminLogout', 'adminControlMessage'
@@ -266,6 +266,7 @@ async function main() {
   assert.equal(elements.playerFav.disabled, false, 'favorite control must be enabled after a station is available');
   assert.equal(elements.playerFav.attributes['aria-pressed'], 'false', 'favorite state must be announced accessibly');
   assert.equal(elements.adminControls.hidden, true, 'advanced source controls must stay hidden before admin login');
+  assert.equal(elements.adminStatusBadge.hidden, true, 'admin status badge must stay hidden before authentication');
   elements.adminToggle.dispatch('click');
   assert.equal(elements.adminPanel.hidden, false, 'admin toggle must open the login dialog');
   assert.equal(elements.adminLoginView.hidden, false, 'login form must be visible before authentication');
@@ -279,12 +280,19 @@ async function main() {
   await flush();
   assert.equal(adminEnterPrevented, true, 'Enter must submit the administrator login form');
   assert.equal(elements.adminControls.hidden, false, 'configured administrator credentials must unlock advanced controls');
+  assert.equal(elements.adminStatusBadge.hidden, false, 'successful login must expose a visible admin status badge');
   assert.equal(elements.adminLoginView.hidden, true, 'login form must hide after successful authentication');
   assert.equal(elements.adminPassword.value, '', 'administrator password field must be cleared after authentication');
   elements.adminLogout.dispatch('click');
   await flush();
   assert.equal(elements.adminPanel.hidden, true, 'logout must close the administrator panel');
   assert.equal(elements.adminControls.hidden, true, 'logout must immediately hide advanced controls');
+  assert.equal(elements.adminStatusBadge.hidden, true, 'logout must immediately hide the admin status badge');
+  adminOverrides['station-a'] = 'https://override.example/live';
+  elements.adminSource.value = '';
+  elements.adminSaveSource.dispatch('click');
+  await flush();
+  assert.equal(adminOverrides['station-a'], 'https://override.example/live', 'post-logout source actions must be rejected by logic, not only hidden by UI');
 
   elements.genre.value = 'jazz';
   elements.genre.dispatch('change');

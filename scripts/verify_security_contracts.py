@@ -83,6 +83,8 @@ def main() -> None:
         "private void checkOne(RadioStation s) {\n        if (!requireAdmin()) return;",
         "adapter.setAdminMode(true)",
         "adapter.setAdminMode(false)",
+        "updateAdminIndicator();",
+        'text.setText(adminMode ? "Admin" : "Više");',
         "EditorInfo.IME_ACTION_DONE",
         "password.setOnEditorActionListener",
         "loginButton.setEnabled(false)",
@@ -348,6 +350,7 @@ def main() -> None:
         'id="playerStop"',
         'id="playerNext"',
         'id="adminPanel"',
+        'id="adminStatusBadge"',
         'id="adminPassword" type="password"',
         'id="adminSource"',
         'aria-live="polite"',
@@ -374,6 +377,8 @@ def main() -> None:
         "unfavoriting inside favorites view must immediately remove the station from the visible set",
         "advanced source controls must stay hidden before admin login",
         "saved admin source override must be applied without exposing it in the normal UI",
+        "post-logout source actions must be rejected by logic, not only hidden by UI",
+        "successful login must expose a visible admin status badge",
         "Enter must submit the administrator login form",
     )
     require(

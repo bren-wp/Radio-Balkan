@@ -468,6 +468,16 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         for (Map.Entry<String, LinearLayout> entry : bottomNavItems.entrySet()) updateBottomNavItem(entry.getKey(), entry.getValue());
     }
 
+    private void updateAdminIndicator() {
+        LinearLayout item = bottomNavItems.get("more");
+        if (item == null || item.getChildCount() < 2) return;
+        TextView icon = (TextView) item.getChildAt(0);
+        TextView text = (TextView) item.getChildAt(1);
+        icon.setText(adminMode ? "♛" : "⋯");
+        text.setText(adminMode ? "Admin" : "Više");
+        updateBottomNavItem("more", item);
+    }
+
     private void updateBottomNavItem(String action, LinearLayout item) {
         if (item == null || item.getChildCount() < 2) return;
         boolean selected = action.equals(navSelection);
@@ -561,6 +571,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private void logoutAdmin() {
         adminMode = false;
         if (adapter != null) adapter.setAdminMode(false);
+        updateAdminIndicator();
         if ("replaced".equals(tab) || "broken".equals(tab)) {
             tab = "all";
             state.setTab(tab);
@@ -631,6 +642,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                             if (accepted) {
                                 adminMode = true;
                                 if (adapter != null) adapter.setAdminMode(true);
+                                updateAdminIndicator();
                                 adminFailures = 0;
                                 adminLockedUntilMs = 0;
                                 statusText.setText("Admin način rada · brendigo");
