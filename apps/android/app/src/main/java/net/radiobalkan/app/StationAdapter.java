@@ -32,11 +32,18 @@ public final class StationAdapter extends BaseAdapter {
     private List<RadioStation> items = new ArrayList<>();
     private String currentKey = "";
     private boolean playing;
+    private boolean adminMode;
 
     public StationAdapter(Context context, Actions actions, ImageLoader images) {
         this.context = context;
         this.actions = actions;
         this.images = images;
+    }
+
+    public void setAdminMode(boolean enabled) {
+        if (adminMode == enabled) return;
+        adminMode = enabled;
+        notifyDataSetChanged();
     }
 
     public void setPlayback(String key, boolean isPlaying) {
@@ -164,13 +171,15 @@ public final class StationAdapter extends BaseAdapter {
         return "";
     }
 
-    private static String statusLine(RadioStation s) {
+    private String statusLine(RadioStation s) {
+        String popularity = formatPopularity(s.votes);
+        if (!adminMode) return popularity;
         String health;
         if ("ok".equals(s.health)) health = s.replaced ? "Dostupno · zamjenski izvor" : "Dostupno";
         else if ("checking".equals(s.health)) health = "Provjeravam dostupnost";
         else if ("broken".equals(s.health)) health = "Trenutno nedostupno";
         else health = "Dostupnost nije provjerena";
-        return health + "  •  " + formatPopularity(s.votes);
+        return health + "  •  " + popularity;
     }
 
     private static String formatPopularity(int votes) {

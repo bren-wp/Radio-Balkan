@@ -527,8 +527,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         itemList.add("Filtriraj stanice");
         itemList.add("Poništi filtre");
         itemList.add("Osvježi popis");
-        itemList.add("Provjeri prikazane stanice");
         if (adminMode) {
+            itemList.add("Provjeri prikazane stanice");
             itemList.add("Rezervni izvori");
             itemList.add("Nedostupne stanice");
             itemList.add("Odjava administratora");
@@ -543,7 +543,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             else if ("Filtriraj stanice".equals(chosen)) showBrowseDialog();
             else if ("Poništi filtre".equals(chosen)) resetBrowseFilters();
             else if ("Osvježi popis".equals(chosen)) refreshCatalog();
-            else if ("Provjeri prikazane stanice".equals(chosen)) checkVisibleStreams();
+            else if ("Provjeri prikazane stanice".equals(chosen) && requireAdmin()) checkVisibleStreams();
             else if ("Rezervni izvori".equals(chosen) && requireAdmin()) { tab = "replaced"; state.setTab(tab); selectBottomNav("radio"); applyFilterAsync(); }
             else if ("Nedostupne stanice".equals(chosen) && requireAdmin()) { tab = "broken"; state.setTab(tab); selectBottomNav("radio"); applyFilterAsync(); }
             else if ("Admin prijava".equals(chosen)) showAdminLogin();
@@ -560,6 +560,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
     private void logoutAdmin() {
         adminMode = false;
+        if (adapter != null) adapter.setAdminMode(false);
         if ("replaced".equals(tab) || "broken".equals(tab)) {
             tab = "all";
             state.setTab(tab);
@@ -629,6 +630,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                             loginButton.setText("Prijavi se");
                             if (accepted) {
                                 adminMode = true;
+                                if (adapter != null) adapter.setAdminMode(true);
                                 adminFailures = 0;
                                 adminLockedUntilMs = 0;
                                 statusText.setText("Admin način rada · brendigo");
@@ -896,6 +898,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     }
 
     private void checkVisibleStreams() {
+        if (!requireAdmin()) return;
         List<RadioStation> targets = new ArrayList<>(visibleStations);
         if (targets.isEmpty()) { Toast.makeText(this, "Nema stanica za provjeru", Toast.LENGTH_SHORT).show(); return; }
         startHealthScan(targets, true);
@@ -959,6 +962,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     }
 
     private void checkOne(RadioStation s) {
+        if (!requireAdmin()) return;
         if (s == null || destroyed) return;
         statusText.setText("Provjeravam · " + s.name);
         try {
@@ -1061,8 +1065,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         List<String> options = new ArrayList<>();
         options.add("▶ Slušaj");
         options.add(state.favorites().contains(s.key()) ? "Ukloni iz omiljenih" : "Dodaj u omiljene");
-        options.add("Provjeri dostupnost");
         if (adminMode) {
+            options.add("Provjeri dostupnost");
             if (StreamResolver.isHttp(s.homepage)) options.add("Web stranica");
             options.add("Kopiraj poveznicu za reprodukciju");
             options.add("Odaberi drugi izvor");
@@ -1076,7 +1080,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             else if (chosen.equals("Web stranica") && requireAdmin()) openWeb(s);
             else if (chosen.equals("Kopiraj poveznicu za reprodukciju") && requireAdmin()) copyText(s.activeUrl);
             else if (chosen.equals("Odaberi drugi izvor") && requireAdmin()) showSourceDialog(s);
-            else if (chosen.equals("Provjeri dostupnost")) checkOne(s);
+            else if (chosen.equals("Provjeri dostupnost") && requireAdmin()) checkOne(s);
             else if (chosen.equals("Vrati automatski odabir") && requireAdmin()) {
                 state.clearAutomaticSources(s.key());
                 String manual = state.manualReplacement(s.key());
