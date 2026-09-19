@@ -418,7 +418,9 @@ const RB = (() => {
 
   async function uiPreferences() {
     const x = await storageGet(['rbUiPrefs']);
-    return x.rbUiPrefs && typeof x.rbUiPrefs === 'object' ? x.rbUiPrefs : {};
+    return x.rbUiPrefs && typeof x.rbUiPrefs === 'object'
+      ? x.rbUiPrefs
+      : { country: 'HR', genre: '', favoritesOnly: false };
   }
 
   async function setUiPreferences(value) {

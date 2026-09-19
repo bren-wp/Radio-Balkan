@@ -80,6 +80,23 @@ func TestSafeHTTPURLAcceptsPublicHTTPStreams(t *testing.T) {
 	}
 }
 
+func TestValidateStateDefaultsToCroatiaOnlyOnFirstLaunch(t *testing.T) {
+	fresh := validateState(PersistedState{}, false)
+	if fresh.CountryCode != "HR" {
+		t.Fatalf("fresh country = %q; want HR", fresh.CountryCode)
+	}
+
+	savedAll := validateState(PersistedState{CountryCode: "", Volume: 80, Tab: "all"}, true)
+	if savedAll.CountryCode != "" {
+		t.Fatalf("saved all-country selection = %q; want empty", savedAll.CountryCode)
+	}
+
+	savedSerbia := validateState(PersistedState{CountryCode: "RS", Volume: 80, Tab: "all"}, true)
+	if savedSerbia.CountryCode != "RS" {
+		t.Fatalf("saved country = %q; want RS", savedSerbia.CountryCode)
+	}
+}
+
 func TestValidateStateDropsUnsafeReplacementURLs(t *testing.T) {
 	state := PersistedState{
 		Favorites:    map[string]bool{"station": true},

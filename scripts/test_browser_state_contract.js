@@ -135,7 +135,7 @@ const stationForeign = {
   codec: 'MP3',
   logo: ''
 };
-const extraStations = Array.from({ length: 58 }, (_, index) => ({
+const extraStations = Array.from({ length: 90 }, (_, index) => ({
   stationuuid: `station-extra-${index}`,
   name: `Radio Extra ${index}`,
   country: 'Hrvatska',
@@ -262,7 +262,7 @@ const context = {
       return copy(favoriteStore);
     },
     async uiPreferences() {
-      return {};
+      return { country: 'HR', genre: '', favoritesOnly: false };
     },
     async setUiPreferences() {
       return {};
@@ -302,7 +302,10 @@ async function main() {
   assert.equal(elements.playerDetails.disabled, false, 'current-station details control must be enabled when a station is active');
   assert.equal(elements.adminControls.hidden, true, 'advanced source controls must stay hidden before admin login');
   assert.equal(elements.adminStatusBadge.hidden, true, 'admin status badge must stay hidden before authentication');
-  assert.equal(elements.quickAll.attributes['aria-pressed'], 'true', 'all-stations navigation must be selected initially');
+  assert.equal(elements.country.value, 'HR', 'first-run browser home must default to Croatia');
+  assert.equal(elements.quickAll.attributes['aria-pressed'], 'true', 'Croatia home navigation must be selected initially');
+  assert.equal(elements.browseTitle.textContent, 'Hrvatska', 'default browse heading must identify Croatia');
+  assert.match(elements.status.textContent, /^72 od 91 prikazano · Hrvatska/, 'Croatia home must render 72 stations before pagination');
 
   const playCallsBeforePlayerDetails = playCalls;
   elements.playerDetails.dispatch('click', { currentTarget: elements.playerDetails });
@@ -356,7 +359,8 @@ async function main() {
   assert.equal(elements.browseTitle.textContent, 'Nedavno slušane', 'recent navigation must expose a distinct home heading');
   assert.match(elements.status.textContent, /^1 od 1 prikazano · Nedavno slušane/, 'recent view must contain successfully played stations in newest-first history');
   elements.quickAll.dispatch('click');
-  assert.equal(elements.browseTitle.textContent, 'Sve stanice', 'all navigation must restore the default browse heading');
+  assert.equal(elements.country.value, 'HR', 'home navigation must restore Croatia');
+  assert.equal(elements.browseTitle.textContent, 'Hrvatska', 'home navigation must restore the Croatia browse heading');
 
   elements.quickTop.dispatch('click');
   assert.equal(elements.quickTop.attributes['aria-pressed'], 'true', 'Top must be a distinct navigation state');
@@ -382,8 +386,8 @@ async function main() {
   assert.equal(elements.quickPop.attributes['aria-pressed'], 'true');
   assert.equal(elements.browseTitle.textContent, 'Pop & Rock', 'Pop & Rock must expose its own browse context');
   elements.quickAll.dispatch('click');
-  assert.equal(elements.country.value, '', 'Sve must clear the supplemental area filter');
-  assert.equal(elements.genre.value, '', 'Sve must clear thematic filters');
+  assert.equal(elements.country.value, 'HR', 'Home must return the area filter to Croatia');
+  assert.equal(elements.genre.value, '', 'Home must clear thematic filters');
   assert.equal(elements.quickAll.attributes['aria-pressed'], 'true');
 
   elements.adminToggle.dispatch('click');
@@ -419,7 +423,7 @@ async function main() {
   elements.genre.value = '';
   elements.genre.dispatch('change');
 
-  const focusTargets = Array.from({ length: 60 }, () => new Element());
+  const focusTargets = Array.from({ length: 94 }, () => new Element());
   elements.stations.querySelectorAllResult = focusTargets;
   elements.stations.dispatch('click', {
     target: {
@@ -428,7 +432,7 @@ async function main() {
       }
     }
   });
-  assert.equal(focusTargets[48].focused, true, 'expanding the station list must focus the first newly revealed play control');
+  assert.equal(focusTargets[72].focused, true, 'expanding the station list must focus the first newly revealed play control');
   elements.stations.querySelectorAllResult = [];
 
   elements.country.value = 'RS';
@@ -544,7 +548,7 @@ async function main() {
   assert.match(elements.status.textContent, /^0 od 0 prikazano/, 'unfavoriting inside favorites view must immediately remove the station from the visible set');
   elements.favoritesOnly.dispatch('click');
   await flush();
-  assert.match(elements.status.textContent, /^48 od 62 prikazano/, 'leaving favorites-only view must restore the full visible catalog page');
+  assert.match(elements.status.textContent, /^72 od 94 prikazano/, 'leaving favorites-only view must restore the expanded visible catalog page');
 
   runtimeListener({ type: 'RB_STATE', epoch: 'epoch-b', revision: 9, station: null, playing: false, sessionId: null });
   await flush();

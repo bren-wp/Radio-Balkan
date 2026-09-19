@@ -12,6 +12,7 @@ import java.util.Set;
 
 public final class StateStore {
     private static final String PREFS = "radio_balkan_state";
+    static final String DEFAULT_COUNTRY = "HR";
     private static final int MAX_RECENT = 50;
     private static final int MAX_BACKUPS = 8;
     /**
@@ -163,7 +164,7 @@ public final class StateStore {
 
     public int volume() { return clamp(prefs.getInt("volume", 80), 0, 100); }
     public void setVolume(int value) { prefs.edit().putInt("volume", clamp(value, 0, 100)).apply(); }
-    public String country() { return safe(prefs.getString("country", "")); }
+    public String country() { return safe(prefs.getString("country", DEFAULT_COUNTRY)); }
     public void setCountry(String value) { prefs.edit().putString("country", safe(value)).apply(); }
     public String genre() { return safe(prefs.getString("genre", "")); }
     public void setGenre(String value) { prefs.edit().putString("genre", safe(value)).apply(); }

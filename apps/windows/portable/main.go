@@ -874,7 +874,9 @@ func validateState(st PersistedState, loaded bool) PersistedState {
 	if st.HealthIntervalMin < 10 || st.HealthIntervalMin > 240 {
 		st.HealthIntervalMin = 30
 	}
-	if !isBalkanCode(st.CountryCode) {
+	if !loaded {
+		st.CountryCode = "HR"
+	} else if !isBalkanCode(st.CountryCode) {
 		st.CountryCode = ""
 	}
 	st.Genre = strings.TrimSpace(st.Genre)
@@ -1839,11 +1841,11 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 	tab, genre, country := app.tab, strings.ToLower(strings.TrimSpace(app.genre)), strings.ToUpper(strings.TrimSpace(app.country))
 	app.mu.RUnlock()
 	y := int32(91)
-	drawSidebarItem(hdc, y, "⌂", "Početna", tab == "all" && genre == "" && country == "", hitTab, "all")
+	drawSidebarItem(hdc, y, "⌂", "Početna", tab == "all" && genre == "" && country == "HR", hitTab, "all")
 	y += 44
 	drawSidebarItem(hdc, y, "★", "Top", tab == "popular", hitTab, "popular")
 	y += 44
-	drawSidebarItem(hdc, y, "◉", "Zemlje", isRegionalCatalogCode(country), hitCountryDropdown, "")
+	drawSidebarItem(hdc, y, "◉", "Zemlje", isRegionalCatalogCode(country) && country != "HR", hitCountryDropdown, "")
 	y += 44
 	drawSidebarItem(hdc, y, "♫", "Žanrovi", genre != "", hitGenreDropdown, "")
 	y += 44
@@ -2131,7 +2133,11 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 	showHome := shouldShowPopular()
 
 	if showHome {
-		ids := popularStations(16)
+		homeColumns := 6
+		if mainR-mainL >= 1120 {
+			homeColumns = 8
+		}
+		ids := popularStations(1 + homeColumns*2)
 		if len(ids) > 0 {
 			app.mu.RLock()
 			featuredIdx := ids[0]
@@ -2144,7 +2150,7 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 			drawHomeHero(hdc, mainL, 82, mainR, 300, featuredIdx, featured, totalStations)
 		}
 
-		// Popular stations: six wide image cards, mirroring the production mockup.
+		// Popular stations adapt between six and eight cards on wider windows.
 		selectFont(hdc, app.hFontBold)
 		text(hdc, "Popularne stanice", mainL, 315, mainR-120, 345, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 		selectFont(hdc, app.hFontSmall)
@@ -2154,11 +2160,11 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 		if len(cards) > 1 {
 			cards = cards[1:]
 		}
-		if len(cards) > 6 {
-			cards = cards[:6]
+		if len(cards) > homeColumns {
+			cards = cards[:homeColumns]
 		}
 		gap := int32(12)
-		cardW := (mainR - mainL - gap*5) / 6
+		cardW := (mainR - mainL - gap*int32(homeColumns-1)) / int32(homeColumns)
 		for i, idx := range cards {
 			l := mainL + int32(i)*(cardW+gap)
 			app.mu.RLock()
@@ -2194,13 +2200,16 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 		text(hdc, "Prikaži sve  →", mainR-130, 660, mainR, 688, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
 		app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 660, mainR, 690}, Kind: hitTab, Index: -1, Value: "all"})
 		region := ids
-		if len(region) > 7 {
-			region = region[7:]
+		regionStart := 1 + len(cards)
+		if len(region) > regionStart {
+			region = region[regionStart:]
+		} else {
+			region = nil
 		}
-		if len(region) > 6 {
-			region = region[:6]
+		if len(region) > homeColumns {
+			region = region[:homeColumns]
 		}
-		regW := (mainR - mainL - gap*5) / 6
+		regW := (mainR - mainL - gap*int32(homeColumns-1)) / int32(homeColumns)
 		for i, idx := range region {
 			app.mu.RLock()
 			if idx < 0 || idx >= len(app.stations) {
@@ -3541,6 +3550,9 @@ func handleClick(x, y int32) {
 			app.detailKey = ""
 			app.tab = h.Value
 			app.country = ""
+			if h.Value == "all" {
+				app.country = "HR"
+			}
 			app.genre = ""
 			app.scroll = 0
 			app.countryMenuOpen = false
@@ -3549,6 +3561,9 @@ func handleClick(x, y int32) {
 			app.stateMu.Lock()
 			app.state.Tab = h.Value
 			app.state.CountryCode = ""
+			if h.Value == "all" {
+				app.state.CountryCode = "HR"
+			}
 			app.state.Genre = ""
 			app.stateMu.Unlock()
 			scheduleStateSave()
