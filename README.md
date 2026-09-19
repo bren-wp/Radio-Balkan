@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.26" src="assets/badges/version.svg">
+  <img alt="version 0.0.27" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -15,16 +15,16 @@
 
 Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrvatske i regije bez korisničkog računa, bez telemetry sustava i bez teškog web runtimea u Windows aplikaciji. Projekt objedinjuje nativni Windows klijent, nativni Android klijent i produkcijske ekstenzije za Chrome, Edge, Opera i Firefox.
 
-## Što donosi v0.0.26
+## Što donosi v0.0.27
 
-- **Adjacent transport traži stvarnu trenutnu stanicu** — Previous/Next su disabled na cold startu i ne mogu pokrenuti reprodukciju prije stvarnog odabira stanice.
-- **Isto pravilo na Windowsu, Androidu i browserima** — browser `playAdjacent`, Android `PlaybackLifecycle.canNavigate` i Windows `canNavigateStations` koriste current-station guard.
-- **Renderer i click handler su usklađeni** — Windows ne samo da prikazuje disabled Prev/Next nego i funkcionalni handler koristi isti availability contract.
-- **Omiljene se osvježavaju odmah** — promjena favorite statusa ponovno primjenjuje aktivne browser filtre; odfavoritirana stanica odmah nestaje iz prikaza Omiljene.
-- **Cold-state regression zaštita** — browser testovi zaključavaju da Prev/Next bez aktualne stanice ostaju disabled i ne šalju `RB_PLAY`.
-- **Android lifecycle regression zaštita** — JVM testovi zahtijevaju i aktualnu stanicu i najmanje dva kandidata prije adjacent navigacije.
-- **Windows transport testovi su stroži** — pokrivaju no-current, single/multiple catalog i filtered scenarije, uz postojeći runtime soak i clean-worktree gate.
-- **Bez novog telemetryja ili širih dozvola** — nema analytics SDK-a, trackinga, novog backenda ni dodatnih Android/browser dozvola.
+- **Lokalni administratorski način rada na svim klijentima** — običan korisnik i dalje sluša radio bez računa; administratorske source, homepage, health i maintenance funkcije otključavaju se tek nakon lokalne prijave.
+- **RBAC nije samo vizualno skrivanje** — Windows i Android privilegirane hit/action putanje ponovno provjeravaju aktivnu admin sesiju, a browser source handleri odbijaju post-logout akcije i imaju izvršni regression test.
+- **Jači lokalni verifier** — Windows, Android i browser koriste PBKDF2-HMAC-SHA256 s 120.000 iteracija i odvojenim saltom umjesto jednokratnog salted SHA-256; plaintext lozinka se ne sprema u produkcijski source niti zapisuje u log.
+- **Kontroliran login lifecycle** — pet neuspješnih pokušaja aktivira 30-sekundni lockout; session je memorijski i resetira se zatvaranjem/restartom, logout odmah uklanja administratorske ovlasti i osjetljive kontrole.
+- **Ispoliran admin UX** — Android provjeru vjerodajnice radi izvan UI threada i podržava IME/Enter submit, browser ima single-flight busy state i Enter submit, a Android/browser imaju jasan vidljiv Admin status nakon prijave.
+- **Health detalji su administratorski** — ručne health provjere, per-station health status i maintenance prikazi više nisu dostupni običnom korisniku na Windowsu i Androidu; automatski interni recovery može i dalje koristiti health stanje bez izlaganja detalja.
+- **v0.0.26 transport/favorites zaštite ostaju aktivne** — current-station Prev/Next ugovori, Stop → fresh Play, stale-state zaštite i trenutačno ponovno filtriranje Omiljenih nisu uklonjeni.
+- **Bez novog backenda, telemetryja ili širih dozvola** — admin autentikacija ostaje lokalna, browser permissions nisu proširene, nema remote executable codea, analyticsa ni behavioral trackinga.
 
 ## Zašto Radio Balkan
 
@@ -64,7 +64,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.26 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.26):
+Gotovi v0.0.27 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.27):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -104,7 +104,7 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.27
+python scripts/bump_version.py 0.0.28
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.
