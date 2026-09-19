@@ -6,7 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const storage = {};
-const balkanCodes = new Set(['HR', 'BA', 'RS', 'SI', 'MK', 'AL', 'ME']);
+const balkanCodes = new Set(['HR', 'BA', 'RS', 'SI', 'MK', 'AL', 'ME', 'BG']);
 
 function response(body, ok = true, status = 200, extraHeaders = {}) {
   const payload = JSON.stringify(body);
@@ -83,10 +83,12 @@ async function mockFetch(raw) {
     }
     return response([station(1, code)]);
   }
-  if (url.includes('/json/stations/search?') && url.includes('hidebroken=true') && url.includes('limit=100') &&
-      (url.includes('tag=diaspora') || url.includes('name=balkan') || url.includes('name=ex%20yu') ||
+  if (url.includes('/json/stations/search?') && url.includes('hidebroken=true') && url.includes('limit=140') &&
+      (url.includes('tag=diaspora') || url.includes('tag=balkan') || url.includes('tag=exyu') ||
+       url.includes('name=balkan') || url.includes('name=ex%20yu') || url.includes('name=radio%20diaspora') ||
        url.includes('language=croatian') || url.includes('language=serbian') || url.includes('language=bosnian') ||
-       url.includes('language=macedonian') || url.includes('language=albanian') || url.includes('language=slovenian'))) {
+       url.includes('language=macedonian') || url.includes('language=albanian') || url.includes('language=slovenian') ||
+       url.includes('language=bulgarian'))) {
     if (networkOffline) throw new Error('simulated offline diaspora catalog');
     const parsed = new URL(url);
     if (parsed.hostname.startsWith('dyn')) {
@@ -94,6 +96,7 @@ async function mockFetch(raw) {
       throw new Error('simulated dynamic API failure');
     }
     const signature = Array.from(parsed.searchParams.entries()).find(([key]) => ['tag', 'name', 'language'].includes(key))?.join(':') || 'diaspora';
+    if (signature === 'tag:exyu') throw new Error('simulated single diaspora query failure');
     const seed = Array.from(signature).reduce((sum, char) => sum + char.charCodeAt(0), 0);
     const diaspora = [];
     for (let i = 0; i < 28; i += 1) {
@@ -108,7 +111,7 @@ async function mockFetch(raw) {
     diaspora.push(station(seed * 100 + 92, 'DE', 1, 'http://127.0.0.1/private'));
     return response(diaspora);
   }
-  if (url.includes('/json/stations/search?hidebroken=true&order=votes&reverse=true&limit=1000')) {
+  if (url.includes('/json/stations/search?hidebroken=true&order=votes&reverse=true&limit=1600')) {
     if (networkOffline) throw new Error('simulated offline catalog');
     const parsed = new URL(url);
     if (parsed.hostname.startsWith('dyn')) {
@@ -116,7 +119,7 @@ async function mockFetch(raw) {
       throw new Error('simulated dynamic API failure');
     }
     const foreign = [];
-    for (let i = 0; i < 150; i += 1) foreign.push(station(i, i % 2 ? 'US' : 'GB'));
+    for (let i = 0; i < 220; i += 1) foreign.push(station(i, i % 2 ? 'US' : 'GB'));
     foreign.push(station(500, 'HR'));
     foreign.push(station(501, 'US', 0));
     foreign.push(station(502, 'DE', 1, 'http://localhost./private'));
@@ -174,15 +177,16 @@ async function main() {
   assert.equal(RB.DIASPORA_CODE, 'DIA');
   assert.ok(RB.COUNTRIES.some(([code, name]) => code === 'INT' && name === 'Strano'));
   assert.ok(RB.COUNTRIES.some(([code, name]) => code === 'DIA' && name === 'Dijaspora'));
+  assert.ok(RB.COUNTRIES.some(([code, name]) => code === 'BG' && name === 'Bugarska'));
 
   const catalog = await RB.load(true);
   const foreign = catalog.filter(item => item.countrycode === RB.FOREIGN_CODE);
   const diaspora = catalog.filter(item => item.countrycode === RB.DIASPORA_CODE);
   const regional = catalog.filter(item => balkanCodes.has(item.countrycode));
 
-  assert.equal(foreign.length, 120, 'foreign catalog must be capped at 120 stations');
-  assert.equal(diaspora.length, 120, 'diaspora catalog must be capped at 120 stations');
-  assert.equal(regional.length, 7, 'regional catalog must retain all seven Balkan country batches');
+  assert.equal(foreign.length, 180, 'foreign catalog must be capped at 180 stations');
+  assert.equal(diaspora.length, 180, 'diaspora catalog must be capped at 180 stations');
+  assert.equal(regional.length, 8, 'regional catalog must retain all eight Balkan country batches');
   assert.ok(diaspora.every(item => item.lastcheckok === 1), 'diaspora catalog must keep only healthy Radio Browser entries');
   assert.ok(diaspora.every(item => !balkanCodes.has(item.sourcecountrycode)), 'diaspora catalog must represent stations hosted outside supported Balkan countries');
   assert.ok(diaspora.every(item => String(item.tags || '').toLowerCase().includes('dijaspora')), 'diaspora stations must keep their explicit classification');
@@ -201,13 +205,18 @@ async function main() {
   oversizedCountry = 'HR';
   const limitedCatalog = await RB.load(true);
   const limitedRegional = limitedCatalog.filter(item => balkanCodes.has(item.countrycode));
-  assert.equal(limitedRegional.length, 6, 'oversized country response must be rejected without poisoning other country batches');
+  assert.equal(limitedRegional.length, 7, 'oversized country response must be rejected without poisoning other country batches');
   assert.ok(!limitedRegional.some(item => item.countrycode === 'HR'), 'oversized response must not be parsed into the catalog');
   oversizedCountry = '';
 
   await RB.setUiPreferences({ country: ' hr ', genre: 'POP', favoritesOnly: 1 });
   const savedPreferences = JSON.parse(JSON.stringify(await RB.uiPreferences()));
   assert.deepEqual(savedPreferences, { country: 'HR', genre: 'pop', favoritesOnly: true }, 'UI preferences must be sanitized and persisted');
+
+  await RB.addRecent(' station-a ');
+  await RB.addRecent('station-b');
+  const savedRecent = JSON.parse(JSON.stringify(await RB.addRecent('station-a')));
+  assert.deepEqual(savedRecent, ['station-a', 'station-b'], 'recent history must sanitize, deduplicate and keep newest-first order');
 
   networkOffline = true;
   await assert.rejects(() => RB.load(true), /Radio Browser trenutačno nije dostupan/, 'forced refresh must surface a real network failure');

@@ -45,11 +45,11 @@ public final class RadioRepository {
     public static final String[][] COUNTRIES = {
             {"", "Sve postaje"}, {"HR", "Hrvatska"}, {"BA", "Bosna i Hercegovina"},
             {"RS", "Srbija"}, {"SI", "Slovenija"}, {"MK", "Sjeverna Makedonija"},
-            {"AL", "Albanija"}, {"ME", "Crna Gora"}, {DIASPORA_CODE, "Dijaspora"},
+            {"AL", "Albanija"}, {"ME", "Crna Gora"}, {"BG", "Bugarska"}, {DIASPORA_CODE, "Dijaspora"},
             {FOREIGN_CODE, "Strano"}
     };
 
-    private static final String[] REGION_CODES = {"HR", "BA", "RS", "SI", "MK", "AL", "ME"};
+    private static final String[] REGION_CODES = {"HR", "BA", "RS", "SI", "MK", "AL", "ME", "BG"};
     private static final Set<String> REGION_SET = new LinkedHashSet<>();
     static { Collections.addAll(REGION_SET, REGION_CODES); }
 
@@ -59,11 +59,11 @@ public final class RadioRepository {
     };
     private static final int PAGE = 250;
     private static final int MAX_PER_COUNTRY = 1800;
-    private static final int MAX_FOREIGN = 120;
-    private static final int MAX_DIASPORA = 120;
-    private static final int FOREIGN_SCAN_LIMIT = 1000;
-    private static final int DIASPORA_QUERY_LIMIT = 100;
-    private static final int MAX_CATALOG = 7240;
+    private static final int MAX_FOREIGN = 180;
+    private static final int MAX_DIASPORA = 180;
+    private static final int FOREIGN_SCAN_LIMIT = 1600;
+    private static final int DIASPORA_QUERY_LIMIT = 140;
+    private static final int MAX_CATALOG = 7360;
     private static final int PRODUCTION_MIN_REGIONAL = 600;
     private static final int MAX_REDIRECTS = 4;
 
@@ -366,17 +366,20 @@ public final class RadioRepository {
 
     private List<RadioStation> fetchDiaspora() throws Exception {
         final String[] queries = {
-                "tag=diaspora", "name=balkan", "name=ex%20yu",
+                "tag=diaspora", "tag=balkan", "tag=exyu",
+                "name=balkan", "name=ex%20yu", "name=radio%20diaspora",
                 "language=croatian", "language=serbian", "language=bosnian",
-                "language=macedonian", "language=albanian", "language=slovenian"
+                "language=macedonian", "language=albanian", "language=slovenian",
+                "language=bulgarian"
         };
         Exception last = null;
         for (String base : apiBases()) {
             if (closed) throw new InterruptedException("zatvaranje");
-            try {
-                List<RadioStation> out = new ArrayList<>();
-                for (String query : queries) {
-                    if (closed || Thread.currentThread().isInterrupted()) throw new InterruptedException("zatvaranje");
+            List<RadioStation> out = new ArrayList<>();
+            Exception baseFailure = null;
+            for (String query : queries) {
+                if (closed || Thread.currentThread().isInterrupted()) throw new InterruptedException("zatvaranje");
+                try {
                     String endpoint = base + "/json/stations/search?" + query
                             + "&hidebroken=true&order=votes&reverse=true&limit=" + DIASPORA_QUERY_LIMIT;
                     JSONArray rows = new JSONArray(get(endpoint, 3 * 1024 * 1024));
@@ -394,18 +397,20 @@ public final class RadioRepository {
                         station.refreshIndexes();
                         out.add(station);
                     }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw e;
+                } catch (Exception e) {
+                    baseFailure = e;
+                    AppLog.e(context, "diaspora-query-partial", e);
                 }
-                out = dedupe(out);
-                out.sort(Comparator.comparingInt((RadioStation station) -> station.votes).reversed()
-                        .thenComparing(station -> RadioStation.fold(station.name)));
-                if (out.size() > MAX_DIASPORA) out = new ArrayList<>(out.subList(0, MAX_DIASPORA));
-                if (!out.isEmpty()) return out;
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw e;
-            } catch (Exception e) {
-                last = e;
             }
+            out = dedupe(out);
+            out.sort(Comparator.comparingInt((RadioStation station) -> station.votes).reversed()
+                    .thenComparing(station -> RadioStation.fold(station.name)));
+            if (out.size() > MAX_DIASPORA) out = new ArrayList<>(out.subList(0, MAX_DIASPORA));
+            if (!out.isEmpty()) return out;
+            if (baseFailure != null) last = baseFailure;
         }
         if (last != null) throw last;
         return Collections.emptyList();

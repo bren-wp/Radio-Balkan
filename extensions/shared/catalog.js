@@ -7,7 +7,7 @@ const RB = (() => {
   ];
   const BALKAN_COUNTRIES = [
     ['HR','Hrvatska'], ['BA','Bosna i Hercegovina'], ['RS','Srbija'],
-    ['SI','Slovenija'], ['MK','Sjeverna Makedonija'], ['AL','Albanija'], ['ME','Crna Gora']
+    ['SI','Slovenija'], ['MK','Sjeverna Makedonija'], ['AL','Albanija'], ['ME','Crna Gora'], ['BG','Bugarska']
   ];
   const FOREIGN_CODE = 'INT';
   const DIASPORA_CODE = 'DIA';
@@ -16,12 +16,13 @@ const RB = (() => {
   const ALLOWED = new Set(COUNTRIES.map(x => x[0]));
   const PAGE = 200;
   const MAX_PER_COUNTRY = 1600;
-  const MAX_FOREIGN = 120;
-  const MAX_DIASPORA = 120;
-  const FOREIGN_SCAN_LIMIT = 1000;
-  const DIASPORA_QUERY_LIMIT = 100;
-  const MAX_CATALOG = 7240;
+  const MAX_FOREIGN = 180;
+  const MAX_DIASPORA = 180;
+  const FOREIGN_SCAN_LIMIT = 1600;
+  const DIASPORA_QUERY_LIMIT = 140;
+  const MAX_CATALOG = 7360;
   const CACHE_MS = 12 * 60 * 60 * 1000;
+  const MAX_RECENT = 50;
   const MAX_SERVER_RESPONSE_BYTES = 512 * 1024;
   const MAX_CATALOG_RESPONSE_BYTES = 8 * 1024 * 1024;
   const MAX_DISCOVERED_API_BASES = 4;
@@ -99,8 +100,10 @@ const RB = (() => {
 
   const identity = station => {
     const name = fold(station.name);
-    const country = clean(station.sourcecountrycode || station.countrycode).toUpperCase();
-    if (!name || !ALLOWED.has(country)) return '';
+    const catalogCode = clean(station.countrycode).toUpperCase();
+    if (!name || !ALLOWED.has(catalogCode)) return '';
+    const sourceCode = clean(station.sourcecountrycode).toUpperCase();
+    const country = (catalogCode === DIASPORA_CODE || catalogCode === FOREIGN_CODE) && sourceCode ? sourceCode : catalogCode;
     const homepageHost = host(station.homepage);
     if (homepageHost) return `${country}|${name}|home:${homepageHost}`;
     try {
@@ -268,9 +271,11 @@ const RB = (() => {
 
   async function fetchDiasporaFromAny(serverList) {
     const queries = [
-      ['tag', 'diaspora'], ['name', 'balkan'], ['name', 'ex yu'],
+      ['tag', 'diaspora'], ['tag', 'balkan'], ['tag', 'exyu'],
+      ['name', 'balkan'], ['name', 'ex yu'], ['name', 'radio diaspora'],
       ['language', 'croatian'], ['language', 'serbian'], ['language', 'bosnian'],
-      ['language', 'macedonian'], ['language', 'albanian'], ['language', 'slovenian']
+      ['language', 'macedonian'], ['language', 'albanian'], ['language', 'slovenian'],
+      ['language', 'bulgarian']
     ];
     let lastError;
     for (const base of serverList) {
@@ -278,15 +283,19 @@ const RB = (() => {
         const mapped = [];
         for (let offset = 0; offset < queries.length; offset += 3) {
           const batch = queries.slice(offset, offset + 3);
-          const pages = await Promise.all(batch.map(async ([field, value]) => {
+          const pages = await Promise.allSettled(batch.map(async ([field, value]) => {
             const requestUrl = `${base}/json/stations/search?${field}=${encodeURIComponent(value)}&hidebroken=true&order=votes&reverse=true&limit=${DIASPORA_QUERY_LIMIT}`;
             const response = await fetchWithTimeout(requestUrl, { cache: 'no-store', redirect: 'error' }, 9000);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const page = await readJsonLimited(response, 3 * 1024 * 1024);
             return Array.isArray(page) ? page : [];
           }));
-          for (const page of pages) {
-            for (const raw of page) {
+          for (const result of pages) {
+            if (result.status !== 'fulfilled') {
+              lastError = result.reason instanceof Error ? result.reason : new Error('Diaspora upit nije uspio');
+              continue;
+            }
+            for (const raw of result.value) {
               const station = normalize(raw);
               const sourceCode = station.countrycode;
               if (!sourceCode || BALKAN_ALLOWED.has(sourceCode) || station.lastcheckok !== 1) continue;
@@ -420,6 +429,30 @@ const RB = (() => {
     }});
   }
 
+  async function recent() {
+    const x = await storageGet(['rbRecent']);
+    const raw = Array.isArray(x.rbRecent) ? x.rbRecent : [];
+    const unique = [];
+    const seen = new Set();
+    for (const value of raw) {
+      const item = clean(value).slice(0, 512);
+      if (!item || seen.has(item)) continue;
+      seen.add(item);
+      unique.push(item);
+      if (unique.length >= MAX_RECENT) break;
+    }
+    return unique;
+  }
+
+  async function addRecent(stationKey) {
+    stationKey = clean(stationKey).slice(0, 512);
+    if (!stationKey) return await recent();
+    const list = await recent();
+    const next = [stationKey, ...list.filter(value => value !== stationKey)].slice(0, MAX_RECENT);
+    await storageSet({ rbRecent: next });
+    return next;
+  }
+
   async function favorites() {
     const x = await storageGet(['rbFavorites']);
     return x.rbFavorites || {};
@@ -466,7 +499,7 @@ const RB = (() => {
   }
 
   return {
-    load, favorites, setFavorite, uiPreferences, setUiPreferences, adminOverrideFor, setAdminOverride, key, fold, safeHttp, ext,
+    load, favorites, setFavorite, recent, addRecent, uiPreferences, setUiPreferences, adminOverrideFor, setAdminOverride, key, fold, safeHttp, ext,
     COUNTRIES, BALKAN_COUNTRIES, ALLOWED, BALKAN_ALLOWED, FOREIGN_CODE, DIASPORA_CODE, MAX_FOREIGN, MAX_DIASPORA
   };
 })();

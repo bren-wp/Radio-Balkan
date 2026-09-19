@@ -139,10 +139,26 @@ def main() -> None:
         "brendigo" + "2025",
     )
     require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/StationDetailsActivity.java",
+        "EXTRA_SIMILAR_JSON",
+        "json.length() > 65_536",
+        "Math.min(rows.length(), 12)",
+        "detailHistory.size() > 12",
+    )
+    forbid(
+        "apps/android/app/src/main/java/net/radiobalkan/app/StationDetailsActivity.java",
+        "station.urlResolved",
+        "station.homepage",
+    )
+
+    require(
         "apps/android/app/src/main/java/net/radiobalkan/app/RadioRepository.java",
         "StreamResolver.isSafeHttpForConnection(current)",
         "setInstanceFollowRedirects(false)",
         "isTrustedApiUrl(current)",
+        '"tag=balkan"',
+        '"name=radio%20diaspora"',
+        '"language=bulgarian"',
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/RadioPlayerService.java",
@@ -217,7 +233,12 @@ def main() -> None:
         "MAX_CATALOG_RESPONSE_BYTES = 8 * 1024 * 1024",
         "MAX_DISCOVERED_API_BASES = 4",
         "MAX_API_BASES = 8",
+        "MAX_RECENT = 50",
         "async function readJsonLimited(response, maxBytes)",
+        "async function recent()",
+        "async function addRecent(stationKey)",
+        "stationKey = clean(stationKey).slice(0, 512)",
+        "Promise.allSettled",
         "response.body?.getReader",
         "total > maxBytes",
         "readJsonLimited(response, MAX_SERVER_RESPONSE_BYTES)",
@@ -235,6 +256,7 @@ def main() -> None:
         "dynamic API discovery must be capped before stable fallbacks are tried",
         "forced refresh must surface a real network failure",
         "UI preferences must be sanitized and persisted",
+        "recent history must sanitize, deduplicate and keep newest-first order",
     )
     require(
         "extensions/shared/network.js",
@@ -251,6 +273,7 @@ def main() -> None:
         "redirect: 'error'",
         "BALKAN.has(actualCountry)",
         "DIASPORA_CODE = 'DIA'",
+        "'BG'",
         "expectedCountry === FOREIGN_CODE || expectedCountry === DIASPORA_CODE",
     )
     require(
@@ -263,6 +286,8 @@ def main() -> None:
         "IPv6 multicast target must be rejected",
         "UUID refresh must return only safe public streams",
         "UUID refresh must reject a regional station returned under another country",
+        "Bulgarian regional station must pass exact-country refresh validation",
+        "foreign refresh must treat BG as Balkan and never remap it into INT",
         "foreign refresh must never remap a Balkan station into the INT group",
         "diaspora pseudo-country must be accepted by browser playback validation",
         "diaspora refresh must never remap a Balkan station into the DIA group",
@@ -286,6 +311,11 @@ def main() -> None:
         "async function closeOffscreen()",
         "await waitForOffscreenClose();",
         "requestToken === commandGeneration && requestedSession === currentSessionId",
+        "async function recordRecentKey(rawKey)",
+        "chrome.storage.local.get(['rbRecent'])",
+        "chrome.storage.local.set({ rbRecent: next })",
+        ".slice(0, 50)",
+        "await recordRecentKey(msg.recentKey)",
     )
     require(
         "extensions/platform/chromium/offscreen.js",
@@ -337,6 +367,11 @@ def main() -> None:
         "currentSessionId = null;",
         "candidates = [];",
         "idx = 0;",
+        "async function recordRecentKey(rawKey)",
+        "api.storage.local.get(['rbRecent'])",
+        "api.storage.local.set({ rbRecent: next })",
+        ".slice(0, 50)",
+        "await recordRecentKey(msg.recentKey)",
     )
     require(
         "extensions/shared/popup.js",
@@ -451,6 +486,8 @@ def main() -> None:
         "new play must wait until the previous offscreen close completes",
         "play issued during close must recover into active playback",
         "Chromium stopped state must expose a retired session",
+        "successful Chromium background playback must persist recent history",
+        "newer successful playback must become the newest Chromium recent item",
     )
     require(
         "scripts/test_chromium_offscreen_contract.js",
@@ -480,6 +517,8 @@ def main() -> None:
         "Firefox candidate exhaustion must recover through a refreshed station URL",
         "Firefox must reject a catalog refresh that finishes after stop",
         "refreshed Firefox stream must become the active session URL",
+        "successful Firefox background playback must persist recent history",
+        "stale Firefox playback completion must not overwrite the newest recent station",
     )
     forbid(
         "extensions/platform/chromium/offscreen.js",

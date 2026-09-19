@@ -26,6 +26,7 @@ let offscreenGeneration = 0;
 let offscreenSession = null;
 let offscreenStation = null;
 let offscreenPlaying = false;
+const recentStorage = { rbRecent: [] };
 
 const runtime = {
   onMessage: {
@@ -66,6 +67,16 @@ const context = {
   Math,
   chrome: {
     runtime,
+    storage: {
+      local: {
+        async get(keys) {
+          const out = {};
+          for (const key of keys) out[key] = recentStorage[key];
+          return out;
+        },
+        async set(values) { Object.assign(recentStorage, values); }
+      }
+    },
     offscreen: {
       async hasDocument() { return documentExists; },
       async createDocument() {
@@ -124,17 +135,18 @@ async function flush() {
 async function main() {
   assert.equal(typeof listener, 'function', 'Chromium service worker must register a runtime listener');
 
-  const first = await dispatch({ type: 'RB_PLAY', station: stationA });
+  const first = await dispatch({ type: 'RB_PLAY', station: stationA, recentKey: 'a' });
   assert.equal(first.station.name, 'Radio A');
   assert.ok(first.sessionId, 'Chromium worker snapshot must expose the active playback session');
   assert.equal(first.playing, true);
   assert.equal(createCalls, 1, 'first playback must create one offscreen document');
+  assert.deepEqual(Array.from(recentStorage.rbRecent), ['a'], 'successful Chromium background playback must persist recent history');
 
   delayedStop = deferred();
   const oldSession = offscreenSession;
   const staleStop = dispatch({ type: 'RB_STOP' });
   await flush();
-  const newerPlay = await dispatch({ type: 'RB_PLAY', station: stationB });
+  const newerPlay = await dispatch({ type: 'RB_PLAY', station: stationB, recentKey: 'b' });
   assert.equal(newerPlay.station.name, 'Radio B');
   assert.equal(newerPlay.playing, true);
   delayedStop.resolve({ ok: true, station: stationA, playing: false, sessionId: oldSession, generation: offscreenGeneration + 1 });
@@ -145,12 +157,13 @@ async function main() {
   const afterStaleStop = await dispatch({ type: 'RB_GET_STATE' });
   assert.equal(afterStaleStop.station.name, 'Radio B', 'stale stop must not replace the newer station');
   assert.equal(afterStaleStop.playing, true, 'stale stop must not stop newer playback');
+  assert.deepEqual(Array.from(recentStorage.rbRecent.slice(0, 2)), ['b', 'a'], 'newer successful playback must become the newest Chromium recent item');
 
   closeGate = deferred();
   const freshStop = dispatch({ type: 'RB_STOP' });
   await flush();
   assert.equal(closeCalls, 1, 'fresh stop must begin closing the current offscreen document');
-  const playDuringClose = dispatch({ type: 'RB_PLAY', station: stationC });
+  const playDuringClose = dispatch({ type: 'RB_PLAY', station: stationC, recentKey: 'c' });
   await flush();
   assert.equal(createCalls, 1, 'new play must wait until the previous offscreen close completes');
   closeGate.resolve();

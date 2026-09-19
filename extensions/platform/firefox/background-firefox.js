@@ -17,6 +17,18 @@ const STALL_RECOVERY_TIMEOUT_MS = 15_000;
 
 function urls(station) { return RBNet.candidateUrls(station); }
 
+async function recordRecentKey(rawKey) {
+  const key = String(rawKey || '').trim().slice(0, 512);
+  if (!key) return;
+  const stored = await api.storage.local.get(['rbRecent']);
+  const current = Array.isArray(stored.rbRecent) ? stored.rbRecent : [];
+  const next = [key, ...current.filter(value => String(value || '').trim() !== key)]
+    .map(value => String(value || '').trim().slice(0, 512))
+    .filter(Boolean)
+    .slice(0, 50);
+  await api.storage.local.set({ rbRecent: next });
+}
+
 function snapshot(extra = {}) {
   return { ...state, sessionId: currentSessionId, generation, ...extra };
 }
@@ -214,7 +226,9 @@ api.runtime.onMessage.addListener(async msg => {
     commitState({ station: msg.station, playing: false });
     const result = await start(requestedSession);
     if (currentSessionId !== requestedSession) return snapshot({ stale: true });
-    return result.ok ? snapshot() : snapshot({ error: 'Stanica trenutačno nije dostupna' });
+    if (!result.ok) return snapshot({ error: 'Stanica trenutačno nije dostupna' });
+    await recordRecentKey(msg.recentKey);
+    return snapshot();
   }
 
   if (msg.type === 'RB_TOGGLE') {

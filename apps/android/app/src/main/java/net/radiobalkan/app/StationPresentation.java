@@ -3,6 +3,7 @@ package net.radiobalkan.app;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Comparator;
 
 /** Public, non-sensitive station copy shared by list/detail surfaces. */
 public final class StationPresentation {
@@ -41,6 +42,40 @@ public final class StationPresentation {
         if (!safe(s.language).isEmpty()) out.append("Jezik programa: ").append(safe(s.language)).append(". ");
         out.append("Slušanje koristi sigurni Radio Balkan player s ograničenim timeoutom te fallback i recovery postupkom kada je dostupan.");
         return out.toString();
+    }
+
+    public static List<RadioStation> similarStations(List<RadioStation> source, RadioStation current, int limit) {
+        List<RadioStation> out = new ArrayList<>();
+        if (source == null || current == null || limit <= 0) return out;
+        final String currentKey = current.key();
+        final String genre = RadioStation.fold(firstUsefulTag(current.tags));
+        final String currentSource = safe(current.sourceCountryCode).toUpperCase(Locale.ROOT);
+        final String currentArea = safe(current.countryCode).toUpperCase(Locale.ROOT);
+        class Ranked {
+            final RadioStation station;
+            final int score;
+            Ranked(RadioStation station, int score) { this.station = station; this.score = score; }
+        }
+        List<Ranked> ranked = new ArrayList<>();
+        for (RadioStation candidate : source) {
+            if (candidate == null || candidate.key().equals(currentKey)) continue;
+            int score = 0;
+            String candidateArea = safe(candidate.countryCode).toUpperCase(Locale.ROOT);
+            String candidateSource = safe(candidate.sourceCountryCode).toUpperCase(Locale.ROOT);
+            if (!currentSource.isEmpty() && currentSource.equals(candidateSource)) score += 6;
+            else if (!currentArea.isEmpty() && currentArea.equals(candidateArea)) score += 6;
+            if (!genre.isEmpty() && RadioStation.fold(candidate.tags).contains(genre)) score += 4;
+            if (score >= 4) ranked.add(new Ranked(candidate, score));
+        }
+        ranked.sort(Comparator
+                .comparingInt((Ranked value) -> value.score).reversed()
+                .thenComparing(Comparator.comparingInt((Ranked value) -> value.station.votes).reversed())
+                .thenComparing(value -> safe(value.station.name).toLowerCase(Locale.ROOT)));
+        for (Ranked value : ranked) {
+            out.add(value.station);
+            if (out.size() >= limit) break;
+        }
+        return out;
     }
 
     public static String publicDetails(RadioStation s) {

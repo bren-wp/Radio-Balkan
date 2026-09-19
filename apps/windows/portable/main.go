@@ -524,6 +524,7 @@ var balkanCountries = []CountryDef{
 	{"MK", "Sjeverna Makedonija"},
 	{"AL", "Albanija"},
 	{"ME", "Crna Gora"},
+	{"BG", "Bugarska"},
 }
 
 func isBalkanCode(code string) bool {
@@ -536,14 +537,6 @@ func isBalkanCode(code string) bool {
 		}
 	}
 	return false
-}
-func countryCodeByName(name string) string {
-	for _, c := range balkanCountries {
-		if c.Name == name {
-			return c.Code
-		}
-	}
-	return ""
 }
 func countryNameByCode(code string) string {
 	for _, c := range balkanCountries {
@@ -3070,6 +3063,10 @@ func drawCountryFlag(hdc syscall.Handle, l, t, r, b int32, code string) {
 		fillRectColor(hdc, l, t, l+1, b, color(218, 180, 55))
 		fillRectColor(hdc, r-1, t, r, b, color(218, 180, 55))
 		drawCircle(hdc, l+w/2-2, t+h/2-2, l+w/2+2, t+h/2+2, color(218, 180, 55), color(218, 180, 55))
+	case "BG":
+		fillRectColor(hdc, l, t, r, t+h/3, color(255, 255, 255))
+		fillRectColor(hdc, l, t+h/3, r, t+2*h/3, color(0, 150, 110))
+		fillRectColor(hdc, l, t+2*h/3, r, b, color(214, 38, 18))
 	default:
 		drawRounded(hdc, l, t, r, b, 2, color(56, 66, 78), color(89, 101, 113))
 		selectFont(hdc, app.hFontSmall)

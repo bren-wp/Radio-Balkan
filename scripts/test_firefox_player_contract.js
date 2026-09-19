@@ -23,6 +23,7 @@ const refreshPlans = [];
 let refreshCalls = 0;
 const reports = [];
 const instances = [];
+const recentStorage = { rbRecent: [] };
 
 class FakeAudio {
   constructor() {
@@ -83,7 +84,19 @@ const context = {
   },
   clearTimeout,
   globalThis: null,
-  browser: { runtime },
+  browser: {
+    runtime,
+    storage: {
+      local: {
+        async get(keys) {
+          const out = {};
+          for (const key of keys) out[key] = recentStorage[key];
+          return out;
+        },
+        async set(values) { Object.assign(recentStorage, values); }
+      }
+    }
+  },
   document: {
     createElement(tag) {
       assert.equal(tag, 'audio');
@@ -120,10 +133,11 @@ async function main() {
   vm.runInContext(fs.readFileSync(playerPath, 'utf8'), context, { filename: playerPath });
   assert.equal(typeof messageListener, 'function', 'Firefox background must register a runtime listener');
 
-  const firstPlay = await messageListener({ type: 'RB_PLAY', station: stationA });
+  const firstPlay = await messageListener({ type: 'RB_PLAY', station: stationA, recentKey: 'a' });
   await flush();
   assert.equal(firstPlay.playing, true, 'play must enter the playing state');
   assert.ok(firstPlay.sessionId, 'play must create a session id');
+  assert.deepEqual(Array.from(recentStorage.rbRecent), ['a'], 'successful Firefox background playback must persist recent history');
 
   const firstInstance = instances[instances.length - 1];
   const instanceCountBeforePause = instances.length;
@@ -164,7 +178,7 @@ async function main() {
   playPlans.push(slowPlay.promise, Promise.resolve());
   const oldRequest = messageListener({ type: 'RB_PLAY', station: stationA });
   await flush();
-  const newRequest = messageListener({ type: 'RB_PLAY', station: stationB });
+  const newRequest = messageListener({ type: 'RB_PLAY', station: stationB, recentKey: 'b' });
   const newResult = await newRequest;
   assert.equal(newResult.station.stationuuid, 'b', 'newer play request must own the active station');
   assert.equal(newResult.playing, true, 'newer play request must be playing');
@@ -177,6 +191,7 @@ async function main() {
   const finalState = await messageListener({ type: 'RB_GET_STATE' });
   assert.equal(finalState.station.stationuuid, 'b', 'slow old playback must not replace the newer station');
   assert.equal(finalState.playing, true, 'newer station must remain playing after the stale promise resolves');
+  assert.equal(recentStorage.rbRecent[0], 'b', 'stale Firefox playback completion must not overwrite the newest recent station');
 
   const hanging = deferred();
   playPlans.push(hanging.promise, Promise.resolve());

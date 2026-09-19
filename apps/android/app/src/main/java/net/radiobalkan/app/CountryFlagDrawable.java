@@ -46,6 +46,8 @@ public final class CountryFlagDrawable extends Drawable {
                 fill(c,l,t,r,bt,0xFFDA121A); eagle(c,l+w/2,t+h/2,Math.max(3,w/5),0xFF111111); break;
             case "ME":
                 fill(c,l,t,r,bt,0xFFC41E3A); stroke(c,l,t,r,bt,0xFFDAB437,Math.max(1,h/12)); p.setColor(0xFFDAB437); c.drawCircle(l+w/2f,t+h/2f,Math.max(2,h/6f),p); break;
+            case "BG":
+                h3(c,l,t,r,bt,0xFFFFFFFF,0xFF00966E,0xFFD62612); break;
             default:
                 fill(c,l,t,r,bt,0xFF263746); p.setColor(0xFFF7A63D); c.drawCircle(l+w/2f,t+h/2f,Math.max(2,h/4f),p); break;
         }
