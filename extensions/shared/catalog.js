@@ -10,14 +10,17 @@ const RB = (() => {
     ['SI','Slovenija'], ['MK','Sjeverna Makedonija'], ['AL','Albanija'], ['ME','Crna Gora']
   ];
   const FOREIGN_CODE = 'INT';
-  const COUNTRIES = [...BALKAN_COUNTRIES, [FOREIGN_CODE, 'Strano']];
+  const DIASPORA_CODE = 'DIA';
+  const COUNTRIES = [...BALKAN_COUNTRIES, [DIASPORA_CODE, 'Dijaspora'], [FOREIGN_CODE, 'Strano']];
   const BALKAN_ALLOWED = new Set(BALKAN_COUNTRIES.map(x => x[0]));
   const ALLOWED = new Set(COUNTRIES.map(x => x[0]));
   const PAGE = 200;
   const MAX_PER_COUNTRY = 1600;
-  const MAX_FOREIGN = 50;
-  const FOREIGN_SCAN_LIMIT = 500;
-  const MAX_CATALOG = 7050;
+  const MAX_FOREIGN = 120;
+  const MAX_DIASPORA = 120;
+  const FOREIGN_SCAN_LIMIT = 1000;
+  const DIASPORA_QUERY_LIMIT = 100;
+  const MAX_CATALOG = 7240;
   const CACHE_MS = 12 * 60 * 60 * 1000;
   const MAX_SERVER_RESPONSE_BYTES = 512 * 1024;
   const MAX_CATALOG_RESPONSE_BYTES = 8 * 1024 * 1024;
@@ -96,7 +99,7 @@ const RB = (() => {
 
   const identity = station => {
     const name = fold(station.name);
-    const country = clean(station.countrycode).toUpperCase();
+    const country = clean(station.sourcecountrycode || station.countrycode).toUpperCase();
     if (!name || !ALLOWED.has(country)) return '';
     const homepageHost = host(station.homepage);
     if (homepageHost) return `${country}|${name}|home:${homepageHost}`;
@@ -143,6 +146,13 @@ const RB = (() => {
     primary.votes = Math.max(+primary.votes || 0, +other.votes || 0);
     primary.bitrate = Math.max(+primary.bitrate || 0, +other.bitrate || 0);
     primary.lastcheckok = Math.max(+primary.lastcheckok || 0, +other.lastcheckok || 0);
+    if (a.countrycode === DIASPORA_CODE || b.countrycode === DIASPORA_CODE) {
+      primary.countrycode = DIASPORA_CODE;
+      primary.sourcecountrycode = a.sourcecountrycode || b.sourcecountrycode || '';
+      if (!String(primary.tags || '').toLowerCase().includes('dijaspora')) {
+        primary.tags = primary.tags ? `dijaspora,${primary.tags}` : 'dijaspora';
+      }
+    }
     return normalize(primary);
   }
 
@@ -256,6 +266,43 @@ const RB = (() => {
     throw lastError || new Error('Strani katalog nije dostupan');
   }
 
+  async function fetchDiasporaFromAny(serverList) {
+    const queries = [
+      ['tag', 'diaspora'], ['name', 'balkan'], ['name', 'ex yu'],
+      ['language', 'croatian'], ['language', 'serbian'], ['language', 'bosnian'],
+      ['language', 'macedonian'], ['language', 'albanian'], ['language', 'slovenian']
+    ];
+    let lastError;
+    for (const base of serverList) {
+      try {
+        const mapped = [];
+        for (const [field, value] of queries) {
+          const url = `${base}/json/stations/search?${field}=${encodeURIComponent(value)}&hidebroken=true&order=votes&reverse=true&limit=${DIASPORA_QUERY_LIMIT}`;
+          const response = await fetchWithTimeout(url, { cache: 'no-store', redirect: 'error' }, 9000);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const page = await readJsonLimited(response, 3 * 1024 * 1024);
+          if (!Array.isArray(page)) continue;
+          for (const raw of page) {
+            const station = normalize(raw);
+            const sourceCode = station.countrycode;
+            if (!sourceCode || BALKAN_ALLOWED.has(sourceCode) || station.lastcheckok !== 1) continue;
+            if (!station.name || (!safeHttp(station.url) && !safeHttp(station.url_resolved))) continue;
+            station.sourcecountrycode = sourceCode;
+            station.countrycode = DIASPORA_CODE;
+            station.tags = station.tags ? `dijaspora,${station.tags}` : 'dijaspora';
+            if (!station.country) station.country = 'Dijaspora';
+            mapped.push(station);
+          }
+        }
+        const unique = dedupe(mapped)
+          .sort((a, b) => b.votes - a.votes || quality(b) - quality(a) || a.name.localeCompare(b.name))
+          .slice(0, MAX_DIASPORA);
+        if (unique.length) return unique;
+      } catch (error) { lastError = error; }
+    }
+    throw lastError || new Error('Katalog dijaspore nije dostupan');
+  }
+
   async function storageGet(keys) {
     const api = ext.storage.local;
     try {
@@ -291,13 +338,16 @@ const RB = (() => {
     for (const [code] of COUNTRIES) {
       if (!present.has(code)) merged.push(...cacheList.filter(x => x.countrycode === code));
     }
-    const regional = dedupe(merged.filter(x => x.countrycode !== FOREIGN_CODE))
+    const regional = dedupe(merged.filter(x => BALKAN_ALLOWED.has(x.countrycode)))
       .sort((a, b) => BALKAN_COUNTRIES.findIndex(x => x[0] === a.countrycode) - BALKAN_COUNTRIES.findIndex(x => x[0] === b.countrycode) || b.votes - a.votes || a.name.localeCompare(b.name))
-      .slice(0, MAX_CATALOG - MAX_FOREIGN);
+      .slice(0, MAX_CATALOG - MAX_FOREIGN - MAX_DIASPORA);
+    const diaspora = dedupe(merged.filter(x => x.countrycode === DIASPORA_CODE))
+      .sort((a, b) => b.votes - a.votes || a.name.localeCompare(b.name))
+      .slice(0, MAX_DIASPORA);
     const foreign = dedupe(merged.filter(x => x.countrycode === FOREIGN_CODE))
       .sort((a, b) => b.votes - a.votes || a.name.localeCompare(b.name))
       .slice(0, MAX_FOREIGN);
-    return [...regional, ...foreign];
+    return [...regional, ...diaspora, ...foreign];
   }
 
   async function freshCatalog(cached) {
@@ -321,13 +371,17 @@ const RB = (() => {
     const foreignPromise = fetchForeignFromAny(serverList)
       .then(list => { successfulBatches += 1; return list; })
       .catch(() => []);
+    const diasporaPromise = fetchDiasporaFromAny(serverList)
+      .then(list => { successfulBatches += 1; return list; })
+      .catch(() => []);
     await Promise.all([worker(), worker()]);
     let online = [];
     for (const [code] of BALKAN_COUNTRIES) online.push(...(results.get(code) || []));
+    online.push(...await diasporaPromise);
     online.push(...await foreignPromise);
     if (successfulBatches === 0) throw new Error('Radio Browser trenutačno nije dostupan');
     const merged = mergeMissingCountries(online, cached);
-    const regionalCount = merged.filter(x => x.countrycode !== FOREIGN_CODE).length;
+    const regionalCount = merged.filter(x => BALKAN_ALLOWED.has(x.countrycode)).length;
     if (regionalCount < 600 && cached.length > merged.length) return mergeMissingCountries([...merged, ...cached], cached);
     return merged;
   }
@@ -408,6 +462,6 @@ const RB = (() => {
 
   return {
     load, favorites, setFavorite, uiPreferences, setUiPreferences, adminOverrideFor, setAdminOverride, key, fold, safeHttp, ext,
-    COUNTRIES, BALKAN_COUNTRIES, ALLOWED, BALKAN_ALLOWED, FOREIGN_CODE, MAX_FOREIGN
+    COUNTRIES, BALKAN_COUNTRIES, ALLOWED, BALKAN_ALLOWED, FOREIGN_CODE, DIASPORA_CODE, MAX_FOREIGN, MAX_DIASPORA
   };
 })();
