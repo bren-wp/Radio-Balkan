@@ -548,6 +548,16 @@ def main() -> None:
         "Generate and verify checksums",
         'python scripts/generate_release_checksums.py release-assets "$VERSION"',
         'sha256sum -c "RadioBalkan-v${VERSION}-SHA256.txt"',
+        "paths:",
+        "- VERSION",
+    )
+    reject(
+        ".github/workflows/publish.yml",
+        "- apps/**",
+        "- extensions/**",
+        "- scripts/check_clean_worktree.py",
+        "- scripts/generate_release_checksums.py",
+        "- .github/workflows/publish.yml",
     )
     require(
         ".github/workflows/screenshots.yml",
