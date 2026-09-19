@@ -320,10 +320,22 @@ async function main() {
   elements.stationPagePlay.dispatch('click');
   await flush();
   assert.equal(playCalls, playCallsBeforeDetails + 1, 'station-page play must use the existing RB_PLAY path');
+
+  const similarButton = new Element('similar-station');
+  similarButton.dataset.stationKey = 'station-b';
+  elements.stationSimilarList.dispatch('click', {
+    target: {
+      closest(selector) {
+        return selector === '[data-station-key]' ? similarButton : null;
+      }
+    }
+  });
+  assert.equal(elements.stationPageTitle.textContent, 'Radio B', 'similar-station navigation must replace the station page without reopening browse');
+  stationRow.focused = false;
   elements.stationBack.dispatch('click');
   assert.equal(elements.stationPage.hidden, true, 'back action must leave the dedicated station page');
   assert.equal(elements.browsePage.hidden, false, 'browse page must be restored after station details');
-  assert.equal(stationRow.focused, true, 'returning from details must restore focus to the originating station card');
+  assert.equal(stationRow.focused, true, 'returning after similar-station navigation must restore focus to the originating station card');
 
   elements.quickTop.dispatch('click');
   assert.equal(elements.quickTop.attributes['aria-pressed'], 'true', 'Top must be a distinct navigation state');
