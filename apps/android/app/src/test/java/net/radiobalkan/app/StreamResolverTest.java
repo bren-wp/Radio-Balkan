@@ -63,6 +63,17 @@ public final class StreamResolverTest {
     }
 
     @Test
+    public void stationUuidValidationRejectsPathAndOversizedInput() {
+        assertTrue(StreamResolver.isValidStationUuid("550e8400-e29b-41d4-a716-446655440000"));
+        assertTrue(StreamResolver.isValidStationUuid("station:hr_01.test"));
+        assertFalse(StreamResolver.isValidStationUuid(""));
+        assertFalse(StreamResolver.isValidStationUuid("../stations/search"));
+        assertFalse(StreamResolver.isValidStationUuid("uuid/with/slash"));
+        assertFalse(StreamResolver.isValidStationUuid("uuid?query=1"));
+        assertFalse(StreamResolver.isValidStationUuid(new String(new char[129]).replace('\0', 'a')));
+    }
+
+    @Test
     public void foreignRepairAcceptsOnlyNonBalkanCatalogCountry() {
         assertTrue(StreamResolver.matchesRefreshCountry(RadioRepository.FOREIGN_CODE, "US"));
         assertTrue(StreamResolver.matchesRefreshCountry(RadioRepository.FOREIGN_CODE, "GB"));

@@ -152,6 +152,46 @@ func TestPlaybackToggleDecisionLifecycle(t *testing.T) {
 	}
 }
 
+func TestStationCardActionLayoutFitsSupportedWidths(t *testing.T) {
+	for _, tc := range []struct {
+		width  int32
+		hasWeb bool
+	}{
+		{width: 390, hasWeb: true},
+		{width: 390, hasWeb: false},
+		{width: 440, hasWeb: true},
+		{width: 520, hasWeb: true},
+	} {
+		if end := stationCardActionEnd(tc.width, tc.hasWeb); end > tc.width {
+			t.Fatalf("station actions overflow card width %d: end=%d hasWeb=%v", tc.width, end, tc.hasWeb)
+		}
+	}
+}
+
+func TestTransportAvailability(t *testing.T) {
+	tests := []struct {
+		name                         string
+		current, stationCount        int
+		stopped                      bool
+		play, stop, navigate         bool
+	}{
+		{name: "empty catalog", current: -1, stationCount: 0},
+		{name: "no selection", current: -1, stationCount: 3},
+		{name: "single selected playing", current: 0, stationCount: 1, play: true, stop: true},
+		{name: "single selected stopped", current: 0, stationCount: 1, stopped: true, play: true},
+		{name: "multiple selected playing", current: 1, stationCount: 3, play: true, stop: true, navigate: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			play, stop, navigate := transportAvailability(tc.current, tc.stationCount, tc.stopped)
+			if play != tc.play || stop != tc.stop || navigate != tc.navigate {
+				t.Fatalf("transportAvailability(%d, %d, %v) = (%v,%v,%v); want (%v,%v,%v)",
+					tc.current, tc.stationCount, tc.stopped, play, stop, navigate, tc.play, tc.stop, tc.navigate)
+			}
+		})
+	}
+}
+
 func TestAudioAckTimeoutDiscardsStaleChannel(t *testing.T) {
 	app = App{done: make(chan struct{}), audioAck: make(chan string)}
 

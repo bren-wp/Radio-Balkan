@@ -16,8 +16,10 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public final class StationAdapter extends BaseAdapter {
     public interface Actions {
@@ -30,6 +32,7 @@ public final class StationAdapter extends BaseAdapter {
     private final Actions actions;
     private final ImageLoader images;
     private List<RadioStation> items = new ArrayList<>();
+    private Set<String> favorites = new HashSet<>();
     private String currentKey = "";
     private boolean playing;
 
@@ -47,10 +50,16 @@ public final class StationAdapter extends BaseAdapter {
         notifyDataSetChanged();
     }
 
-    public void setSnapshot(List<RadioStation> value, String key, boolean isPlaying) {
+    public void setSnapshot(List<RadioStation> value, String key, boolean isPlaying, Set<String> favoriteKeys) {
         items = value == null ? new ArrayList<>() : new ArrayList<>(value);
+        favorites = favoriteKeys == null ? new HashSet<>() : new HashSet<>(favoriteKeys);
         currentKey = key == null ? "" : key;
         playing = isPlaying;
+        notifyDataSetChanged();
+    }
+
+    public void setFavorites(Set<String> favoriteKeys) {
+        favorites = favoriteKeys == null ? new HashSet<>() : new HashSet<>(favoriteKeys);
         notifyDataSetChanged();
     }
 
@@ -84,7 +93,9 @@ public final class StationAdapter extends BaseAdapter {
         row.meta.setCompoundDrawablePadding(dp(6));
         row.meta.setCompoundDrawables(flag, null, null, null);
         row.listeners.setText(statusLine(s));
+        boolean favorite = favorites.contains(key);
         row.play.setText(active && playing ? "Ⅱ" : "▶");
+        row.favorite.setText(favorite ? "♥" : "♡");
         row.root.setSelected(active);
         row.root.setBackground(interactiveRounded(active ? 0xFF171C24 : 0xFF11171F, active ? 0xFFFFA52E : 0xFF303845, 18, 0x26FFFFFF));
 
@@ -92,9 +103,12 @@ public final class StationAdapter extends BaseAdapter {
         images.load(s.favicon, row.logo, null);
         String action = active && playing ? "Pauziraj " : "Slušaj ";
         row.play.setContentDescription(action + s.name);
+        row.favorite.setContentDescription((favorite ? "Ukloni iz omiljenih: " : "Dodaj u omiljene: ") + s.name);
+        row.favorite.setSelected(favorite);
         row.more.setContentDescription("Više opcija za " + s.name);
         row.root.setContentDescription(s.name + ", " + countryAndGenre(s) + ", " + statusLine(s) + (active ? ", trenutno odabrana" : ""));
         row.play.setOnClickListener(v -> actions.onPlay(s));
+        row.favorite.setOnClickListener(v -> actions.onFavorite(s));
         row.more.setOnClickListener(v -> actions.onMore(s));
         row.root.setOnClickListener(v -> actions.onPlay(s));
         row.root.setOnLongClickListener(v -> { actions.onMore(s); return true; });
@@ -103,6 +117,7 @@ public final class StationAdapter extends BaseAdapter {
 
     private Row createRow() {
         Row r = new Row();
+        boolean compact = isCompactWidth();
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.HORIZONTAL);
         root.setGravity(Gravity.CENTER_VERTICAL);
@@ -121,13 +136,13 @@ public final class StationAdapter extends BaseAdapter {
         ImageView logo = new ImageView(context);
         logo.setScaleType(ImageView.ScaleType.CENTER_CROP);
         artBox.addView(logo, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        root.addView(artBox, new LinearLayout.LayoutParams(dp(104), ViewGroup.LayoutParams.MATCH_PARENT));
+        root.addView(artBox, new LinearLayout.LayoutParams(dp(compact ? 88 : 104), ViewGroup.LayoutParams.MATCH_PARENT));
         r.logo = logo;
 
         LinearLayout info = new LinearLayout(context);
         info.setOrientation(LinearLayout.VERTICAL);
         info.setGravity(Gravity.CENTER_VERTICAL);
-        info.setPadding(dp(13), 0, dp(6), 0);
+        info.setPadding(dp(compact ? 9 : 13), 0, dp(compact ? 3 : 6), 0);
         r.name = text(17, Color.WHITE, true);
         r.meta = text(12, 0xFFBEC4CD, false);
         r.listeners = text(11, 0xFF98A2AF, false);
@@ -136,11 +151,14 @@ public final class StationAdapter extends BaseAdapter {
         info.addView(r.listeners, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(23)));
         root.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
 
-        r.more = smallButton("⋮", false, 24);
-        root.addView(r.more, new LinearLayout.LayoutParams(dp(46), dp(48)));
+        r.favorite = smallButton("♡", false, compact ? 20 : 22);
+        root.addView(r.favorite, new LinearLayout.LayoutParams(dp(compact ? 36 : 40), dp(48)));
+
+        r.more = smallButton("⋮", false, compact ? 22 : 24);
+        root.addView(r.more, new LinearLayout.LayoutParams(dp(compact ? 38 : 42), dp(48)));
 
         r.play = smallButton("▶", true, 18);
-        root.addView(r.play, new LinearLayout.LayoutParams(dp(56), dp(56)));
+        root.addView(r.play, new LinearLayout.LayoutParams(dp(compact ? 50 : 56), dp(56)));
         r.root = root;
         return r;
     }
@@ -218,12 +236,17 @@ public final class StationAdapter extends BaseAdapter {
         return new RippleDrawable(ColorStateList.valueOf(rippleColor), content, mask);
     }
 
+    private boolean isCompactWidth() {
+        float density = context.getResources().getDisplayMetrics().density;
+        return context.getResources().getDisplayMetrics().widthPixels / Math.max(1f, density) < 390f;
+    }
+
     private int dp(int v) { return (int) (v * context.getResources().getDisplayMetrics().density + 0.5f); }
 
     private static final class Row {
         LinearLayout root;
         ImageView logo;
         TextView name, meta, listeners;
-        Button play, more;
+        Button play, favorite, more;
     }
 }

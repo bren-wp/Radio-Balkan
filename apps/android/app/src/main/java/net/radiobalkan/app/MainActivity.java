@@ -697,7 +697,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 postIfActive(() -> {
                     if (generation != filterGeneration.get()) return;
                     visibleStations = out;
-                    adapter.setSnapshot(out, currentKey, playing);
+                    adapter.setSnapshot(out, currentKey, playing, favorites);
                     featured = out.isEmpty() ? null : out.get(0);
                     if (featured == null) {
                         heroName.setText("Nema rezultata");
@@ -898,8 +898,10 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     }
 
     @Override public void onFavorite(RadioStation s) {
+        if (s == null) return;
         boolean on = state.toggleFavorite(s.key());
         Toast.makeText(this, on ? "Dodano u omiljene" : "Uklonjeno iz omiljenih", Toast.LENGTH_SHORT).show();
+        if (adapter != null) adapter.setFavorites(state.favorites());
         if ("favorites".equals(tab)) applyFilterAsync();
     }
 
