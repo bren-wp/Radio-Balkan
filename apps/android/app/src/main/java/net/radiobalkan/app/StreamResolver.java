@@ -198,9 +198,9 @@ public final class StreamResolver {
         for (String base : BASES) {
             long remainingNanos = deadline - System.nanoTime();
             if (remainingNanos <= 0) break;
-            int remainingMs = (int) Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
-            int connectTimeout = Math.max(1, Math.min(2500, remainingMs));
-            int readTimeout = Math.max(1, Math.min(3500, remainingMs));
+            int remainingMs = (int) Math.max(2L, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
+            int connectTimeout = Math.max(1, Math.min(2500, remainingMs / 2));
+            int readTimeout = Math.max(1, Math.min(3500, remainingMs - connectTimeout));
             HttpURLConnection c = null;
             try {
                 URL u = new URL(base + "/json/stations/byuuid/" + stationUuid);
