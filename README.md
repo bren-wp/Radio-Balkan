@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.30" src="assets/badges/version.svg">
+  <img alt="version 0.0.31" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -15,18 +15,16 @@
 
 Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrvatske i regije bez korisničkog računa, bez telemetry sustava i bez teškog web runtimea u Windows aplikaciji. Projekt objedinjuje nativni Windows klijent, nativni Android klijent i produkcijske ekstenzije za Chrome, Edge, Opera i Firefox.
 
-## Što donosi v0.0.30
+## Što donosi v0.0.31
 
-- **Bolje organizirana početna** — Sve, Top, Nedavno, Zemlje, Žanrovi, Dijaspora, Strano, Narodna i Pop & Rock vode na stvarno različite prikaze ili filtre umjesto dupliciranih odredišta.
-- **Jasniji kontekst pregledavanja** — browser prikazuje dinamički naslov i opis aktivnog prikaza, dok Android i Windows koriste istu semantiku za Top, Nedavno, Omiljene, Dijasporu, Strano i žanrove.
-- **Veći regionalni ekosustav** — Bugarska je puni regionalni katalog na Windowsu, Androidu i browserima, uključujući lokalni prikaz zastave i playback/network pravila.
-- **Više stanica za dijasporu i Strano** — obje supplemental grupe sada podržavaju do 240 provjerenih postaja, uz regionalni katalog koji i dalje ostaje prioritet.
-- **Širi diaspora discovery** — uz Balkan/Ex-YU i regionalne jezike pretražuju se i dodatni kontrolirani signali poput ex-yu, yugo, jugoslav, montenegrin i serbo-croatian.
-- **Brži Android katalog** — diaspora discovery više ne izvršava velik niz upita serijski; koristi zaseban bounded pool od tri workera, kao kontrolirani paralelni pristup na drugim klijentima.
-- **Nedavno slušane** — lokalna povijest sprema najviše 50 dedupliciranih stanica i zapisuje stanicu tek nakon uspješno pokrenute reprodukcije.
-- **Dodatno usklađene station stranice** — Android detail prikaz dobiva slične stanice i ponašanje bliže Windows/browser klijentima; javni prikazi i dalje ne izlažu administratorske source podatke.
-- **Sigurnost i stabilnost ostaju fail-closed** — private-network zaštita, bounded response/redirect/timeout pravila, session/generation zaštita playera, admin RBAC i clean-worktree contracti ostaju dio obaveznog CI-ja.
-- **Bez telemetryja i reference-domain ovisnosti** — nije dodan analytics, tracking, javni account backend ni referentna domena u produkcijske površine.
+- **Čišća početna u browser ekstenzijama** — primarno pregledavanje sada je jasno svedeno na **Top / Žanrovi / Zemlje**, dok su Početna, Nedavno, Dijaspora, Strano, Narodna i Pop & Rock smješteni u kompaktni discovery red.
+- **Jedinstveno pravilo klika na stanicu** — kartica i identitet trenutačne stanice u playeru na Windowsu, Androidu i browserima otvaraju zasebnu stranicu stanice; samo eksplicitni ▶ pokreće reprodukciju.
+- **Bolja station-detail konzistentnost** — detaljna stranica ostaje javni prikaz s opisom, područjem, žanrom, jezikom, codec/bitrate informacijama i sličnim stanicama bez izlaganja stream URL-a ili administratorskih source podataka.
+- **Manje mrtvog i dupliciranog koda** — uklonjen je drugi browser writer za povijest slušanja; uspješni playback jedini zapisuje Nedavno iz background playera, a popup ga samo čita. Windows ponovno koristi zajednički public-tag helper.
+- **Bolja pristupačnost playera** — identitet aktivne stanice ima fokusabilnu detalj akciju i opisnu oznaku, bez promjene postojećih Play/Pause/Stop/Prev/Next kontrola.
+- **Sigurnost ostaje fail-closed** — private-network blokade, response/redirect/timeout limiti, session/generation zaštita playera, lokalni admin RBAC i bounded recovery nisu oslabljeni novim UX putanjama.
+- **Brend i privatnost ostaju zaključani** — nema analyticsa, telemetryja, oglasa ni reference-domain ovisnosti; **Built with Brendigo** i poveznica na https://brendigo.com/ ostaju dio javnih klijenata.
+- **Produkcijski gate potvrđen** — feature CI i post-merge main CI prošli su versions/security/UI, browser, Android i Windows build/test suite, uključujući stvarni Windows startup soak i Product screenshots workflow.
 
 ## Zašto Radio Balkan
 
@@ -66,7 +64,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.30 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.30):
+Gotovi v0.0.31 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.31):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -106,7 +104,7 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.31
+python scripts/bump_version.py 0.0.32
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.

@@ -1,5 +1,23 @@
 # Izdavanja
 
+## 0.0.31
+
+Izdanje 0.0.31 fokusira se na čišću informacijsku arhitekturu, potpuno konzistentan dedicated station-detail ulaz iz svih ključnih korisničkih površina i dodatno uklanjanje mrtvog/dupliciranog koda. Nisu dodani analytics, telemetry, oglasi, javni korisnički računi, novi backend niti šire browser dozvole.
+
+- browser početna sada ima jasnu primarnu navigaciju **Top / Žanrovi / Zemlje** te zaseban kompaktni discovery red za Početnu, Nedavno, Dijasporu, Strano, Narodnu i Pop & Rock
+- klik na karticu stanice i klik na identitet aktivne stanice u donjem playeru na Windowsu, Androidu i browserima otvaraju dedicated station stranicu bez implicitnog autoplay-a
+- eksplicitni ▶ ostaje jedina neposredna playback akcija; postojeći Play/Pause/Stop/Previous/Next lifecycle ostaje nepromijenjen
+- browser uklanja mrtvi `catalog.addRecent()` writer; Nedavno ostaje background-owned i zapisuje se tek nakon potvrđeno uspješnog playback starta
+- Windows uklanja duplicirani `firstTag()` helper i koristi jedinstveni `firstPublicTag()` put za user-facing station metadata
+- browser current-station details kontrola je fokusabilna i dobiva dinamičan pristupačni naziv
+- Android artwork i tekst aktivne stanice u playeru vode na postojeći non-exported `StationDetailsActivity`
+- Windows bottom-player identitet aktivne stanice dobiva isti `hitStationDetails` put kao kartice, bez miješanja s posebnim favorite/play/now-playing akcijama
+- produkcijski verifier i regression testovi zaključavaju novu navigacijsku hijerarhiju, player-to-details ponašanje, ownership povijesti slušanja i zabranu reference-domain linka
+- **Built with Brendigo** i `https://brendigo.com/` ostaju javno dostupni na podržanim klijentima
+- exact-head feature CI i post-merge `main` CI prošli su browser, Android, Windows, versions/security/UI provjere, stvarni Windows startup soak i Product screenshots workflow
+
+Dostupnost pojedine third-party radio stanice i dalje ovisi o infrastrukturi same postaje. Radio Balkan filtrira poznato neispravne izvore i koristi bounded timeout/fallback/recovery putanje, ali ne može jamčiti neprekidnu dostupnost svakog vanjskog streama.
+
 ## 0.0.30
 
 Izdanje 0.0.30 dodatno usklađuje Windows, Android i browser klijente oko discovery navigacije, lokalne povijesti slušanja, većeg Balkanskog/diaspora kataloga i bounded mrežnog dohvaćanja. Nisu dodani analytics, telemetry, javni korisnički računi, novi backend niti šire browser dozvole.
