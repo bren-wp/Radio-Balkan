@@ -142,6 +142,10 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         }
         genre = state.genre();
         tab = validTab(state.tab()) ? state.tab() : "all";
+        if ("replaced".equals(tab) || "broken".equals(tab)) {
+            tab = "all";
+            state.setTab("all");
+        }
         navSelection = navSelectionForTab(tab);
         images = new ImageLoader();
         repository = new RadioRepository(this);
@@ -593,6 +597,13 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 .setNegativeButton("Odustani", null)
                 .create();
         dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            long clickNow = System.currentTimeMillis();
+            if (clickNow < adminLockedUntilMs) {
+                long seconds = Math.max(1L, (adminLockedUntilMs - clickNow + 999L) / 1000L);
+                password.setText("");
+                password.setError("Prijava je zaključana još " + seconds + " s.");
+                return;
+            }
             if (AdminAuth.matches(username.getText().toString(), password.getText().toString())) {
                 adminMode = true;
                 adminFailures = 0;

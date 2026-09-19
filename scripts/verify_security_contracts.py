@@ -70,6 +70,8 @@ def main() -> None:
         'chosen.equals("Odaberi drugi izvor") && requireAdmin()',
         "if (!requireAdmin()) return;",
         "adminLockedUntilMs = System.currentTimeMillis() + 30_000L",
+        'if ("replaced".equals(tab) || "broken".equals(tab))',
+        "if (clickNow < adminLockedUntilMs)",
     )
     forbid(
         "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
@@ -488,6 +490,7 @@ def main() -> None:
         "func passwordDialog(",
         "func toggleAdminSession()",
         "if adminModeEnabled()",
+        'if app.tab == "replaced" || app.tab == "broken"',
     )
     forbid(
         "apps/windows/portable/main.go",

@@ -1024,6 +1024,10 @@ func main() {
 	if isValidTab(app.state.Tab) {
 		app.tab = app.state.Tab
 	}
+	if app.tab == "replaced" || app.tab == "broken" {
+		app.tab = "all"
+		app.state.Tab = "all"
+	}
 	if app.safeMode {
 		// A previous launch did not finish cleanly. Start conservatively and avoid
 		// immediate full-network stress until the UI is responsive.
