@@ -659,7 +659,7 @@
       const override = await RB.adminOverrideFor(RB.key(station)).catch(() => '');
       if (token !== commandGeneration) return;
       const playableStation = override ? { ...station, url_resolved: override } : station;
-      const result = await ext.runtime.sendMessage({ type: 'RB_PLAY', station: playableStation });
+      const result = await ext.runtime.sendMessage({ type: 'RB_PLAY', station: playableStation, recentKey: RB.key(station) });
       if (token !== commandGeneration) return;
       await applyCommandResult(result, token);
       if (token !== commandGeneration) return;
