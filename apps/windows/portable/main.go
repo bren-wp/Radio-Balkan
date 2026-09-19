@@ -2453,7 +2453,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	}
 	playing = app.playing
 	stopped = app.audioStopped
-	canNavigate = canNavigateStations(len(app.stations), len(app.filtered))
+	canNavigate = canNavigateStations(currentIdx, len(app.stations), len(app.filtered))
 	app.mu.RUnlock()
 	app.stateMu.RLock()
 	vol := app.state.Volume
@@ -3039,7 +3039,10 @@ func canAdjustVolume(volume, delta int) bool {
 	return false
 }
 
-func canNavigateStations(stationCount, filteredCount int) bool {
+func canNavigateStations(current, stationCount, filteredCount int) bool {
+	if current < 0 {
+		return false
+	}
 	count := stationCount
 	if filteredCount > 0 {
 		count = filteredCount
