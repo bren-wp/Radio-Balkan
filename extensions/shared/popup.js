@@ -376,6 +376,7 @@
 
   function resetFilters() {
     clearTimeout(searchTimer);
+    viewMode = 'all';
     search.value = '';
     country.value = '';
     if (genre) genre.value = '';
@@ -732,8 +733,9 @@
       $('heroMeta').textContent = stationMeta(station);
     } else {
       const foreign = all.filter(item => item.countrycode === RB.FOREIGN_CODE).length;
-      const regional = all.length - foreign;
-      $('heroMeta').textContent = `${regional} regionalnih · ${foreign} stranih postaja`;
+      const diaspora = all.filter(item => item.countrycode === RB.DIASPORA_CODE).length;
+      const regional = all.length - foreign - diaspora;
+      $('heroMeta').textContent = `${regional} regionalnih · ${diaspora} dijaspora · ${foreign} stranih postaja`;
     }
     const playerLogo = $('playerLogo');
     playerLogo.onerror = null;
@@ -777,7 +779,12 @@
     const row = event.target.closest('.station');
     if (!row) return;
     const station = visible.find(item => RB.key(item) === row.dataset.key);
-    void play(station);
+    if (!station) return;
+    if (event.target.closest('.stationPlay')) {
+      void play(station);
+      return;
+    }
+    openStationPage(station, row);
   });
 
   list.addEventListener('keydown', event => {
@@ -787,15 +794,52 @@
     if (!row) return;
     event.preventDefault();
     const station = visible.find(item => RB.key(item) === row.dataset.key);
-    void play(station);
+    if (station) openStationPage(station, row);
   });
 
+  $('stationBack').addEventListener('click', closeStationPage);
+  $('stationPagePlay').addEventListener('click', () => {
+    if (detailStation) void play(detailStation);
+  });
+  $('stationPageFavorite').addEventListener('click', async () => {
+    if (!detailStation) return;
+    const key = RB.key(detailStation);
+    try {
+      favs = await RB.setFavorite(key, !favs[key]);
+      updateStationPageFavorite();
+      render();
+      updatePlayer();
+    } catch {
+      playerStatus = 'Omiljene nisu spremljene';
+      updatePlayer();
+    }
+  });
+  $('stationSimilarList').addEventListener('click', event => {
+    const button = event.target.closest('[data-station-key]');
+    if (!button) return;
+    const station = all.find(item => RB.key(item) === button.dataset.stationKey);
+    if (station) openStationPage(station, button);
+  });
+  $('stationPage').addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    closeStationPage();
+  });
+
+  $('quickAll').addEventListener('click', () => selectArea(''));
+  $('quickTop').addEventListener('click', selectTop);
+  $('quickCountries').addEventListener('click', () => country.focus());
+  $('quickGenres').addEventListener('click', () => genre?.focus());
+  $('quickDiaspora').addEventListener('click', () => selectArea(RB.DIASPORA_CODE));
+  $('quickForeign').addEventListener('click', () => selectArea(RB.FOREIGN_CODE));
+
   search.addEventListener('input', () => {
+    viewMode = 'all';
     clearTimeout(searchTimer);
     searchTimer = setTimeout(apply, 130);
   });
-  country.addEventListener('change', () => { apply(); queueUiPreferencesSave(); });
-  genre?.addEventListener('change', () => { apply(); queueUiPreferencesSave(); });
+  country.addEventListener('change', () => { viewMode = 'all'; apply(); queueUiPreferencesSave(); });
+  genre?.addEventListener('change', () => { viewMode = 'all'; apply(); queueUiPreferencesSave(); });
   $('adminToggle').addEventListener('click', openAdminPanel);
   $('adminClose').addEventListener('click', closeAdminPanel);
   $('adminPanel').addEventListener('click', event => { if (event.target === $('adminPanel')) closeAdminPanel(); });
@@ -901,6 +945,7 @@
   $('playerStop').addEventListener('click', () => void stopPlayback());
   $('playerNext').addEventListener('click', () => void playAdjacent(1));
   $('favoritesOnly').addEventListener('click', () => {
+    viewMode = 'all';
     favoritesOnly = !favoritesOnly;
     updateFavoritesFilterButton();
     queueUiPreferencesSave();
@@ -912,6 +957,7 @@
     try {
       favs = await RB.setFavorite(key, !favs[key]);
       apply();
+      if (detailStation) updateStationPageFavorite();
     } catch {
       playerStatus = 'Omiljene nisu spremljene';
       updatePlayer();
@@ -969,5 +1015,6 @@
 
   updateAdminUi();
   updatePlayer();
+  updateQuickNavigation();
   void load(false);
 })();
