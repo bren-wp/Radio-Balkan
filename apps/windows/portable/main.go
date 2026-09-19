@@ -2363,6 +2363,43 @@ func firstTag(tags string) string {
 	return ""
 }
 
+type stationCardActions struct {
+	start, gap, healthRight          int32
+	webW, copyW, checkW, sourceW     int32
+	webLabel, copyLabel, sourceLabel string
+}
+
+func stationCardActionLayout(cardWidth int32) stationCardActions {
+	if cardWidth < 440 {
+		return stationCardActions{
+			start: 88, gap: 4, healthRight: 82,
+			webW: 34, copyW: 46, checkW: 24, sourceW: 40,
+			webLabel: "Web", copyLabel: "Kop.", sourceLabel: "Izvor",
+		}
+	}
+	return stationCardActions{
+		start: 118, gap: 6, healthRight: 112,
+		webW: 40, copyW: 54, checkW: 26, sourceW: 46,
+		webLabel: "Web", copyLabel: "Kopiraj", sourceLabel: "Izvor",
+	}
+}
+
+func stationCardActionEnd(cardWidth int32, hasWeb bool) int32 {
+	layout := stationCardActionLayout(cardWidth)
+	widths := []int32{layout.copyW, layout.checkW, layout.sourceW}
+	if hasWeb {
+		widths = append([]int32{layout.webW}, widths...)
+	}
+	total := layout.start
+	for i, width := range widths {
+		if i > 0 {
+			total += layout.gap
+		}
+		total += width
+	}
+	return 128 + total
+}
+
 func drawStationCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStation) {
 	key := stationKey(s)
 	app.mu.RLock()
@@ -2391,21 +2428,22 @@ func drawStationCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStati
 		meta += " · " + g
 	}
 	text(hdc, meta, artR+44, t+38, r-145, t+65, rgb(178, 185, 194), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+	layout := stationCardActionLayout(r - l)
 	hl, hc := healthText(s.Health)
-	text(hdc, hl, artR+15, t+70, artR+112, t+93, hc, DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	x := artR + 118
+	text(hdc, hl, artR+15, t+70, artR+layout.healthRight, t+93, hc, DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+	x := artR + layout.start
 	y := t + 70
 	action := func(label string, w int32, kind HitKind) {
 		drawMiniAction(hdc, x, y, x+w, y+23, label)
 		app.hits = append(app.hits, HitRegion{R: RECT{x, y, x + w, y + 23}, Kind: kind, Index: idx, Value: key})
-		x += w + 6
+		x += w + layout.gap
 	}
 	if safeHTTPURL(strings.TrimSpace(s.Homepage)) {
-		action("Web", 40, hitWeb)
+		action(layout.webLabel, layout.webW, hitWeb)
 	}
-	action("Kopiraj", 54, hitLink)
-	action("✓", 26, hitCheckStation)
-	action("Izvor", 46, hitReplace)
+	action(layout.copyLabel, layout.copyW, hitLink)
+	action("✓", layout.checkW, hitCheckStation)
+	action(layout.sourceLabel, layout.sourceW, hitReplace)
 	app.stateMu.RLock()
 	fav := app.state.Favorites[key]
 	app.stateMu.RUnlock()

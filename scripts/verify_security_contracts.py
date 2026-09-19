@@ -404,6 +404,8 @@ def main() -> None:
         "defer runtime.UnlockOSThread()",
         "func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleAction",
         "func transportAvailability(current, stationCount int, stopped bool)",
+        "func stationCardActionLayout(cardWidth int32) stationCardActions",
+        "func stationCardActionEnd(cardWidth int32, hasWeb bool) int32",
         "playbackToggleReconnect",
         "Kind: hitPlayerStop",
         "playStationByKey(currentKey, current)",

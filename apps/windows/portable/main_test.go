@@ -152,6 +152,22 @@ func TestPlaybackToggleDecisionLifecycle(t *testing.T) {
 	}
 }
 
+func TestStationCardActionLayoutFitsSupportedWidths(t *testing.T) {
+	for _, tc := range []struct {
+		width  int32
+		hasWeb bool
+	}{
+		{width: 390, hasWeb: true},
+		{width: 390, hasWeb: false},
+		{width: 440, hasWeb: true},
+		{width: 520, hasWeb: true},
+	} {
+		if end := stationCardActionEnd(tc.width, tc.hasWeb); end > tc.width {
+			t.Fatalf("station actions overflow card width %d: end=%d hasWeb=%v", tc.width, end, tc.hasWeb)
+		}
+	}
+}
+
 func TestTransportAvailability(t *testing.T) {
 	tests := []struct {
 		name                         string

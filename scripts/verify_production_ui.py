@@ -192,6 +192,9 @@ def main() -> int:
         "drawIconButtonState",
         "refreshBusy := refreshRunning || loading",
         'if safeHTTPURL(strings.TrimSpace(s.Homepage)) {',
+        "func stationCardActionLayout(cardWidth int32) stationCardActions",
+        "stationCardActionLayout(r - l)",
+        '"Kop."',
         '"■"',
     ):
         require(errors, windows, needle, "Windows UI")
