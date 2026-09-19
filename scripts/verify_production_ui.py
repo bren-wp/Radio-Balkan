@@ -46,7 +46,6 @@ def main() -> int:
 
     popup_html = read("extensions/shared/popup.html")
     popup_js = read("extensions/shared/popup.js")
-    enhancements_js = read("extensions/shared/enhancements.js")
     popup_css = read("extensions/shared/popup.css")
 
     for needle in (
@@ -62,8 +61,13 @@ def main() -> int:
         'id="adminPassword" type="password"',
         'id="adminSource"',
         'id="clearFilters"',
-        'id="stationPanel"',
-        'id="stationDetailPlay"',
+        'id="stationPage"',
+        'id="stationBack"',
+        'id="stationPagePlay"',
+        'id="stationSimilarList"',
+        'id="quickTop"',
+        'id="quickCountries"',
+        'id="quickGenres"',
         'id="quickDiaspora"',
         'href="https://brendigo.com/"',
         'Built with',
@@ -72,6 +76,8 @@ def main() -> int:
     ):
         require(errors, popup_html, needle, "extensions/shared/popup.html")
     forbid(errors, popup_html, '>Ništa<', "extensions/shared/popup.html")
+    forbid(errors, popup_html, 'id="stationPanel"', "extensions/shared/popup.html")
+    forbid(errors, popup_html, 'role="dialog" aria-labelledby="station', "extensions/shared/popup.html")
 
     for needle in (
         "function syncStationPlaybackUi()",
@@ -110,13 +116,16 @@ def main() -> int:
     require(errors, popup_css, "width: 44px", "extensions/shared/popup.css")
     require(errors, popup_css, ".station:focus-visible", "extensions/shared/popup.css")
     require(errors, popup_css, "button:active:not(:disabled)", "extensions/shared/popup.css")
-    require(errors, enhancements_js, "event.stopImmediatePropagation()", "extensions/shared/enhancements.js")
-    require(errors, enhancements_js, "openDetails(row)", "extensions/shared/enhancements.js")
-    require(errors, enhancements_js, "play.click()", "extensions/shared/enhancements.js")
-    require(errors, enhancements_js, "selectArea('DIA')", "extensions/shared/enhancements.js")
-    require(errors, enhancements_js, "selectArea('INT')", "extensions/shared/enhancements.js")
+    require(errors, popup_js, "function openStationPage(station, returnFocus = null)", "extensions/shared/popup.js")
+    require(errors, popup_js, "if (returnFocus && !detailReturnFocus) detailReturnFocus = returnFocus;", "extensions/shared/popup.js")
+    require(errors, popup_js, "function closeStationPage()", "extensions/shared/popup.js")
+    require(errors, popup_js, "if (event.target.closest('.stationPlay'))", "extensions/shared/popup.js")
+    require(errors, popup_js, "openStationPage(station, row)", "extensions/shared/popup.js")
+    require(errors, popup_js, "function selectTop()", "extensions/shared/popup.js")
+    require(errors, popup_js, "selectArea(RB.DIASPORA_CODE)", "extensions/shared/popup.js")
+    require(errors, popup_js, "selectArea(RB.FOREIGN_CODE)", "extensions/shared/popup.js")
     require(errors, popup_css, ".builtWith", "extensions/shared/popup.css")
-    require(errors, popup_css, ".stationPanel", "extensions/shared/popup.css")
+    require(errors, popup_css, ".stationPage", "extensions/shared/popup.css")
     require(errors, popup_css, ".emptyAction", "extensions/shared/popup.css")
     require(errors, popup_css, "@media (max-width: 380px)", "extensions/shared/popup.css")
     require(errors, popup_css, ".player > img { display: none; }", "extensions/shared/popup.css")
@@ -124,6 +133,25 @@ def main() -> int:
 
     android = read("apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java")
     adapter = read("apps/android/app/src/main/java/net/radiobalkan/app/StationAdapter.java")
+    station_details = read("apps/android/app/src/main/java/net/radiobalkan/app/StationDetailsActivity.java")
+    station_presentation = read("apps/android/app/src/main/java/net/radiobalkan/app/StationPresentation.java")
+    manifest = read("apps/android/app/src/main/AndroidManifest.xml")
+    for needle in (
+        "StationPresentation.description(station)",
+        "StationPresentation.publicDetails(station)",
+        "PlaybackStarter.start(this, station, state)",
+        '"Built with Brendigo"',
+        '"https://brendigo.com/"',
+        "finish();",
+    ):
+        require(errors, station_details, needle, "Android StationDetailsActivity")
+    require(errors, manifest, 'android:name=".StationDetailsActivity"', "Android manifest")
+    require(errors, manifest, 'android:exported="false"', "Android manifest")
+    forbid(errors, station_details, "AlertDialog", "Android StationDetailsActivity")
+    forbid(errors, station_details, "station.urlResolved", "Android StationDetailsActivity")
+    forbid(errors, station_details, "station.homepage", "Android StationDetailsActivity")
+    require(errors, station_presentation, "public static String description(RadioStation s)", "Android StationPresentation")
+    require(errors, station_presentation, "public static String publicDetails(RadioStation s)", "Android StationPresentation")
     for needle in (
         '"Rezervni izvori"',
         '"Filtriraj stanice"',
@@ -140,11 +168,16 @@ def main() -> int:
         'navItem("⋯", "Više", "more")',
         'Button sort = chip("Filtriraj ⌄", false)',
         "new RippleDrawable(",
-        'navSelection = RadioRepository.DIASPORA_CODE.equalsIgnoreCase(country) ? "diaspora" : navSelectionForTab(tab);',
-        'navItem("◎", "Dijaspora", "diaspora")',
+        'navItem("⌂", "Početna", "all")',
+        'navItem("★", "Top", "top")',
+        'navItem("◇", "Otkrij", "discover")',
+        'navItem("♡", "Omiljene", "favorites")',
+        'navItem("⋯", "Više", "more")',
         "buildQuickAreas()",
         "buildBrendigoFooter()",
         "@Override public void onDetails(RadioStation s)",
+        "new Intent(this, StationDetailsActivity.class)",
+        "PlaybackStarter.start(this, s, state)",
         "catalogRefreshRunning.compareAndSet(false, true)",
         "updatePlaybackControls()",
         "playerStop.setOnClickListener",
@@ -177,6 +210,9 @@ def main() -> int:
         '"Očisti automatske izvore"',
         '"Promijeni izvor"',
         'navItem("○", "Profil", "profile")',
+        'navItem("▥", "Radio", "radio")',
+        'navItem("◎", "Dijaspora", "diaspora")',
+        'navItem("▥", "Radio", "radio")',
     ):
         forbid(errors, android, needle, "Android MainActivity")
 
@@ -232,14 +268,23 @@ def main() -> int:
         "case WM_GETMINMAXINFO:",
         "info.PtMinTrackSize.X = 1100",
         "info.PtMinTrackSize.Y = 720",
-        'drawSidebarLabel(hdc, "BRZI ODABIR", y)',
-        '"Popularne", tab == "popular"',
-        '"Jazz", genre == "jazz"',
+        'drawSidebarLabel(hdc, "BIBLIOTEKA", y)',
+        '"Top", tab == "popular"',
+        '"Zemlje", isRegionalCatalogCode(country)',
+        '"Žanrovi", genre != ""',
         '"Dijaspora", country == diasporaCatalogCode',
+        '"Strano", country == foreignCatalogCode',
+        '"Omiljene", tab == "favorites"',
+        '"Nedavno", tab == "recent"',
         "Kind: hitStationDetails",
+        "Kind: hitStationBack",
         "Kind: hitBrendigo",
         'shellOpen("https://brendigo.com/")',
-        "func showStationDetails(idx int)",
+        "func drawStationDetailPage(hdc syscall.Handle, cr RECT)",
+        "func openStationDetails(idx int)",
+        "func closeStationDetails()",
+        "func stationPublicDescription(s RadioStation) string",
+        "func stationPublicFacts(s RadioStation) string",
         'RECT{mainR - 150, 528, mainR, 558}, Kind: hitGenreDropdown',
         'action("Kopiraj", 54, hitLink)',
         'setStatus("Poveznica za reprodukciju je kopirana")',
@@ -271,11 +316,14 @@ def main() -> int:
         'upiši AUTO',
         'strings.EqualFold(strings.TrimSpace(value), "AUTO")',
         'Lokalni dijagnostički zapis',
+        '"Pretraga", false, hitTab, "searchfocus"',
+        '"Pregledaj", false, hitTab, "browse"',
+        "func showStationDetails(idx int)",
     ):
         forbid(errors, windows, needle, "Windows UI")
 
     # User-facing production surfaces must not accidentally expose common development placeholders.
-    user_surfaces = "\n".join((popup_html, popup_js, enhancements_js, android, adapter))
+    user_surfaces = "\n".join((popup_html, popup_js, android, adapter))
     for pattern in (r"\bTODO\b", r"\bFIXME\b", r"developer mode", r"debug mode", r"test mode"):
         if re.search(pattern, user_surfaces, re.IGNORECASE):
             errors.append(f"Production UI: developer placeholder matched {pattern!r}")

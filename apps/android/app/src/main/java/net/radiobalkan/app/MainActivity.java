@@ -71,7 +71,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private final AtomicBoolean healthRunning = new AtomicBoolean();
     private final AtomicBoolean autoHealthStarted = new AtomicBoolean();
     private final AtomicBoolean catalogRefreshRunning = new AtomicBoolean();
-    private final AtomicBoolean adminAuthRunning = new AtomicBoolean();
+    private final AdminLoginGuard adminLoginGuard = AdminLoginGuard.shared();
     private final Object dataLock = new Object();
     private List<RadioStation> allStations = new ArrayList<>();
     private List<RadioStation> visibleStations = new ArrayList<>();
@@ -94,14 +94,13 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private String currentCountryCode = "";
     private boolean playing;
     private boolean adminMode;
-    private final AdminRateLimiter adminRateLimiter = new AdminRateLimiter(5, 30_000L);
     private boolean playbackStopped = true;
     private RadioStation featured;
     private Runnable searchRunnable;
     private boolean receiverRegistered;
     private volatile boolean destroyed;
     private final Map<String, LinearLayout> bottomNavItems = new HashMap<>();
-    private String navSelection = "radio";
+    private String navSelection = "all";
 
     private final BroadcastReceiver playerReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
@@ -147,7 +146,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             tab = "all";
             state.setTab("all");
         }
-        navSelection = RadioRepository.DIASPORA_CODE.equalsIgnoreCase(country) ? "diaspora" : navSelectionForTab(tab);
+        navSelection = navSelectionForTab(tab);
         images = new ImageLoader();
         repository = new RadioRepository(this);
         buildUi();
@@ -341,7 +340,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         popular.setOnClickListener(v -> {
             tab = "popular"; country = ""; genre = "";
             state.setTab(tab); state.setCountry(country); state.setGenre(genre);
-            selectBottomNav("radio"); applyFilterAsync();
+            selectBottomNav("top"); applyFilterAsync();
         });
         row.addView(popular, new LinearLayout.LayoutParams(0, dp(42), 1f));
 
@@ -350,7 +349,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         diaspora.setOnClickListener(v -> {
             tab = "all"; country = RadioRepository.DIASPORA_CODE; genre = "";
             state.setTab(tab); state.setCountry(country); state.setGenre(genre);
-            selectBottomNav("diaspora"); applyFilterAsync();
+            selectBottomNav("all"); applyFilterAsync();
         });
         LinearLayout.LayoutParams middle = new LinearLayout.LayoutParams(0, dp(42), 1f);
         middle.setMargins(dp(6), 0, dp(6), 0);
@@ -361,7 +360,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         foreign.setOnClickListener(v -> {
             tab = "all"; country = RadioRepository.FOREIGN_CODE; genre = "";
             state.setTab(tab); state.setCountry(country); state.setGenre(genre);
-            selectBottomNav("radio"); applyFilterAsync();
+            selectBottomNav("all"); applyFilterAsync();
         });
         row.addView(foreign, new LinearLayout.LayoutParams(0, dp(42), 1f));
         return row;
@@ -481,9 +480,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         nav.setPadding(dp(8), dp(6), dp(8), dp(5));
         nav.setBackground(rounded(0xFF0D1219, 0xFF303844, 0));
         nav.addView(navItem("⌂", "Početna", "all"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+        nav.addView(navItem("★", "Top", "top"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         nav.addView(navItem("◇", "Otkrij", "discover"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
-        nav.addView(navItem("◎", "Dijaspora", "diaspora"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
-        nav.addView(navItem("▥", "Radio", "radio"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         nav.addView(navItem("♡", "Omiljene", "favorites"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         nav.addView(navItem("⋯", "Više", "more"), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         selectBottomNav(navSelection);
@@ -510,14 +508,12 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 tab = "all"; country = ""; genre = "";
                 state.setTab(tab); state.setCountry(country); state.setGenre(genre);
                 applyFilterAsync(); list.smoothScrollToPosition(0);
-            } else if ("diaspora".equals(action)) {
-                tab = "all"; country = RadioRepository.DIASPORA_CODE; genre = "";
+            } else if ("top".equals(action)) {
+                tab = "popular"; country = ""; genre = "";
                 state.setTab(tab); state.setCountry(country); state.setGenre(genre);
                 applyFilterAsync(); list.smoothScrollToPosition(0);
             } else if ("favorites".equals(action)) {
                 tab = "favorites"; state.setTab(tab); applyFilterAsync();
-            } else if ("radio".equals(action)) {
-                tab = "all"; state.setTab(tab); applyFilterAsync(); list.smoothScrollToPosition(0);
             }
         });
         updateBottomNavItem(action, item);
@@ -526,12 +522,12 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
     private static String navSelectionForTab(String value) {
         if ("favorites".equals(value)) return "favorites";
-        if ("all".equals(value)) return "all";
-        return "radio";
+        if ("popular".equals(value)) return "top";
+        return "all";
     }
 
     private void selectBottomNav(String action) {
-        navSelection = safe(action).isEmpty() ? "radio" : action;
+        navSelection = safe(action).isEmpty() ? "all" : action;
         for (Map.Entry<String, LinearLayout> entry : bottomNavItems.entrySet()) updateBottomNavItem(entry.getKey(), entry.getValue());
     }
 
@@ -621,8 +617,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             else if ("Poništi filtre".equals(chosen)) resetBrowseFilters();
             else if ("Osvježi popis".equals(chosen)) refreshCatalog();
             else if ("Provjeri prikazane stanice".equals(chosen) && requireAdmin()) checkVisibleStreams();
-            else if ("Rezervni izvori".equals(chosen) && requireAdmin()) { tab = "replaced"; state.setTab(tab); selectBottomNav("radio"); applyFilterAsync(); }
-            else if ("Nedostupne stanice".equals(chosen) && requireAdmin()) { tab = "broken"; state.setTab(tab); selectBottomNav("radio"); applyFilterAsync(); }
+            else if ("Rezervni izvori".equals(chosen) && requireAdmin()) { tab = "replaced"; state.setTab(tab); selectBottomNav("all"); applyFilterAsync(); }
+            else if ("Nedostupne stanice".equals(chosen) && requireAdmin()) { tab = "broken"; state.setTab(tab); selectBottomNav("all"); applyFilterAsync(); }
             else if ("Admin prijava".equals(chosen)) showAdminLogin();
             else if ("Odjava administratora".equals(chosen)) logoutAdmin();
             else if ("O aplikaciji".equals(chosen)) showAboutDialog();
@@ -651,8 +647,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
     private void showAdminLogin() {
         long now = SystemClock.elapsedRealtime();
-        if (adminRateLimiter.isLocked(now)) {
-            long seconds = adminRateLimiter.remainingSeconds(now);
+        if (adminLoginGuard.isLocked(now)) {
+            long seconds = adminLoginGuard.remainingSeconds(now);
             Toast.makeText(this, "Previše neuspjelih pokušaja. Pokušaj ponovno za " + seconds + " s.", Toast.LENGTH_LONG).show();
             return;
         }
@@ -686,13 +682,13 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             Runnable submit = () -> {
                 if (!loginButton.isEnabled()) return;
                 long clickNow = SystemClock.elapsedRealtime();
-                if (adminRateLimiter.isLocked(clickNow)) {
-                    long seconds = adminRateLimiter.remainingSeconds(clickNow);
+                if (adminLoginGuard.isLocked(clickNow)) {
+                    long seconds = adminLoginGuard.remainingSeconds(clickNow);
                     password.setText("");
                     password.setError("Prijava je zaključana još " + seconds + " s.");
                     return;
                 }
-                if (!adminAuthRunning.compareAndSet(false, true)) {
+                if (!adminLoginGuard.tryBegin()) {
                     password.setError("Provjera prijave je već u tijeku");
                     return;
                 }
@@ -707,8 +703,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                     ioWorker.execute(() -> {
                         boolean accepted = AdminAuth.matches(candidateUsername, candidatePassword);
                         long completedAt = SystemClock.elapsedRealtime();
-                        if (!accepted) adminRateLimiter.recordFailure(completedAt);
-                        adminAuthRunning.set(false);
+                        adminLoginGuard.complete(accepted, completedAt);
                         ui.post(() -> {
                             if (destroyed) return;
                             if (!dialog.isShowing()) return;
@@ -718,13 +713,12 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                                 adminMode = true;
                                 if (adapter != null) adapter.setAdminMode(true);
                                 updateAdminIndicator();
-                                adminRateLimiter.recordSuccess();
                                 statusText.setText("Admin način rada · brendigo");
                                 Toast.makeText(this, "Administrator je prijavljen", Toast.LENGTH_SHORT).show();
                                 dialog.dismiss();
                                 return;
                             }
-                            if (adminRateLimiter.isLocked(completedAt)) {
+                            if (adminLoginGuard.isLocked(completedAt)) {
                                 password.setError("Previše pokušaja. Prijava je privremeno zaključana.");
                             } else {
                                 password.setError("Neispravno korisničko ime ili lozinka");
@@ -733,7 +727,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                         });
                     });
                 } catch (RejectedExecutionException rejected) {
-                    adminAuthRunning.set(false);
+                    adminLoginGuard.cancel();
                     loginButton.setEnabled(true);
                     loginButton.setText("Prijavi se");
                     password.setError("Prijava trenutačno nije dostupna");
@@ -1089,16 +1083,11 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private boolean startStationPlayback(RadioStation s, boolean requestPermission) {
         if (s == null) return false;
         if (requestPermission) requestNotificationPermission();
-        String key = s.key();
-        Intent i = new Intent(this, RadioPlayerService.class).setAction(RadioPlayerService.ACTION_PLAY);
-        i.putExtra(RadioPlayerService.EXTRA_KEY, key); i.putExtra(RadioPlayerService.EXTRA_NAME, s.name); i.putExtra(RadioPlayerService.EXTRA_META, s.meta());
-        String resolvedForPlayback = !safe(s.activeUrl).isEmpty() ? s.activeUrl : s.urlResolved;
-        i.putExtra(RadioPlayerService.EXTRA_URL, s.url); i.putExtra(RadioPlayerService.EXTRA_RESOLVED, resolvedForPlayback); i.putExtra(RadioPlayerService.EXTRA_UUID, s.stationUuid); i.putExtra(RadioPlayerService.EXTRA_HOMEPAGE, s.homepage); i.putExtra(RadioPlayerService.EXTRA_COUNTRY, s.countryCode);
-        try { if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i); }
-        catch (Throwable t) { AppLog.e(this, "player-play", t); Toast.makeText(this, "Reprodukciju nije moguće pokrenuti", Toast.LENGTH_LONG).show(); return false; }
-        currentKey = key;
-        state.addRecent(key);
-        state.setLastStation(key, s.name, s.meta());
+        if (!PlaybackStarter.start(this, s, state)) {
+            Toast.makeText(this, "Reprodukciju nije moguće pokrenuti", Toast.LENGTH_LONG).show();
+            return false;
+        }
+        currentKey = s.key();
         currentCountryCode = s.flagCode();
         playerName.setText(s.name); playerMeta.setText(s.meta()); applyFlag(playerMeta, s.flagCode()); statusText.setText("Povezujem…");
         if (playerArtwork != null) { playerArtwork.setImageResource(R.drawable.ic_radio_balkan); images.load(s.favicon, playerArtwork, null); }
@@ -1149,70 +1138,14 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
     @Override public void onDetails(RadioStation s) {
         if (s == null) return;
-        String area;
-        if (RadioRepository.DIASPORA_CODE.equalsIgnoreCase(s.countryCode)) {
-            area = safe(s.country).isEmpty() ? "Dijaspora" : "Dijaspora · " + safe(s.country);
-        } else if (RadioRepository.FOREIGN_CODE.equalsIgnoreCase(s.countryCode)) {
-            area = safe(s.country).isEmpty() ? "Strana postaja" : safe(s.country);
-        } else {
-            area = safe(s.country).isEmpty() ? s.countryCode : safe(s.country);
+        Intent intent = new Intent(this, StationDetailsActivity.class)
+                .putExtra(StationDetailsActivity.EXTRA_STATION_JSON, s.toJson().toString());
+        try {
+            startActivity(intent);
+        } catch (Throwable error) {
+            AppLog.e(this, "open-station-details", error);
+            Toast.makeText(this, "Detalje stanice nije moguće otvoriti", Toast.LENGTH_SHORT).show();
         }
-
-        StringBuilder description = new StringBuilder();
-        description.append(s.name).append(" je radio stanica");
-        if (!area.isEmpty()) description.append(" iz područja ").append(area);
-        description.append(". ");
-        String firstGenre = firstUsefulTag(s.tags);
-        if (!firstGenre.isEmpty()) description.append("Glavni sadržaj: ").append(firstGenre).append(". ");
-        if (!safe(s.language).isEmpty()) description.append("Jezik programa: ").append(s.language).append(". ");
-        description.append("Reprodukcija se pokreće kroz sigurni stream s automatskim fallback/recovery postupkom kada je dostupan.");
-
-        LinearLayout panel = new LinearLayout(this);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(20), dp(8), dp(20), dp(4));
-        TextView meta = label(area.isEmpty() ? "Radio uživo" : area, 13, 0xFFFFB23F, true);
-        meta.setSingleLine(false);
-        panel.addView(meta, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        TextView body = label(description.toString(), 14, 0xFFE2E6EC, false);
-        body.setSingleLine(false);
-        body.setLineSpacing(0, 1.12f);
-        LinearLayout.LayoutParams bodyLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        bodyLp.setMargins(0, dp(10), 0, dp(8));
-        panel.addView(body, bodyLp);
-        TextView technical = label(stationPublicDetails(s), 12, 0xFFAAB2BD, false);
-        technical.setSingleLine(false);
-        panel.addView(technical, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        boolean favorite = state.favorites().contains(s.key());
-        new AlertDialog.Builder(this)
-                .setTitle(s.name)
-                .setView(panel)
-                .setPositiveButton("▶ Slušaj", (dialog, which) -> onPlay(s))
-                .setNeutralButton(favorite ? "♥ Ukloni iz omiljenih" : "♡ Dodaj u omiljene", (dialog, which) -> onFavorite(s))
-                .setNegativeButton("Zatvori", null)
-                .show();
-    }
-
-    private String stationPublicDetails(RadioStation s) {
-        List<String> parts = new ArrayList<>();
-        if (!safe(s.state).isEmpty() && !safe(s.state).equalsIgnoreCase(s.country)) parts.add(s.state);
-        if (!safe(s.codec).isEmpty()) parts.add(s.codec.toUpperCase(Locale.ROOT));
-        if (s.bitrate > 0) parts.add(s.bitrate + " kbps");
-        if (!safe(s.tags).isEmpty()) {
-            String tags = s.tags.replace("dijaspora,", "").replace("dijaspora", "").trim();
-            if (!tags.isEmpty()) parts.add("Kategorije: " + tags);
-        }
-        return parts.isEmpty() ? "Radio uživo" : android.text.TextUtils.join(" · ", parts);
-    }
-
-    private String firstUsefulTag(String tags) {
-        if (tags == null) return "";
-        for (String raw : tags.split(",")) {
-            String value = raw.trim();
-            if (value.isEmpty() || "dijaspora".equalsIgnoreCase(value)) continue;
-            if (value.length() <= 32) return value;
-        }
-        return "";
     }
 
     @Override public void onMore(RadioStation s) {

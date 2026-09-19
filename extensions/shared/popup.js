@@ -30,6 +30,8 @@
   let adminLockedUntil = 0;
   let adminDetailsGeneration = 0;
   let detailStation = null;
+  let detailReturnFocus = null;
+  let viewMode = 'all';
   const retiredEpochs = new Set();
   const ADMIN_ITERATIONS = 120000;
   const ADMIN_SALT = Uint8Array.from('c6d79acaafb52bb8bac278313e84ccf7'.match(/../g).map(x => Number.parseInt(x, 16)));
@@ -149,6 +151,157 @@
     ].filter(Boolean).join(' · ');
   }
 
+  function firstUsefulTag(station) {
+    return String(station?.tags || '')
+      .split(',')
+      .map(value => value.trim())
+      .find(value => value && value.toLowerCase() !== 'dijaspora' && value.length <= 32) || '';
+  }
+
+  function stationDescription(station) {
+    const area = stationCountry(station) || 'područja Radio Balkan kataloga';
+    const genre = firstUsefulTag(station);
+    const language = String(station?.language || '').trim();
+    let text = `${station.name} je radio stanica iz područja ${area}. Slušanje se pokreće kroz sigurni Radio Balkan player s ograničenim timeoutom te fallback i recovery postupkom kada je dostupan.`;
+    if (genre) text += ` Na programu je istaknuta kategorija ${genre}.`;
+    if (language) text += ` Jezik programa: ${language}.`;
+    return text;
+  }
+
+  function stationPublicFacts(station) {
+    const parts = [];
+    const state = String(station?.state || '').trim();
+    if (state && state.toLowerCase() !== String(station?.country || '').trim().toLowerCase()) parts.push(state);
+    if (station?.codec) parts.push(String(station.codec).toUpperCase());
+    if (Number(station?.bitrate) > 0) parts.push(`${station.bitrate} kbps`);
+    const tags = String(station?.tags || '')
+      .split(',')
+      .map(value => value.trim())
+      .filter(value => value && value.toLowerCase() !== 'dijaspora')
+      .slice(0, 5);
+    if (tags.length) parts.push(`Kategorije: ${tags.join(', ')}`);
+    return parts.join(' · ') || 'Radio uživo';
+  }
+
+  function updateStationPageFavorite() {
+    const button = $('stationPageFavorite');
+    if (!button || !detailStation) return;
+    const favorite = !!favs[RB.key(detailStation)];
+    button.textContent = favorite ? '♥ Omiljena' : '♡ Dodaj u omiljene';
+    button.setAttribute('aria-pressed', String(favorite));
+  }
+
+  function renderSimilarStations(station) {
+    const target = $('stationSimilarList');
+    if (!target) return;
+    const genre = firstUsefulTag(station).toLowerCase();
+    const sameArea = value => value.countrycode === station.countrycode ||
+      (!!station.sourcecountrycode && value.sourcecountrycode === station.sourcecountrycode);
+    const ranked = all
+      .filter(value => RB.key(value) !== RB.key(station))
+      .map(value => {
+        let score = 0;
+        if (sameArea(value)) score += 6;
+        if (genre && String(value.tags || '').toLowerCase().includes(genre)) score += 4;
+        score += Math.min(3, Math.max(0, Number(value.votes || 0) / 1000));
+        return { value, score };
+      })
+      .filter(entry => entry.score >= 4)
+      .sort((a, b) => b.score - a.score || Number(b.value.votes || 0) - Number(a.value.votes || 0))
+      .slice(0, 5);
+    const fragment = document.createDocumentFragment();
+    for (const { value } of ranked) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'similarStation';
+      button.dataset.stationKey = RB.key(value);
+      const copy = document.createElement('span');
+      const name = document.createElement('strong');
+      name.textContent = value.name;
+      const meta = document.createElement('span');
+      meta.textContent = stationMeta(value);
+      copy.append(name, meta);
+      const arrow = document.createElement('b');
+      arrow.textContent = '›';
+      button.append(copy, arrow);
+      fragment.append(button);
+    }
+    if (!ranked.length) {
+      const empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'Nema dovoljno sličnih stanica za ovaj prikaz.';
+      fragment.append(empty);
+    }
+    target.replaceChildren(fragment);
+  }
+
+  function openStationPage(station, returnFocus = null) {
+    if (!station) return;
+    detailStation = station;
+    if (returnFocus && !detailReturnFocus) detailReturnFocus = returnFocus;
+    $('browsePage').hidden = true;
+    $('stationPage').hidden = false;
+    $('stationPageTitle').textContent = station.name;
+    $('stationPageMeta').textContent = stationMeta(station) || 'Radio uživo';
+    $('stationBreadcrumbArea').textContent = stationCountry(station) || 'Radio uživo';
+    $('stationPageDescription').textContent = stationDescription(station);
+    $('stationPageFacts').textContent = stationPublicFacts(station);
+    const logo = $('stationPageLogo');
+    logo.onerror = null;
+    logo.src = station.logo && RB.safeHttp(station.logo) ? station.logo : 'icon48.png';
+    logo.onerror = () => { logo.onerror = null; logo.src = 'icon48.png'; };
+    updateStationPageFavorite();
+    renderSimilarStations(station);
+    $('stationBack').focus();
+  }
+
+  function closeStationPage() {
+    if ($('stationPage').hidden) return;
+    $('stationPage').hidden = true;
+    $('browsePage').hidden = false;
+    const focusTarget = detailReturnFocus;
+    detailReturnFocus = null;
+    detailStation = null;
+    focusTarget?.focus?.();
+  }
+
+  function setQuickPressed(id, pressed) {
+    const button = $(id);
+    if (button) button.setAttribute('aria-pressed', String(!!pressed));
+  }
+
+  function updateQuickNavigation() {
+    const value = String(country.value || '').toUpperCase();
+    setQuickPressed('quickAll', viewMode === 'all' && !value && !genre?.value && !favoritesOnly);
+    setQuickPressed('quickTop', viewMode === 'top');
+    setQuickPressed('quickDiaspora', value === RB.DIASPORA_CODE);
+    setQuickPressed('quickForeign', value === RB.FOREIGN_CODE);
+  }
+
+  function selectArea(code) {
+    viewMode = 'all';
+    favoritesOnly = false;
+    updateFavoritesFilterButton();
+    search.value = '';
+    if (genre) genre.value = '';
+    country.value = [...country.options].some(option => option.value === code) ? code : '';
+    queueUiPreferencesSave();
+    apply();
+    updateQuickNavigation();
+  }
+
+  function selectTop() {
+    viewMode = 'top';
+    favoritesOnly = false;
+    search.value = '';
+    country.value = '';
+    if (genre) genre.value = '';
+    updateFavoritesFilterButton();
+    queueUiPreferencesSave();
+    apply();
+    updateQuickNavigation();
+  }
+
   function foldedStation(station) {
     return RB.fold(`${station.name} ${station.country} ${station.state} ${station.tags} ${station.language} ${station.codec}`);
   }
@@ -223,6 +376,7 @@
 
   function resetFilters() {
     clearTimeout(searchTimer);
+    viewMode = 'all';
     search.value = '';
     country.value = '';
     if (genre) genre.value = '';
@@ -332,9 +486,13 @@
       (!favoritesOnly || favs[RB.key(station)]) &&
       (!q || foldedStation(station).includes(q))
     );
+    if (viewMode === 'top') {
+      visible = visible.slice().sort((a, b) => Number(b.votes || 0) - Number(a.votes || 0) || a.name.localeCompare(b.name)).slice(0, 50);
+    }
     renderLimit = PAGE;
     render();
     updatePlayer();
+    updateQuickNavigation();
   }
 
   function stationCard(station) {
@@ -575,8 +733,9 @@
       $('heroMeta').textContent = stationMeta(station);
     } else {
       const foreign = all.filter(item => item.countrycode === RB.FOREIGN_CODE).length;
-      const regional = all.length - foreign;
-      $('heroMeta').textContent = `${regional} regionalnih · ${foreign} stranih postaja`;
+      const diaspora = all.filter(item => item.countrycode === RB.DIASPORA_CODE).length;
+      const regional = all.length - foreign - diaspora;
+      $('heroMeta').textContent = `${regional} regionalnih · ${diaspora} dijaspora · ${foreign} stranih postaja`;
     }
     const playerLogo = $('playerLogo');
     playerLogo.onerror = null;
@@ -620,7 +779,12 @@
     const row = event.target.closest('.station');
     if (!row) return;
     const station = visible.find(item => RB.key(item) === row.dataset.key);
-    void play(station);
+    if (!station) return;
+    if (event.target.closest('.stationPlay')) {
+      void play(station);
+      return;
+    }
+    openStationPage(station, row);
   });
 
   list.addEventListener('keydown', event => {
@@ -630,15 +794,52 @@
     if (!row) return;
     event.preventDefault();
     const station = visible.find(item => RB.key(item) === row.dataset.key);
-    void play(station);
+    if (station) openStationPage(station, row);
   });
 
+  $('stationBack').addEventListener('click', closeStationPage);
+  $('stationPagePlay').addEventListener('click', () => {
+    if (detailStation) void play(detailStation);
+  });
+  $('stationPageFavorite').addEventListener('click', async () => {
+    if (!detailStation) return;
+    const key = RB.key(detailStation);
+    try {
+      favs = await RB.setFavorite(key, !favs[key]);
+      updateStationPageFavorite();
+      render();
+      updatePlayer();
+    } catch {
+      playerStatus = 'Omiljene nisu spremljene';
+      updatePlayer();
+    }
+  });
+  $('stationSimilarList').addEventListener('click', event => {
+    const button = event.target.closest('[data-station-key]');
+    if (!button) return;
+    const station = all.find(item => RB.key(item) === button.dataset.stationKey);
+    if (station) openStationPage(station, button);
+  });
+  $('stationPage').addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    closeStationPage();
+  });
+
+  $('quickAll').addEventListener('click', () => selectArea(''));
+  $('quickTop').addEventListener('click', selectTop);
+  $('quickCountries').addEventListener('click', () => country.focus());
+  $('quickGenres').addEventListener('click', () => genre?.focus());
+  $('quickDiaspora').addEventListener('click', () => selectArea(RB.DIASPORA_CODE));
+  $('quickForeign').addEventListener('click', () => selectArea(RB.FOREIGN_CODE));
+
   search.addEventListener('input', () => {
+    viewMode = 'all';
     clearTimeout(searchTimer);
     searchTimer = setTimeout(apply, 130);
   });
-  country.addEventListener('change', () => { apply(); queueUiPreferencesSave(); });
-  genre?.addEventListener('change', () => { apply(); queueUiPreferencesSave(); });
+  country.addEventListener('change', () => { viewMode = 'all'; apply(); queueUiPreferencesSave(); });
+  genre?.addEventListener('change', () => { viewMode = 'all'; apply(); queueUiPreferencesSave(); });
   $('adminToggle').addEventListener('click', openAdminPanel);
   $('adminClose').addEventListener('click', closeAdminPanel);
   $('adminPanel').addEventListener('click', event => { if (event.target === $('adminPanel')) closeAdminPanel(); });
@@ -744,6 +945,7 @@
   $('playerStop').addEventListener('click', () => void stopPlayback());
   $('playerNext').addEventListener('click', () => void playAdjacent(1));
   $('favoritesOnly').addEventListener('click', () => {
+    viewMode = 'all';
     favoritesOnly = !favoritesOnly;
     updateFavoritesFilterButton();
     queueUiPreferencesSave();
@@ -755,6 +957,7 @@
     try {
       favs = await RB.setFavorite(key, !favs[key]);
       apply();
+      if (detailStation) updateStationPageFavorite();
     } catch {
       playerStatus = 'Omiljene nisu spremljene';
       updatePlayer();
@@ -812,5 +1015,6 @@
 
   updateAdminUi();
   updatePlayer();
+  updateQuickNavigation();
   void load(false);
 })();

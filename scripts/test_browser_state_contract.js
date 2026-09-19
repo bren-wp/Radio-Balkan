@@ -83,9 +83,15 @@ const ids = [
   'adminToggle', 'adminStatusBadge', 'adminPanel', 'adminClose', 'adminRole', 'adminLoginView', 'adminControls',
   'adminUsername', 'adminPassword', 'adminLogin', 'adminMessage', 'adminStationName',
   'adminSource', 'adminSaveSource', 'adminResetSource', 'adminHomepage', 'adminOpenWeb',
-  'adminLogout', 'adminControlMessage'
+  'adminLogout', 'adminControlMessage',
+  'browsePage', 'stationPage', 'stationBack', 'stationPageTitle', 'stationPageMeta',
+  'stationBreadcrumbArea', 'stationPageDescription', 'stationPageFacts', 'stationPageLogo',
+  'stationPagePlay', 'stationPageFavorite', 'stationSimilarList',
+  'quickAll', 'quickTop', 'quickCountries', 'quickGenres', 'quickDiaspora', 'quickForeign'
 ];
 const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
+elements.stationPage.hidden = true;
+elements.browsePage.hidden = false;
 
 const stationA = {
   stationuuid: 'station-a',
@@ -105,6 +111,28 @@ const stationB = {
   tags: 'rock',
   bitrate: 192,
   codec: 'AAC',
+  logo: ''
+};
+const stationDiaspora = {
+  stationuuid: 'station-diaspora',
+  name: 'Radio Dijaspora',
+  country: 'Germany',
+  countrycode: 'DIA',
+  sourcecountrycode: 'DE',
+  tags: 'balkan,dijaspora',
+  bitrate: 128,
+  codec: 'MP3',
+  logo: ''
+};
+const stationForeign = {
+  stationuuid: 'station-foreign',
+  name: 'World Radio',
+  country: 'United States',
+  countrycode: 'INT',
+  sourcecountrycode: 'US',
+  tags: 'hits',
+  bitrate: 128,
+  codec: 'MP3',
   logo: ''
 };
 const extraStations = Array.from({ length: 58 }, (_, index) => ({
@@ -205,7 +233,8 @@ const context = {
   },
   RB: {
     ext: { runtime },
-    COUNTRIES: [['HR', 'Hrvatska'], ['RS', 'Srbija'], ['INT', 'Strano']],
+    COUNTRIES: [['HR', 'Hrvatska'], ['RS', 'Srbija'], ['DIA', 'Dijaspora'], ['INT', 'Strano']],
+    DIASPORA_CODE: 'DIA',
     FOREIGN_CODE: 'INT',
     fold(value) {
       return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
@@ -217,7 +246,7 @@ const context = {
       return false;
     },
     async load() {
-      return [copy(stationA), copy(stationB), ...copy(extraStations)];
+      return [copy(stationA), copy(stationB), ...copy(extraStations), copy(stationDiaspora), copy(stationForeign)];
     },
     async favorites() {
       return copy(favoriteStore);
@@ -267,6 +296,64 @@ async function main() {
   assert.equal(elements.playerFav.attributes['aria-pressed'], 'false', 'favorite state must be announced accessibly');
   assert.equal(elements.adminControls.hidden, true, 'advanced source controls must stay hidden before admin login');
   assert.equal(elements.adminStatusBadge.hidden, true, 'admin status badge must stay hidden before authentication');
+  assert.equal(elements.quickAll.attributes['aria-pressed'], 'true', 'all-stations navigation must be selected initially');
+
+  const stationRow = new Element('station-row');
+  stationRow.dataset.key = 'station-a';
+  const stationTarget = {
+    closest(selector) {
+      if (selector === '[data-more]' || selector === '.stationPlay') return null;
+      if (selector === '.station') return stationRow;
+      return null;
+    }
+  };
+  const playCallsBeforeDetails = playCalls;
+  elements.stations.dispatch('click', { target: stationTarget });
+  assert.equal(elements.stationPage.hidden, false, 'station-card click must open the dedicated station page');
+  assert.equal(elements.browsePage.hidden, true, 'browse page must hide while station page is active');
+  assert.equal(elements.stationPageTitle.textContent, 'Radio A');
+  assert.match(elements.stationPageDescription.textContent, /Radio A je radio stanica/);
+  assert.equal(elements.stationPageDescription.textContent.includes('https://'), false, 'public station page must not expose stream URLs');
+  assert.equal(playCalls, playCallsBeforeDetails, 'opening the station page must never start playback implicitly');
+
+  getState = { epoch: 'epoch-a', revision: 2, station: stationA, playing: true, sessionId: 'session-a' };
+  elements.stationPagePlay.dispatch('click');
+  await flush();
+  assert.equal(playCalls, playCallsBeforeDetails + 1, 'station-page play must use the existing RB_PLAY path');
+
+  const similarButton = new Element('similar-station');
+  similarButton.dataset.stationKey = 'station-b';
+  elements.stationSimilarList.dispatch('click', {
+    target: {
+      closest(selector) {
+        return selector === '[data-station-key]' ? similarButton : null;
+      }
+    }
+  });
+  assert.equal(elements.stationPageTitle.textContent, 'Radio B', 'similar-station navigation must replace the station page without reopening browse');
+  stationRow.focused = false;
+  elements.stationBack.dispatch('click');
+  assert.equal(elements.stationPage.hidden, true, 'back action must leave the dedicated station page');
+  assert.equal(elements.browsePage.hidden, false, 'browse page must be restored after station details');
+  assert.equal(stationRow.focused, true, 'returning after similar-station navigation must restore focus to the originating station card');
+
+  elements.quickTop.dispatch('click');
+  assert.equal(elements.quickTop.attributes['aria-pressed'], 'true', 'Top must be a distinct navigation state');
+  assert.match(elements.status.textContent, /od 50 prikazano/, 'Top view must cap the visible ranking at 50 stations');
+  elements.quickCountries.dispatch('click');
+  assert.equal(elements.country.focused, true, 'Zemlje navigation must focus the country selector rather than duplicating another view');
+  elements.quickGenres.dispatch('click');
+  assert.equal(elements.genre.focused, true, 'Žanrovi navigation must focus the genre selector rather than duplicating another view');
+  elements.quickDiaspora.dispatch('click');
+  assert.equal(elements.country.value, 'DIA', 'Dijaspora must select the DIA catalog group');
+  assert.equal(elements.quickDiaspora.attributes['aria-pressed'], 'true');
+  elements.quickForeign.dispatch('click');
+  assert.equal(elements.country.value, 'INT', 'Strano must select the INT catalog group');
+  assert.equal(elements.quickForeign.attributes['aria-pressed'], 'true');
+  elements.quickAll.dispatch('click');
+  assert.equal(elements.country.value, '', 'Sve must clear the supplemental area filter');
+  assert.equal(elements.quickAll.attributes['aria-pressed'], 'true');
+
   elements.adminToggle.dispatch('click');
   assert.equal(elements.adminPanel.hidden, false, 'admin toggle must open the login dialog');
   assert.equal(elements.adminLoginView.hidden, false, 'login form must be visible before authentication');
@@ -425,7 +512,7 @@ async function main() {
   assert.match(elements.status.textContent, /^0 od 0 prikazano/, 'unfavoriting inside favorites view must immediately remove the station from the visible set');
   elements.favoritesOnly.dispatch('click');
   await flush();
-  assert.match(elements.status.textContent, /^48 od 60 prikazano/, 'leaving favorites-only view must restore the full visible catalog page');
+  assert.match(elements.status.textContent, /^48 od 62 prikazano/, 'leaving favorites-only view must restore the full visible catalog page');
 
   runtimeListener({ type: 'RB_STATE', epoch: 'epoch-b', revision: 9, station: null, playing: false, sessionId: null });
   await flush();

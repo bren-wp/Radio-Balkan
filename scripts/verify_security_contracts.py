@@ -74,12 +74,12 @@ def main() -> None:
         'chosen.equals("Web stranica") && requireAdmin()',
         'chosen.equals("Odaberi drugi izvor") && requireAdmin()',
         "if (!requireAdmin()) return;",
-        "private final AdminRateLimiter adminRateLimiter = new AdminRateLimiter(5, 30_000L);",
+        "private final AdminLoginGuard adminLoginGuard = AdminLoginGuard.shared();",
         'if ("replaced".equals(tab) || "broken".equals(tab))',
-        "if (adminRateLimiter.isLocked(clickNow))",
-        "adminAuthRunning.compareAndSet(false, true)",
-        "if (!accepted) adminRateLimiter.recordFailure(completedAt)",
-        "adminAuthRunning.set(false)",
+        "if (adminLoginGuard.isLocked(clickNow))",
+        "adminLoginGuard.tryBegin()",
+        "adminLoginGuard.complete(accepted, completedAt)",
+        "adminLoginGuard.cancel()",
         "SystemClock.elapsedRealtime()",
         'else if ("Provjeri prikazane stanice".equals(chosen) && requireAdmin()) checkVisibleStreams();',
         'else if (chosen.equals("Provjeri dostupnost") && requireAdmin()) checkOne(s);',
@@ -99,6 +99,8 @@ def main() -> None:
         "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
         "brendigo" + "2025",
         "adminLockedUntilMs",
+        "private final AdminRateLimiter adminRateLimiter = new AdminRateLimiter(5, 30_000L);",
+        "private final AtomicBoolean adminAuthRunning",
     )
     require(
         "apps/android/app/src/test/java/net/radiobalkan/app/AdminAuthTest.java",
@@ -117,6 +119,21 @@ def main() -> None:
         "successClearsFailureAndLockoutState",
         "expiredLockoutAllowsFreshAttempts",
     )
+    require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/AdminLoginGuard.java",
+        "private static final AdminLoginGuard SHARED",
+        "boolean tryBegin()",
+        "void complete(boolean accepted, long nowMs)",
+        "void cancel()",
+    )
+    require(
+        "apps/android/app/src/test/java/net/radiobalkan/app/AdminLoginGuardTest.java",
+        "singleFlightRejectsSecondAttemptUntilCompletion",
+        "fiveFailedCompletionsTriggerLockout",
+        "successfulCompletionClearsFailuresAndReleasesFlight",
+        "cancelReleasesFlightWithoutCountingFailure",
+    )
+
     forbid(
         "apps/android/app/src/test/java/net/radiobalkan/app/AdminAuthTest.java",
         "brendigo" + "2025",
@@ -366,26 +383,22 @@ def main() -> None:
         "79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0",
     )
     require(
-        "extensions/shared/enhancements.js",
-        "event.stopImmediatePropagation()",
-        "openDetails(row)",
-        "play.click()",
-        "selectArea('DIA')",
-        "selectArea('INT')",
+        "extensions/shared/popup.js",
+        "function openStationPage(station, returnFocus = null)",
+        "function closeStationPage()",
+        "if (event.target.closest('.stationPlay'))",
+        "openStationPage(station, row)",
+        "function stationDescription(station)",
+        "function stationPublicFacts(station)",
+        "selectArea(RB.DIASPORA_CODE)",
+        "selectArea(RB.FOREIGN_CODE)",
     )
     forbid(
-        "extensions/shared/enhancements.js",
-        "adminSource",
-        "adminHomepage",
-        "url_resolved",
-        "sourcecountrycode",
-    )
-    require(
-        "scripts/test_browser_ui_enhancements.js",
-        "station-card click must not reach the legacy row autoplay handler",
-        "opening details must not implicitly start playback",
-        "detail play must delegate to the existing station playback button",
-        "public detail description must not expose a stream URL",
+        "extensions/shared/popup.js",
+        "stationPageDescription').textContent = station.url",
+        "stationPageDescription').textContent = station.url_resolved",
+        "stationPageFacts').textContent = station.homepage",
+        "stationPageFacts').textContent = station.url",
     )
     require(
         "extensions/shared/popup.html",
@@ -424,6 +437,13 @@ def main() -> None:
         "post-logout source actions must be rejected by logic, not only hidden by UI",
         "successful login must expose a visible admin status badge",
         "Enter must submit the administrator login form",
+        "station-card click must open the dedicated station page",
+        "opening the station page must never start playback implicitly",
+        "station-page play must use the existing RB_PLAY path",
+        "public station page must not expose stream URLs",
+        "Top must be a distinct navigation state",
+        "Zemlje navigation must focus the country selector rather than duplicating another view",
+        "Žanrovi navigation must focus the genre selector rather than duplicating another view",
     )
     require(
         "scripts/test_chromium_player_contract.js",

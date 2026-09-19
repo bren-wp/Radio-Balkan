@@ -202,3 +202,68 @@ func TestDiasporaWinsDedupAndKeepsSourceCountry(t *testing.T) {
 		t.Fatalf("flag code = %q; want DE", stationFlagCode(got[0]))
 	}
 }
+
+
+func TestStationPublicPresentationHidesSensitiveSources(t *testing.T) {
+	station := RadioStation{
+		Name:              "Radio Dijaspora",
+		Country:           "Germany",
+		CountryCode:       diasporaCatalogCode,
+		SourceCountryCode: "DE",
+		Tags:              "hits,dijaspora,pop",
+		Language:          "Croatian",
+		Codec:             "mp3",
+		Bitrate:           128,
+		URLResolved:       "https://secret-stream.example/live",
+		Homepage:          "https://admin-homepage.example/",
+	}
+	description := stationPublicDescription(station)
+	facts := stationPublicFacts(station)
+	if !strings.Contains(description, "Dijaspora · Germany") {
+		t.Fatalf("description missing diaspora area: %q", description)
+	}
+	if strings.Contains(description, station.URLResolved) || strings.Contains(description, station.Homepage) {
+		t.Fatal("public station description leaked a sensitive source/homepage")
+	}
+	if strings.Contains(facts, station.URLResolved) || strings.Contains(facts, station.Homepage) {
+		t.Fatal("public station facts leaked a sensitive source/homepage")
+	}
+	if !strings.Contains(facts, "MP3") || !strings.Contains(facts, "128 kbps") {
+		t.Fatalf("public station facts missing expected codec/bitrate: %q", facts)
+	}
+	if got := firstPublicTag("dijaspora,pop,hits"); got != "pop" {
+		t.Fatalf("first public tag = %q; want pop", got)
+	}
+}
+
+func TestSimilarStationRankingPrefersCountryAndGenre(t *testing.T) {
+	source := RadioStation{StationUUID: "source", Name: "Source", CountryCode: "HR", Tags: "pop", Votes: 10}
+	app.mu.Lock()
+	original := app.stations
+	app.stations = []RadioStation{
+		source,
+		{StationUUID: "same-country", Name: "Same country", CountryCode: "HR", Tags: "talk", Votes: 20},
+		{StationUUID: "same-genre", Name: "Same genre", CountryCode: "RS", Tags: "pop", Votes: 100},
+		{StationUUID: "both", Name: "Both", CountryCode: "HR", Tags: "pop", Votes: 5},
+		{StationUUID: "unrelated", Name: "Unrelated", CountryCode: "DE", Tags: "jazz", Votes: 9999},
+	}
+	app.mu.Unlock()
+	defer func() {
+		app.mu.Lock()
+		app.stations = original
+		app.mu.Unlock()
+	}()
+
+	got := similarStationIndices(source, 0, 3)
+	if len(got) != 3 {
+		t.Fatalf("similar count = %d; want 3", len(got))
+	}
+	if got[0] != 3 {
+		t.Fatalf("top similar index = %d; want country+genre match index 3", got[0])
+	}
+	for _, idx := range got {
+		if idx == 4 {
+			t.Fatal("unrelated high-vote station must not enter similar results")
+		}
+	}
+}
