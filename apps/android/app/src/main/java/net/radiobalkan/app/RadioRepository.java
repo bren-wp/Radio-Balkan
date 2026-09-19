@@ -227,6 +227,12 @@ public final class RadioRepository {
         if (primary.bitrate <= 0) primary.bitrate = other.bitrate;
         primary.votes = Math.max(primary.votes, other.votes);
         primary.lastCheckOk = Math.max(primary.lastCheckOk, other.lastCheckOk);
+        if (DIASPORA_CODE.equalsIgnoreCase(a.countryCode) || DIASPORA_CODE.equalsIgnoreCase(b.countryCode)) {
+            primary.countryCode = DIASPORA_CODE;
+            if (!safe(primary.tags).toLowerCase(Locale.ROOT).contains("dijaspora")) {
+                primary.tags = safe(primary.tags).isEmpty() ? "dijaspora" : "dijaspora," + primary.tags;
+            }
+        }
         primary.refreshIndexes();
         return primary;
     }
