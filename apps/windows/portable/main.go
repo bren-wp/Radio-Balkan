@@ -2304,6 +2304,7 @@ func drawHomeHero(hdc syscall.Handle, l, t, r, b int32, idx int, st RadioStation
 	infoW := int32(330)
 	featureR := r - infoW - gap
 	drawRounded(hdc, l, t, featureR, b, 16, color(14, 19, 26), color(67, 72, 82))
+	app.hits = append(app.hits, HitRegion{R: RECT{l, t, featureR, b}, Kind: hitStationDetails, Index: idx, Value: stationKey(st)})
 	drawFeatureBackdrop(hdc, l+2, t+2, featureR-2, b-2)
 	// Opaque left readability panel, visually approximating the generated gradient.
 	leftPanelR := l + (featureR-l)*46/100
