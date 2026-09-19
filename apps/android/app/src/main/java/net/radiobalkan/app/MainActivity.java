@@ -956,10 +956,12 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         if ("popular".equals(tab)) title = "Top stanice";
         else if ("favorites".equals(tab)) title = "Omiljene";
         else if ("recent".equals(tab)) title = "Nedavno slušane";
-        else if (RadioRepository.DIASPORA_CODE.equalsIgnoreCase(country)) title = "Dijaspora";
-        else if (RadioRepository.FOREIGN_CODE.equalsIgnoreCase(country)) title = "Strano";
-        else if (!country.isEmpty()) title = RadioRepository.countryName(country);
-        else if (!genre.isEmpty()) title = genreTitle(genre);
+        else {
+            if (RadioRepository.DIASPORA_CODE.equalsIgnoreCase(country)) title = "Dijaspora";
+            else if (RadioRepository.FOREIGN_CODE.equalsIgnoreCase(country)) title = "Strano";
+            else if (!country.isEmpty()) title = RadioRepository.countryName(country);
+            if (!genre.isEmpty()) title = "Sve stanice".equals(title) ? genreTitle(genre) : title + " · " + genreTitle(genre);
+        }
         stationsTitle.setText(title);
     }
 
@@ -1180,8 +1182,15 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
     @Override public void onDetails(RadioStation s) {
         if (s == null) return;
+        List<RadioStation> source;
+        synchronized (dataLock) { source = new ArrayList<>(allStations); }
+        org.json.JSONArray similar = new org.json.JSONArray();
+        for (RadioStation candidate : StationPresentation.similarStations(source, s, 8)) {
+            similar.put(candidate.toJson());
+        }
         Intent intent = new Intent(this, StationDetailsActivity.class)
-                .putExtra(StationDetailsActivity.EXTRA_STATION_JSON, s.toJson().toString());
+                .putExtra(StationDetailsActivity.EXTRA_STATION_JSON, s.toJson().toString())
+                .putExtra(StationDetailsActivity.EXTRA_SIMILAR_JSON, similar.toString());
         try {
             startActivity(intent);
         } catch (Throwable error) {

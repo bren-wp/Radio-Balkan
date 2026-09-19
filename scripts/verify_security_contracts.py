@@ -139,6 +139,19 @@ def main() -> None:
         "brendigo" + "2025",
     )
     require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/StationDetailsActivity.java",
+        "EXTRA_SIMILAR_JSON",
+        "json.length() > 65_536",
+        "Math.min(rows.length(), 12)",
+        "detailHistory.size() > 12",
+    )
+    forbid(
+        "apps/android/app/src/main/java/net/radiobalkan/app/StationDetailsActivity.java",
+        "station.urlResolved",
+        "station.homepage",
+    )
+
+    require(
         "apps/android/app/src/main/java/net/radiobalkan/app/RadioRepository.java",
         "StreamResolver.isSafeHttpForConnection(current)",
         "setInstanceFollowRedirects(false)",

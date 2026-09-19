@@ -143,6 +143,10 @@ def main() -> int:
     for needle in (
         "StationPresentation.description(station)",
         "StationPresentation.publicDetails(station)",
+        "EXTRA_SIMILAR_JSON",
+        "addSimilarStations(root)",
+        "navigateBack()",
+        "openSimilar(candidate)",
         "PlaybackStarter.start(this, station, state)",
         '"Built with Brendigo"',
         '"https://brendigo.com/"',
@@ -156,6 +160,7 @@ def main() -> int:
     forbid(errors, station_details, "station.homepage", "Android StationDetailsActivity")
     require(errors, station_presentation, "public static String description(RadioStation s)", "Android StationPresentation")
     require(errors, station_presentation, "public static String publicDetails(RadioStation s)", "Android StationPresentation")
+    require(errors, station_presentation, "public static List<RadioStation> similarStations(", "Android StationPresentation")
     for needle in (
         '"Rezervni izvori"',
         '"Filtriraj stanice"',
@@ -187,6 +192,8 @@ def main() -> int:
         "buildBrendigoFooter()",
         "@Override public void onDetails(RadioStation s)",
         "new Intent(this, StationDetailsActivity.class)",
+        "StationPresentation.similarStations(source, s, 8)",
+        "StationDetailsActivity.EXTRA_SIMILAR_JSON",
         "PlaybackStarter.start(this, s, state)",
         "catalogRefreshRunning.compareAndSet(false, true)",
         "updatePlaybackControls()",

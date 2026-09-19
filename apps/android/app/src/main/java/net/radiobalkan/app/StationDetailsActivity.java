@@ -20,15 +20,21 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import org.json.JSONObject;
+import org.json.JSONArray;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Dedicated public station page. This Activity is intentionally not exported. */
 public final class StationDetailsActivity extends Activity {
     public static final String EXTRA_STATION_JSON = "net.radiobalkan.app.STATION_JSON";
+    public static final String EXTRA_SIMILAR_JSON = "net.radiobalkan.app.SIMILAR_JSON";
 
     private StateStore state;
     private ImageLoader images;
     private RadioStation station;
     private Button favoriteButton;
+    private final List<RadioStation> similarStations = new ArrayList<>();
+    private final List<RadioStation> detailHistory = new ArrayList<>();
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -39,6 +45,7 @@ public final class StationDetailsActivity extends Activity {
             finish();
             return;
         }
+        similarStations.addAll(readSimilar(getIntent(), station.key()));
         buildUi();
     }
 
@@ -51,6 +58,26 @@ public final class StationDetailsActivity extends Activity {
             AppLog.e(this, "station-details-input", error);
             return null;
         }
+    }
+
+    private List<RadioStation> readSimilar(Intent intent, String currentKey) {
+        List<RadioStation> out = new ArrayList<>();
+        try {
+            String json = intent == null ? "" : intent.getStringExtra(EXTRA_SIMILAR_JSON);
+            if (json == null || json.trim().isEmpty() || json.length() > 65_536) return out;
+            JSONArray rows = new JSONArray(json);
+            int limit = Math.min(rows.length(), 12);
+            for (int i = 0; i < limit; i++) {
+                JSONObject value = rows.optJSONObject(i);
+                if (value == null) continue;
+                RadioStation candidate = RadioStation.fromJson(value);
+                if (candidate.name.trim().isEmpty() || candidate.key().equals(currentKey) || containsKey(out, candidate.key())) continue;
+                out.add(candidate);
+            }
+        } catch (Throwable error) {
+            AppLog.e(this, "station-details-similar-input", error);
+        }
+        return out;
     }
 
     private void buildUi() {
@@ -66,7 +93,7 @@ public final class StationDetailsActivity extends Activity {
 
         Button back = button("← Sve stanice", false);
         back.setContentDescription("Natrag na popis radio stanica");
-        back.setOnClickListener(v -> finish());
+        back.setOnClickListener(v -> navigateBack());
         root.addView(back, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(44)));
 
         LinearLayout hero = new LinearLayout(this);
@@ -131,6 +158,8 @@ public final class StationDetailsActivity extends Activity {
         about.addView(facts, margin(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 13, 0, 0));
         root.addView(about, margin(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 12, 0, 0));
 
+        addSimilarStations(root);
+
         TextView privacy = text("Stream adresa i administratorski maintenance podaci nisu prikazani na javnoj stranici stanice.", 11, 0xFF788493, false);
         privacy.setGravity(Gravity.CENTER);
         privacy.setSingleLine(false);
@@ -144,6 +173,59 @@ public final class StationDetailsActivity extends Activity {
         brendigo.setContentDescription("Built with Brendigo, otvori brendigo.com");
         brendigo.setOnClickListener(v -> openBrendigo());
         root.addView(brendigo, margin(ViewGroup.LayoutParams.MATCH_PARENT, dp(52), 0, 12, 0, 0));
+    }
+
+    private void addSimilarStations(LinearLayout root) {
+        List<RadioStation> candidates = new ArrayList<>();
+        for (int i = detailHistory.size() - 1; i >= 0 && candidates.size() < 5; i--) {
+            RadioStation value = detailHistory.get(i);
+            if (!value.key().equals(station.key()) && !containsKey(candidates, value.key())) candidates.add(value);
+        }
+        for (RadioStation value : similarStations) {
+            if (candidates.size() >= 5) break;
+            if (!value.key().equals(station.key()) && !containsKey(candidates, value.key())) candidates.add(value);
+        }
+        if (candidates.isEmpty()) return;
+
+        TextView heading = text("Slične stanice", 18, Color.WHITE, true);
+        root.addView(heading, margin(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 18, 0, 7));
+        for (RadioStation candidate : candidates) {
+            String genre = StationPresentation.firstUsefulTag(candidate.tags);
+            String meta = StationPresentation.area(candidate);
+            if (!genre.isEmpty()) meta += " · " + genre;
+            Button item = button(candidate.name + "\n" + meta, false);
+            item.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+            item.setPadding(dp(14), dp(8), dp(14), dp(8));
+            item.setContentDescription("Otvori detalje stanice " + candidate.name);
+            item.setOnClickListener(v -> openSimilar(candidate));
+            root.addView(item, margin(ViewGroup.LayoutParams.MATCH_PARENT, dp(66), 0, 0, 0, 8));
+        }
+    }
+
+    private void openSimilar(RadioStation candidate) {
+        if (candidate == null || candidate.key().equals(station.key())) return;
+        detailHistory.add(station);
+        if (detailHistory.size() > 12) detailHistory.remove(0);
+        station = candidate;
+        buildUi();
+    }
+
+    private void navigateBack() {
+        if (detailHistory.isEmpty()) {
+            finish();
+            return;
+        }
+        station = detailHistory.remove(detailHistory.size() - 1);
+        buildUi();
+    }
+
+    private boolean containsKey(List<RadioStation> source, String key) {
+        for (RadioStation value : source) if (value != null && value.key().equals(key)) return true;
+        return false;
+    }
+
+    @Override public void onBackPressed() {
+        navigateBack();
     }
 
     private String stationMeta() {
