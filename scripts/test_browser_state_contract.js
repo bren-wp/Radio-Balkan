@@ -177,7 +177,7 @@ const context = {
         assert.equal(format, 'raw');
         assert.equal(algorithm?.name, 'PBKDF2');
         assert.equal(extractable, false);
-        assert.deepEqual(usages, ['deriveBits']);
+        assert.equal(Array.from(usages).join(','), 'deriveBits');
         return { bytes: Buffer.from(bytes) };
       },
       async deriveBits(params, key, length) {
