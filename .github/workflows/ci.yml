@@ -46,6 +46,7 @@ jobs:
           node --check extensions/shared/network.js
           node --check extensions/shared/catalog.js
           node --check extensions/shared/popup.js
+          node --check extensions/shared/enhancements.js
           node --check extensions/platform/chromium/service_worker.js
           node --check extensions/platform/chromium/offscreen.js
           node --check extensions/platform/firefox/background-firefox.js
