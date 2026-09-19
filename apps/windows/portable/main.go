@@ -219,9 +219,10 @@ type RadioStation struct {
 	Homepage    string `json:"homepage"`
 	Favicon     string `json:"favicon"`
 	Tags        string `json:"tags"`
-	Country     string `json:"country"`
-	CountryCode string `json:"countrycode"`
-	State       string `json:"state"`
+	Country           string `json:"country"`
+	CountryCode       string `json:"countrycode"`
+	SourceCountryCode string `json:"sourcecountrycode,omitempty"`
+	State             string `json:"state"`
 	Language    string `json:"language"`
 	Votes       int    `json:"votes"`
 	Codec       string `json:"codec"`
@@ -5225,6 +5226,9 @@ func mergeStationRecord(a, b RadioStation) RadioStation {
 	}
 	if primary.CountryCode == "" {
 		primary.CountryCode = other.CountryCode
+	}
+	if primary.SourceCountryCode == "" {
+		primary.SourceCountryCode = other.SourceCountryCode
 	}
 	if primary.Codec == "" {
 		primary.Codec = other.Codec
