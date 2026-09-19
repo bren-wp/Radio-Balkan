@@ -386,8 +386,8 @@ async function main() {
   assert.equal(elements.quickPop.attributes['aria-pressed'], 'true');
   assert.equal(elements.browseTitle.textContent, 'Pop & Rock', 'Pop & Rock must expose its own browse context');
   elements.quickAll.dispatch('click');
-  assert.equal(elements.country.value, '', 'Sve must clear the supplemental area filter');
-  assert.equal(elements.genre.value, '', 'Sve must clear thematic filters');
+  assert.equal(elements.country.value, 'HR', 'Home must return the area filter to Croatia');
+  assert.equal(elements.genre.value, '', 'Home must clear thematic filters');
   assert.equal(elements.quickAll.attributes['aria-pressed'], 'true');
 
   elements.adminToggle.dispatch('click');
