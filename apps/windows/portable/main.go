@@ -2436,7 +2436,9 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	np := ""
 	currentCountry := ""
 	playing := false
+	stopped := true
 	currentIdx := -1
+	canNavigate := false
 	var current RadioStation
 	app.mu.RLock()
 	if idx := currentStationIndexLocked(); idx >= 0 && idx < len(app.stations) {
@@ -2450,6 +2452,8 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 		}
 	}
 	playing = app.playing
+	stopped = app.audioStopped
+	canNavigate = canNavigateStations(len(app.stations), len(app.filtered))
 	app.mu.RUnlock()
 	app.stateMu.RLock()
 	vol := app.state.Volume
@@ -2494,9 +2498,16 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 
 	// Center transport controls.
 	cx := cr.Right / 2
+	canStop := canStopPlayback(currentIdx, stopped)
 	selectFont(hdc, app.hFontBold)
-	text(hdc, "◀", cx-112, t+21, cx-74, t+59, rgb(193, 199, 207), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	app.hits = append(app.hits, HitRegion{R: RECT{cx - 116, t + 17, cx - 70, t + 63}, Kind: hitPlayerPrev, Index: -1})
+	prevColor := rgb(193, 199, 207)
+	if !canNavigate {
+		prevColor = rgb(91, 98, 108)
+	}
+	text(hdc, "◀", cx-112, t+21, cx-74, t+59, prevColor, DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	if canNavigate {
+		app.hits = append(app.hits, HitRegion{R: RECT{cx - 116, t + 17, cx - 70, t + 63}, Kind: hitPlayerPrev, Index: -1})
+	}
 	label := "▶"
 	if playing {
 		label = "Ⅱ"
@@ -2505,11 +2516,23 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	selectFont(hdc, app.hFontTitle)
 	text(hdc, label, cx-28, t+10, cx+28, t+72, rgb(20, 21, 24), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	app.hits = append(app.hits, HitRegion{R: RECT{cx - 35, t + 7, cx + 35, t + 76}, Kind: hitPlayerPlay, Index: -1})
-	drawIconButton(hdc, cx+48, t+25, cx+88, t+65, "■", false)
-	app.hits = append(app.hits, HitRegion{R: RECT{cx + 44, t + 21, cx + 92, t + 69}, Kind: hitPlayerStop, Index: -1})
+	if canStop {
+		drawIconButton(hdc, cx+48, t+25, cx+88, t+65, "■", false)
+		app.hits = append(app.hits, HitRegion{R: RECT{cx + 44, t + 21, cx + 92, t + 69}, Kind: hitPlayerStop, Index: -1})
+	} else {
+		drawRounded(hdc, cx+48, t+25, cx+88, t+65, 13, color(14, 20, 28), color(33, 41, 51))
+		selectFont(hdc, app.hFontBold)
+		text(hdc, "■", cx+48, t+25, cx+88, t+65, rgb(91, 98, 108), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	}
 	selectFont(hdc, app.hFontBold)
-	text(hdc, "▶", cx+112, t+21, cx+150, t+59, rgb(193, 199, 207), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	app.hits = append(app.hits, HitRegion{R: RECT{cx + 108, t + 17, cx + 154, t + 63}, Kind: hitPlayerNext, Index: -1})
+	nextColor := rgb(193, 199, 207)
+	if !canNavigate {
+		nextColor = rgb(91, 98, 108)
+	}
+	text(hdc, "▶", cx+112, t+21, cx+150, t+59, nextColor, DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	if canNavigate {
+		app.hits = append(app.hits, HitRegion{R: RECT{cx + 108, t + 17, cx + 154, t + 63}, Kind: hitPlayerNext, Index: -1})
+	}
 	// Live line underneath transport.
 	lineL := cx - 150
 	lineR := cx + 150
@@ -2916,16 +2939,33 @@ func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleActi
 	return playbackToggleResume
 }
 
+func defaultPlaybackIndexLocked() int {
+	if len(app.filtered) > 0 {
+		idx := app.filtered[0]
+		if idx >= 0 && idx < len(app.stations) {
+			return idx
+		}
+	}
+	if len(app.stations) > 0 {
+		return 0
+	}
+	return -1
+}
+
 func toggleCurrentPlayback() {
 	app.mu.RLock()
 	current, playing, stopped := currentStationIndexLocked(), app.playing, app.audioStopped
 	currentKey := app.currentKey
+	defaultIndex := defaultPlaybackIndexLocked()
 	if currentKey == "" && current >= 0 && current < len(app.stations) {
 		currentKey = stationKey(app.stations[current])
 	}
 	app.mu.RUnlock()
 	action := decidePlaybackToggle(current, playing, stopped)
 	if action == playbackToggleNone {
+		if defaultIndex >= 0 {
+			playStation(defaultIndex)
+		}
 		return
 	}
 	if action == playbackTogglePause {
@@ -2973,7 +3013,25 @@ func toggleCurrentPlayback() {
 	invalidate()
 }
 
+func canStopPlayback(current int, stopped bool) bool {
+	return current >= 0 && !stopped
+}
+
+func canNavigateStations(stationCount, filteredCount int) bool {
+	count := stationCount
+	if filteredCount > 0 {
+		count = filteredCount
+	}
+	return count > 1
+}
+
 func stopCurrentPlayback() {
+	app.mu.RLock()
+	canStop := canStopPlayback(currentStationIndexLocked(), app.audioStopped)
+	app.mu.RUnlock()
+	if !canStop {
+		return
+	}
 	audioStop()
 	app.mu.Lock()
 	app.playing = false
@@ -2996,7 +3054,7 @@ func playAdjacent(delta int) {
 	filtered := append([]int(nil), app.filtered...)
 	stationCount := len(app.stations)
 	app.mu.RUnlock()
-	if stationCount == 0 {
+	if !canNavigateStations(stationCount, len(filtered)) {
 		return
 	}
 	if len(filtered) > 0 {

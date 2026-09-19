@@ -76,7 +76,7 @@ function deferred() {
 
 const ids = [
   'search', 'country', 'genre', 'stations', 'status', 'refresh', 'heroPlay',
-  'playerToggle', 'playerStop', 'favoritesOnly', 'clearFilters', 'playerFav', 'playerState',
+  'playerToggle', 'playerPrev', 'playerStop', 'playerNext', 'favoritesOnly', 'clearFilters', 'playerFav', 'playerState',
   'playerName', 'playerMeta', 'heroName', 'heroMeta', 'playerLogo'
 ];
 const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
@@ -120,6 +120,7 @@ let getStateCalls = 0;
 let toggleCalls = 0;
 let stopCalls = 0;
 let playCalls = 0;
+let lastPlayedStation = null;
 const toggleQueue = [];
 const stopQueue = [];
 
@@ -150,6 +151,7 @@ const runtime = {
     }
     if (message?.type === 'RB_PLAY') {
       playCalls += 1;
+      lastPlayedStation = copy(message.station);
       return copy(getState);
     }
     throw new Error(`Unexpected runtime message: ${message?.type}`);
@@ -220,6 +222,8 @@ async function main() {
   assert.equal(elements.playerName.textContent, 'Radio A', 'initial GET_STATE must select the active station');
   assert.equal(elements.playerState.textContent, 'Sada svira', 'initial playing state must be rendered');
   assert.equal(elements.playerToggle.disabled, false, 'player toggle must be enabled after a station is available');
+  assert.equal(elements.playerPrev.disabled, false, 'previous control must be enabled when multiple stations are available');
+  assert.equal(elements.playerNext.disabled, false, 'next control must be enabled when multiple stations are available');
   assert.equal(elements.playerStop.disabled, false, 'player stop must be enabled after a station is available');
   assert.equal(elements.playerFav.disabled, false, 'favorite control must be enabled after a station is available');
   assert.equal(elements.playerFav.attributes['aria-pressed'], 'false', 'favorite state must be announced accessibly');
@@ -246,6 +250,12 @@ async function main() {
   elements.refresh.dispatch('click');
   await flush();
   assert.equal(elements.country.value, 'RS', 'selected country filter must survive a catalog refresh');
+  assert.equal(elements.playerPrev.disabled, true, 'previous must disable when the active filter leaves only one visible station, even if the current station is outside that filter');
+  assert.equal(elements.playerNext.disabled, true, 'next must disable when the active filter leaves only one visible station, even if the current station is outside that filter');
+  elements.country.value = '';
+  elements.country.dispatch('change');
+  assert.equal(elements.playerPrev.disabled, false, 'previous must re-enable when multiple stations are visible again');
+  assert.equal(elements.playerNext.disabled, false, 'next must re-enable when multiple stations are visible again');
 
   const listRepaintsBeforeState = elements.stations.replaceChildrenCalls;
   runtimeListener({ type: 'RB_STATE', epoch: 'epoch-a', revision: 2, station: stationA, playing: false, sessionId: 'session-a' });
@@ -323,6 +333,20 @@ async function main() {
   await flush();
   assert.equal(playCalls, playCallsBeforeStoppedReplay + 1, 'main play control after stop must send a fresh RB_PLAY command');
   assert.equal(elements.playerState.textContent, 'Sada svira', 'play after stop must create a fresh playback session from the main control');
+
+  const adjacentCallsBefore = playCalls;
+  getState = { epoch: 'epoch-b', revision: 7, station: stationB, playing: true, sessionId: 'session-b-next' };
+  elements.playerNext.dispatch('click');
+  await flush();
+  assert.equal(playCalls, adjacentCallsBefore + 1, 'next control must start the adjacent station');
+  assert.equal(lastPlayedStation?.stationuuid, 'station-extra-0', 'next from Radio B must select the following visible station');
+  const afterNextCalls = playCalls;
+  getState = { epoch: 'epoch-b', revision: 8, station: stationB, playing: true, sessionId: 'session-b-prev' };
+  elements.playerPrev.dispatch('click');
+  await flush();
+  assert.equal(playCalls, afterNextCalls + 1, 'previous control must start the previous visible station');
+  assert.equal(lastPlayedStation?.stationuuid, 'station-a', 'previous from Radio B must select the preceding visible station');
+  assert.equal(elements.playerPrev.disabled, false, 'previous control must remain available after adjacent playback');
 
   console.log('Browser popup state and UI regression tests OK');
 }

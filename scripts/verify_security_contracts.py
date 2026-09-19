@@ -263,13 +263,17 @@ def main() -> None:
         "message?.type !== 'RB_STATE' || activeCommandToken",
         "$('playerState').textContent = playerStatus;",
         "async function stopPlayback()",
+        "async function playAdjacent(delta)",
+        "navigationStations()",
         "ext.runtime.sendMessage({ type: 'RB_STOP' })",
         "playerStop').setAttribute('aria-busy'",
     )
     require(
         "extensions/shared/popup.html",
         'id="playerState"',
+        'id="playerPrev"',
         'id="playerStop"',
+        'id="playerNext"',
         'aria-live="polite"',
     )
     require(
@@ -284,6 +288,10 @@ def main() -> None:
         "duplicate stop clicks must be ignored while stop is in flight",
         "completed stop command must render an explicit stopped state",
         "player stop must stay disabled once playback is already stopped",
+        "previous must disable when the active filter leaves only one visible station",
+        "next from Radio B must select the following visible station",
+        "previous from Radio B must select the preceding visible station",
+        "next control must start the adjacent station",
         "main play control after stop must send a fresh RB_PLAY command",
     )
     require(
@@ -403,8 +411,13 @@ def main() -> None:
         "runtime.LockOSThread()",
         "defer runtime.UnlockOSThread()",
         "func decidePlaybackToggle(current int, playing, stopped bool) playbackToggleAction",
+        "func defaultPlaybackIndexLocked() int",
+        "playStation(defaultIndex)",
         "playbackToggleReconnect",
         "Kind: hitPlayerStop",
+        "func canStopPlayback(current int, stopped bool) bool",
+        "func canNavigateStations(stationCount, filteredCount int) bool",
+        "canStopPlayback(currentStationIndexLocked(), app.audioStopped)",
         "playStationByKey(currentKey, current)",
         "app.audioStopped = true",
         "audioSetVolume(v)",

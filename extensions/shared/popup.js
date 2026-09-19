@@ -230,6 +230,7 @@
     );
     renderLimit = PAGE;
     render();
+    updatePlayer();
   }
 
   function stationCard(station) {
@@ -386,6 +387,22 @@
     }
   }
 
+  function navigationStations() {
+    if (visible.length) return visible;
+    return all;
+  }
+
+  async function playAdjacent(delta) {
+    if (activeCommandToken || !delta) return;
+    const source = navigationStations();
+    if (source.length < 2) return;
+    const currentKey = current ? RB.key(current) : '';
+    let index = source.findIndex(station => RB.key(station) === currentKey);
+    if (index < 0) index = delta > 0 ? -1 : 0;
+    const nextIndex = (index + (delta > 0 ? 1 : -1) + source.length) % source.length;
+    await play(source[nextIndex]);
+  }
+
   async function toggle() {
     if (activeCommandToken) return;
     if (!current && visible.length) return play(visible[0]);
@@ -475,6 +492,12 @@
     $('playerStop').disabled = !station || commandBusy || stopped;
     $('playerStop').setAttribute('aria-busy', String(commandBusy));
     $('playerStop').setAttribute('aria-label', commandBusy ? 'Radnja je u tijeku' : (stopped ? 'Reprodukcija je zaustavljena' : 'Zaustavi reprodukciju'));
+    const navigationCount = navigationStations().length;
+    const canNavigate = navigationCount > 1 && !commandBusy;
+    $('playerPrev').disabled = !canNavigate;
+    $('playerNext').disabled = !canNavigate;
+    $('playerPrev').setAttribute('aria-busy', String(commandBusy));
+    $('playerNext').setAttribute('aria-busy', String(commandBusy));
   }
 
   list.addEventListener('click', event => {
@@ -512,7 +535,9 @@
   $('clearFilters').addEventListener('click', resetFilters);
   $('heroPlay').addEventListener('click', () => void toggle());
   $('playerToggle').addEventListener('click', () => void toggle());
+  $('playerPrev').addEventListener('click', () => void playAdjacent(-1));
   $('playerStop').addEventListener('click', () => void stopPlayback());
+  $('playerNext').addEventListener('click', () => void playAdjacent(1));
   $('favoritesOnly').addEventListener('click', () => {
     favoritesOnly = !favoritesOnly;
     updateFavoritesFilterButton();

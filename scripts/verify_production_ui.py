@@ -52,7 +52,9 @@ def main() -> int:
         'role="list"',
         'aria-pressed="false"',
         'id="playerToggle"',
+        'id="playerPrev"',
         'id="playerStop"',
+        'id="playerNext"',
         'id="clearFilters"',
         'disabled>▶</button>',
         'Nije odabrano',
@@ -76,6 +78,9 @@ def main() -> int:
         "playerToggle').setAttribute('aria-busy'",
         "playerStop').setAttribute('aria-busy'",
         "function stopPlayback()",
+        "function playAdjacent(delta)",
+        "navigationStations()",
+        "render();\n    updatePlayer();",
         "ext.runtime.sendMessage({ type: 'RB_STOP' })",
         "button.disabled = !!activeCommandToken && active",
         "function renderEmptyState(",
@@ -89,6 +94,9 @@ def main() -> int:
     require(errors, popup_css, ".station:focus-visible", "extensions/shared/popup.css")
     require(errors, popup_css, "button:active:not(:disabled)", "extensions/shared/popup.css")
     require(errors, popup_css, ".emptyAction", "extensions/shared/popup.css")
+    require(errors, popup_css, "@media (max-width: 380px)", "extensions/shared/popup.css")
+    require(errors, popup_css, ".player > img { display: none; }", "extensions/shared/popup.css")
+    require(errors, popup_css, "grid-template-columns: minmax(0, 1fr) 42px minmax(168px, auto)", "extensions/shared/popup.css")
 
     android = read("apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java")
     adapter = read("apps/android/app/src/main/java/net/radiobalkan/app/StationAdapter.java")
@@ -111,6 +119,11 @@ def main() -> int:
         "updatePlaybackControls()",
         "playerStop.setOnClickListener",
         "RadioPlayerService.ACTION_STOP",
+        "playerPrev.setEnabled(false)",
+        "playerStop.setEnabled(false)",
+        "playerNext.setEnabled(false)",
+        "} else if (playerArtwork != null) {",
+        "playerArtwork.setImageResource(R.drawable.ic_radio_balkan)",
         "playerPrev.setOnClickListener",
         "playerNext.setOnClickListener",
         "PlaybackLifecycle.adjacentIndex",
@@ -183,10 +196,15 @@ def main() -> int:
         'Prazno polje vraća automatski odabir.',
         'Zapis o pogrešci spremljen je lokalno.',
         "func activateStation(idx int)",
+        "func defaultPlaybackIndexLocked() int",
+        "if defaultIndex >= 0 {",
         'heroLabel = "Ⅱ  Pauziraj"',
         'heroLabel = "▶  Nastavi"',
         'playLabel = "Ⅱ"',
         "Kind: hitPlayerStop",
+        "canStopPlayback(currentIdx, stopped)",
+        "canNavigate = canNavigateStations(len(app.stations), len(app.filtered))",
+        "if canNavigate {",
         '"■"',
     ):
         require(errors, windows, needle, "Windows UI")

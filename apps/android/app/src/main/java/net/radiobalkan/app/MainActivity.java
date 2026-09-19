@@ -118,6 +118,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             if (playerArtwork != null && artworkStation != null) {
                 playerArtwork.setImageResource(R.drawable.ic_radio_balkan);
                 images.load(artworkStation.favicon, playerArtwork, null);
+            } else if (playerArtwork != null) {
+                playerArtwork.setImageResource(R.drawable.ic_radio_balkan);
             }
             if (playerEqualizer != null) playerEqualizer.setActive(playing);
             statusText.setText(status.isEmpty() ? "Spremno" : status);
@@ -358,6 +360,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         transport.setGravity(Gravity.CENTER_VERTICAL);
 
         playerPrev = playerButton("◀", false);
+        playerPrev.setEnabled(false);
         playerPrev.setContentDescription("Prethodna stanica");
         playerPrev.setOnClickListener(v -> playAdjacent(-1));
         transport.addView(playerPrev, new LinearLayout.LayoutParams(dp(40), dp(52)));
@@ -386,6 +389,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         });
 
         playerStop = playerButton("■", false);
+        playerStop.setEnabled(false);
         playerStop.setContentDescription("Zaustavi reprodukciju");
         playerStop.setOnClickListener(v -> {
             if (currentKey.isEmpty() || playbackStopped) return;
@@ -395,6 +399,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         transport.addView(playerStop, new LinearLayout.LayoutParams(dp(40), dp(52)));
 
         playerNext = playerButton("▶", false);
+        playerNext.setEnabled(false);
         playerNext.setContentDescription("Sljedeća stanica");
         playerNext.setOnClickListener(v -> playAdjacent(1));
         transport.addView(playerNext, new LinearLayout.LayoutParams(dp(40), dp(52)));

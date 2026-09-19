@@ -130,6 +130,69 @@ func TestWriteFileDurablePersistsCompleteContent(t *testing.T) {
 }
 
 
+func TestTransportAvailabilityUsesVisibleStationCount(t *testing.T) {
+	tests := []struct {
+		name         string
+		stationCount int
+		filtered     int
+		want         bool
+	}{
+		{"empty", 0, 0, false},
+		{"one station", 1, 0, false},
+		{"two stations", 2, 0, true},
+		{"single filtered result", 5, 1, false},
+		{"multiple filtered results", 5, 2, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := canNavigateStations(tc.stationCount, tc.filtered); got != tc.want {
+				t.Fatalf("navigation availability = %v, want %v", got, tc.want)
+			}
+		})
+	}
+
+	if canStopPlayback(-1, false) {
+		t.Fatal("stop must be disabled without a current station")
+	}
+	if canStopPlayback(0, true) {
+		t.Fatal("stop must be disabled after terminal stop")
+	}
+	if !canStopPlayback(0, false) {
+		t.Fatal("stop must be enabled for an active or paused current station")
+	}
+}
+
+func TestDefaultPlaybackIndexLocked(t *testing.T) {
+	previousStations := app.stations
+	previousFiltered := app.filtered
+	defer func() {
+		app.stations = previousStations
+		app.filtered = previousFiltered
+	}()
+
+	app.stations = nil
+	app.filtered = nil
+	if got := defaultPlaybackIndexLocked(); got != -1 {
+		t.Fatalf("empty default index = %d, want -1", got)
+	}
+
+	app.stations = []RadioStation{{Name: "A"}, {Name: "B"}, {Name: "C"}}
+	app.filtered = nil
+	if got := defaultPlaybackIndexLocked(); got != 0 {
+		t.Fatalf("unfiltered default index = %d, want 0", got)
+	}
+
+	app.filtered = []int{2, 1}
+	if got := defaultPlaybackIndexLocked(); got != 2 {
+		t.Fatalf("filtered default index = %d, want 2", got)
+	}
+
+	app.filtered = []int{99}
+	if got := defaultPlaybackIndexLocked(); got != 0 {
+		t.Fatalf("invalid filtered index fallback = %d, want 0", got)
+	}
+}
+
 func TestPlaybackToggleDecisionLifecycle(t *testing.T) {
 	tests := []struct {
 		name     string
