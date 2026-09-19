@@ -75,7 +75,7 @@ const (
 	WS_TABSTOP          = 0x00010000
 	WS_BORDER           = 0x00800000
 	ES_AUTOHSCROLL      = 0x0080
-	ES_PASSWORD          = 0x0020
+	ES_PASSWORD         = 0x0020
 	EM_SETCUEBANNER     = 0x1501
 
 	SW_SHOW       = 5
