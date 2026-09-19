@@ -135,7 +135,7 @@ const stationForeign = {
   codec: 'MP3',
   logo: ''
 };
-const extraStations = Array.from({ length: 58 }, (_, index) => ({
+const extraStations = Array.from({ length: 90 }, (_, index) => ({
   stationuuid: `station-extra-${index}`,
   name: `Radio Extra ${index}`,
   country: 'Hrvatska',
@@ -305,7 +305,7 @@ async function main() {
   assert.equal(elements.country.value, 'HR', 'first-run browser home must default to Croatia');
   assert.equal(elements.quickAll.attributes['aria-pressed'], 'true', 'Croatia home navigation must be selected initially');
   assert.equal(elements.browseTitle.textContent, 'Hrvatska', 'default browse heading must identify Croatia');
-  assert.match(elements.status.textContent, /^59 od 59 prikazano · Hrvatska/, 'Croatia home must render the complete fixture without a 48-card first-page cap');
+  assert.match(elements.status.textContent, /^72 od 91 prikazano · Hrvatska/, 'Croatia home must render 72 stations before pagination');
 
   const playCallsBeforePlayerDetails = playCalls;
   elements.playerDetails.dispatch('click', { currentTarget: elements.playerDetails });
@@ -423,7 +423,7 @@ async function main() {
   elements.genre.value = '';
   elements.genre.dispatch('change');
 
-  const focusTargets = Array.from({ length: 60 }, () => new Element());
+  const focusTargets = Array.from({ length: 94 }, () => new Element());
   elements.stations.querySelectorAllResult = focusTargets;
   elements.stations.dispatch('click', {
     target: {
@@ -432,7 +432,7 @@ async function main() {
       }
     }
   });
-  assert.equal(focusTargets[48].focused, true, 'expanding the station list must focus the first newly revealed play control');
+  assert.equal(focusTargets[72].focused, true, 'expanding the station list must focus the first newly revealed play control');
   elements.stations.querySelectorAllResult = [];
 
   elements.country.value = 'RS';
@@ -548,7 +548,7 @@ async function main() {
   assert.match(elements.status.textContent, /^0 od 0 prikazano/, 'unfavoriting inside favorites view must immediately remove the station from the visible set');
   elements.favoritesOnly.dispatch('click');
   await flush();
-  assert.match(elements.status.textContent, /^48 od 62 prikazano/, 'leaving favorites-only view must restore the full visible catalog page');
+  assert.match(elements.status.textContent, /^72 od 94 prikazano/, 'leaving favorites-only view must restore the expanded visible catalog page');
 
   runtimeListener({ type: 'RB_STATE', epoch: 'epoch-b', revision: 9, station: null, playing: false, sessionId: null });
   await flush();
