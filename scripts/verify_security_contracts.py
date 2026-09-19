@@ -80,6 +80,7 @@ def main() -> None:
         "adminAuthRunning.compareAndSet(false, true)",
         "if (!accepted) adminRateLimiter.recordFailure(completedAt)",
         "adminAuthRunning.set(false)",
+        "SystemClock.elapsedRealtime()",
         'else if ("Provjeri prikazane stanice".equals(chosen) && requireAdmin()) checkVisibleStreams();',
         'else if (chosen.equals("Provjeri dostupnost") && requireAdmin()) checkOne(s);',
         "private void checkVisibleStreams() {\n        if (!requireAdmin()) return;",
@@ -97,6 +98,7 @@ def main() -> None:
     forbid(
         "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
         "brendigo" + "2025",
+        "adminLockedUntilMs",
     )
     require(
         "apps/android/app/src/test/java/net/radiobalkan/app/AdminAuthTest.java",
