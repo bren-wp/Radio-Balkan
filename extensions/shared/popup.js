@@ -30,7 +30,9 @@
   let adminLockedUntil = 0;
   let adminDetailsGeneration = 0;
   const retiredEpochs = new Set();
-  const ADMIN_DIGEST = '79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0';
+  const ADMIN_ITERATIONS = 120000;
+  const ADMIN_SALT = Uint8Array.from('c6d79acaafb52bb8bac278313e84ccf7'.match(/../g).map(x => Number.parseInt(x, 16)));
+  const ADMIN_DIGEST = '6d319ade7c2c0f333d1d520eaf582034a80cabbc4e2f0317527b68576b631f80';
 
   const search = $('search');
   const country = $('country');
@@ -43,8 +45,19 @@
   async function adminCredentialsValid(username, password) {
     if (String(username || '').trim().toLowerCase() !== 'brendigo' || typeof password !== 'string') return false;
     if (!globalThis.crypto?.subtle || typeof TextEncoder !== 'function') return false;
-    const bytes = new TextEncoder().encode('RadioBalkanAdmin:v1:' + password);
-    const digest = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes));
+    const material = await globalThis.crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(password),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveBits']
+    );
+    const digest = new Uint8Array(await globalThis.crypto.subtle.deriveBits({
+      name: 'PBKDF2',
+      salt: ADMIN_SALT,
+      iterations: ADMIN_ITERATIONS,
+      hash: 'SHA-256'
+    }, material, 256));
     const expected = new Uint8Array(ADMIN_DIGEST.match(/../g).map(x => Number.parseInt(x, 16)));
     if (digest.length !== expected.length) return false;
     let different = 0;
@@ -113,7 +126,6 @@
   function logoutAdmin() {
     adminMode = false;
     adminDetailsGeneration += 1;
-    setAdminMessage('');
     setAdminMessage('');
     updateAdminUi();
     closeAdminPanel();
@@ -632,13 +644,17 @@
       closeAdminPanel();
     }
   });
-  $('adminLogin').addEventListener('click', async () => {
+  async function attemptAdminLogin() {
+    const loginButton = $('adminLogin');
+    if (loginButton.disabled) return;
     const now = Date.now();
     if (now < adminLockedUntil) {
       setAdminMessage(`Previše pokušaja. Pokušaj ponovno za ${Math.max(1, Math.ceil((adminLockedUntil - now) / 1000))} s.`);
       return;
     }
-    $('adminLogin').disabled = true;
+    loginButton.disabled = true;
+    loginButton.textContent = 'Provjeravam…';
+    loginButton.setAttribute('aria-busy', 'true');
     setAdminMessage('Provjeravam…');
     try {
       const ok = await adminCredentialsValid($('adminUsername').value, $('adminPassword').value);
@@ -661,10 +677,25 @@
         setAdminMessage('Neispravno korisničko ime ili lozinka.');
       }
       $('adminPassword').focus();
+    } catch {
+      $('adminPassword').value = '';
+      setAdminMessage('Prijava trenutačno nije dostupna.');
+      $('adminPassword').focus();
     } finally {
-      $('adminLogin').disabled = false;
+      loginButton.disabled = false;
+      loginButton.textContent = 'Prijavi se';
+      loginButton.setAttribute('aria-busy', 'false');
     }
-  });
+  }
+
+  $('adminLogin').addEventListener('click', () => void attemptAdminLogin());
+  for (const input of [$('adminUsername'), $('adminPassword')]) {
+    input.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      void attemptAdminLogin();
+    });
+  }
   $('adminLogout').addEventListener('click', logoutAdmin);
   $('adminSaveSource').addEventListener('click', async () => {
     if (!adminMode || !current) return;

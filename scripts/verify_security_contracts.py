@@ -49,13 +49,18 @@ def main() -> None:
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/AdminAuth.java",
         'private static final String USERNAME = "brendigo";',
-        'private static final String SALT = "RadioBalkanAdmin:v1:";',
+        "ITERATIONS = 120_000",
+        "PBKDF2WithHmacSHA256",
+        "PBEKeySpec",
         "MessageDigest.isEqual",
-        "79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0",
+        "c6d79acaafb52bb8bac278313e84ccf7",
+        "6d319ade7c2c0f333d1d520eaf582034a80cabbc4e2f0317527b68576b631f80",
     )
     forbid(
         "apps/android/app/src/main/java/net/radiobalkan/app/AdminAuth.java",
         "brendigo" + "2025",
+        "RadioBalkanAdmin:v1:",
+        "79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
@@ -72,6 +77,11 @@ def main() -> None:
         "adminLockedUntilMs = System.currentTimeMillis() + 30_000L",
         'if ("replaced".equals(tab) || "broken".equals(tab))',
         "if (clickNow < adminLockedUntilMs)",
+        "EditorInfo.IME_ACTION_DONE",
+        "password.setOnEditorActionListener",
+        "loginButton.setEnabled(false)",
+        'loginButton.setText("Provjeravam…")',
+        "ioWorker.execute",
     )
     forbid(
         "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
@@ -308,9 +318,12 @@ def main() -> None:
         "navigationStations()",
         "ext.runtime.sendMessage({ type: 'RB_STOP' })",
         "playerStop').setAttribute('aria-busy'",
-        "const ADMIN_DIGEST = '79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0';",
+        "const ADMIN_ITERATIONS = 120000;",
+        "c6d79acaafb52bb8bac278313e84ccf7",
+        "const ADMIN_DIGEST = '6d319ade7c2c0f333d1d520eaf582034a80cabbc4e2f0317527b68576b631f80';",
         "async function adminCredentialsValid",
-        "crypto.subtle.digest('SHA-256'",
+        "crypto.subtle.importKey",
+        "crypto.subtle.deriveBits",
         "let adminMode = false;",
         "RB.adminOverrideFor(RB.key(station))",
         "RB.setAdminOverride(RB.key(current), value)",
@@ -319,6 +332,8 @@ def main() -> None:
     forbid(
         "extensions/shared/popup.js",
         "brendigo" + "2025",
+        "RadioBalkanAdmin:v1:",
+        "79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0",
     )
     require(
         "extensions/shared/popup.html",
@@ -353,6 +368,7 @@ def main() -> None:
         "unfavoriting inside favorites view must immediately remove the station from the visible set",
         "advanced source controls must stay hidden before admin login",
         "saved admin source override must be applied without exposing it in the normal UI",
+        "Enter must submit the administrator login form",
     )
     require(
         "scripts/test_chromium_player_contract.js",
@@ -484,6 +500,10 @@ def main() -> None:
         "if shuttingDown() {",
         "func prepareShutdown()",
         "ES_PASSWORD",
+        '"crypto/hmac"',
+        "adminPasswordIterations = 120000",
+        "func deriveAdminPasswordKey(password string) [32]byte",
+        "hmac.New(sha256.New",
         "func adminCredentialsValid(username, password string) bool",
         "subtle.ConstantTimeCompare",
         "func requireAdmin() bool",
@@ -495,6 +515,8 @@ def main() -> None:
     forbid(
         "apps/windows/portable/main.go",
         "brendigo" + "2025",
+        "RadioBalkanAdmin:v1:",
+        "0x79, 0xcf, 0x89, 0x3d",
     )
     require(
         "apps/windows/portable/main_test.go",

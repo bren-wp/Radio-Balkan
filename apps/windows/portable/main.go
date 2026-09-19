@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
 	_ "embed"
@@ -382,14 +383,39 @@ var inputDialogClassOnce sync.Once
 var inputDialogClassErr error
 var activeInputDialog *inputDialogState
 
-var adminPasswordDigest = [32]byte{0x79, 0xcf, 0x89, 0x3d, 0xcf, 0xdb, 0x18, 0xec, 0xc6, 0xeb, 0xa5, 0x91, 0x89, 0x6f, 0x89, 0x6c, 0x5d, 0xd3, 0xea, 0xb9, 0x53, 0x54, 0xd4, 0xe7, 0xe4, 0x50, 0x3d, 0x13, 0x29, 0x2f, 0xe9, 0xa0}
+const adminPasswordIterations = 120000
+
+var adminPasswordSalt = [16]byte{0xc6, 0xd7, 0x9a, 0xca, 0xaf, 0xb5, 0x2b, 0xb8, 0xba, 0xc2, 0x78, 0x31, 0x3e, 0x84, 0xcc, 0xf7}
+var adminPasswordDigest = [32]byte{0x6d, 0x31, 0x9a, 0xde, 0x7c, 0x2c, 0x0f, 0x33, 0x3d, 0x1d, 0x52, 0x0e, 0xaf, 0x58, 0x20, 0x34, 0xa8, 0x0c, 0xab, 0xbc, 0x4e, 0x2f, 0x03, 0x17, 0x52, 0x7b, 0x68, 0x57, 0x6b, 0x63, 0x1f, 0x80}
+
+func deriveAdminPasswordKey(password string) [32]byte {
+	var derived [32]byte
+	var block [4]byte
+	binary.BigEndian.PutUint32(block[:], 1)
+
+	mac := hmac.New(sha256.New, []byte(password))
+	_, _ = mac.Write(adminPasswordSalt[:])
+	_, _ = mac.Write(block[:])
+	u := mac.Sum(nil)
+	copy(derived[:], u)
+
+	for iteration := 1; iteration < adminPasswordIterations; iteration++ {
+		mac.Reset()
+		_, _ = mac.Write(u)
+		u = mac.Sum(nil)
+		for i := range derived {
+			derived[i] ^= u[i]
+		}
+	}
+	return derived
+}
 
 func adminCredentialsValid(username, password string) bool {
 	if !strings.EqualFold(strings.TrimSpace(username), "brendigo") {
 		return false
 	}
-	sum := sha256.Sum256([]byte("RadioBalkanAdmin:v1:" + password))
-	return subtle.ConstantTimeCompare(sum[:], adminPasswordDigest[:]) == 1
+	derived := deriveAdminPasswordKey(password)
+	return subtle.ConstantTimeCompare(derived[:], adminPasswordDigest[:]) == 1
 }
 
 func adminModeEnabled() bool {

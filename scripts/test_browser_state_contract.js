@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { createHash } = require('node:crypto');
+const { pbkdf2Sync } = require('node:crypto');
 const { TextEncoder } = require('node:util');
 
 class Element {
@@ -173,9 +173,19 @@ const context = {
   Promise,
   crypto: {
     subtle: {
-      async digest(algorithm, bytes) {
-        assert.equal(String(algorithm).toUpperCase(), 'SHA-256');
-        const digest = createHash('sha256').update(Buffer.from(bytes)).digest();
+      async importKey(format, bytes, algorithm, extractable, usages) {
+        assert.equal(format, 'raw');
+        assert.equal(algorithm?.name, 'PBKDF2');
+        assert.equal(extractable, false);
+        assert.deepEqual(usages, ['deriveBits']);
+        return { bytes: Buffer.from(bytes) };
+      },
+      async deriveBits(params, key, length) {
+        assert.equal(params?.name, 'PBKDF2');
+        assert.equal(String(params?.hash).toUpperCase(), 'SHA-256');
+        assert.equal(params?.iterations, 120000);
+        assert.equal(length, 256);
+        const digest = pbkdf2Sync(key.bytes, Buffer.from(params.salt), params.iterations, length / 8, 'sha256');
         return Uint8Array.from(digest).buffer;
       }
     }
@@ -261,8 +271,13 @@ async function main() {
   assert.equal(elements.adminLoginView.hidden, false, 'login form must be visible before authentication');
   elements.adminUsername.value = 'brendigo';
   elements.adminPassword.value = 'brendigo' + String(2025);
-  elements.adminLogin.dispatch('click');
+  let adminEnterPrevented = false;
+  elements.adminPassword.dispatch('keydown', {
+    key: 'Enter',
+    preventDefault() { adminEnterPrevented = true; }
+  });
   await flush();
+  assert.equal(adminEnterPrevented, true, 'Enter must submit the administrator login form');
   assert.equal(elements.adminControls.hidden, false, 'configured administrator credentials must unlock advanced controls');
   assert.equal(elements.adminLoginView.hidden, true, 'login form must hide after successful authentication');
   assert.equal(elements.adminPassword.value, '', 'administrator password field must be cleared after authentication');

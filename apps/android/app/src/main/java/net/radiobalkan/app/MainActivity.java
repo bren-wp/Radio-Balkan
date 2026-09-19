@@ -24,9 +24,11 @@ import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
+import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -581,11 +583,15 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         EditText username = new EditText(this);
         username.setSingleLine(true);
         username.setHint("Korisničko ime");
+        username.setContentDescription("Administratorsko korisničko ime");
+        username.setImeOptions(EditorInfo.IME_ACTION_NEXT);
         username.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
         panel.addView(username, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
         EditText password = new EditText(this);
         password.setSingleLine(true);
         password.setHint("Lozinka");
+        password.setContentDescription("Administratorska lozinka");
+        password.setImeOptions(EditorInfo.IME_ACTION_DONE);
         password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         panel.addView(password, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
 
@@ -596,35 +602,68 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 .setPositiveButton("Prijavi se", null)
                 .setNegativeButton("Odustani", null)
                 .create();
-        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            long clickNow = System.currentTimeMillis();
-            if (clickNow < adminLockedUntilMs) {
-                long seconds = Math.max(1L, (adminLockedUntilMs - clickNow + 999L) / 1000L);
+        dialog.setOnShowListener(ignored -> {
+            Button loginButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            Runnable submit = () -> {
+                if (!loginButton.isEnabled()) return;
+                long clickNow = System.currentTimeMillis();
+                if (clickNow < adminLockedUntilMs) {
+                    long seconds = Math.max(1L, (adminLockedUntilMs - clickNow + 999L) / 1000L);
+                    password.setText("");
+                    password.setError("Prijava je zaključana još " + seconds + " s.");
+                    return;
+                }
+
+                String candidateUsername = username.getText().toString();
+                String candidatePassword = password.getText().toString();
                 password.setText("");
-                password.setError("Prijava je zaključana još " + seconds + " s.");
-                return;
-            }
-            if (AdminAuth.matches(username.getText().toString(), password.getText().toString())) {
-                adminMode = true;
-                adminFailures = 0;
-                adminLockedUntilMs = 0;
-                password.setText("");
-                statusText.setText("Admin način rada · brendigo");
-                Toast.makeText(this, "Administrator je prijavljen", Toast.LENGTH_SHORT).show();
-                dialog.dismiss();
-                return;
-            }
-            password.setText("");
-            adminFailures++;
-            if (adminFailures >= 5) {
-                adminFailures = 0;
-                adminLockedUntilMs = System.currentTimeMillis() + 30_000L;
-                password.setError("Previše pokušaja. Prijava je privremeno zaključana.");
-            } else {
-                password.setError("Neispravno korisničko ime ili lozinka");
-            }
-            password.requestFocus();
-        }));
+                loginButton.setEnabled(false);
+                loginButton.setText("Provjeravam…");
+
+                try {
+                    ioWorker.execute(() -> {
+                        boolean accepted = AdminAuth.matches(candidateUsername, candidatePassword);
+                        ui.post(() -> {
+                            if (destroyed || !dialog.isShowing()) return;
+                            loginButton.setEnabled(true);
+                            loginButton.setText("Prijavi se");
+                            if (accepted) {
+                                adminMode = true;
+                                adminFailures = 0;
+                                adminLockedUntilMs = 0;
+                                statusText.setText("Admin način rada · brendigo");
+                                Toast.makeText(this, "Administrator je prijavljen", Toast.LENGTH_SHORT).show();
+                                dialog.dismiss();
+                                return;
+                            }
+                            adminFailures++;
+                            if (adminFailures >= 5) {
+                                adminFailures = 0;
+                                adminLockedUntilMs = System.currentTimeMillis() + 30_000L;
+                                password.setError("Previše pokušaja. Prijava je privremeno zaključana.");
+                            } else {
+                                password.setError("Neispravno korisničko ime ili lozinka");
+                            }
+                            password.requestFocus();
+                        });
+                    });
+                } catch (RejectedExecutionException rejected) {
+                    loginButton.setEnabled(true);
+                    loginButton.setText("Prijavi se");
+                    password.setError("Prijava trenutačno nije dostupna");
+                    password.requestFocus();
+                }
+            };
+            loginButton.setOnClickListener(v -> submit.run());
+            password.setOnEditorActionListener((v, actionId, event) -> {
+                boolean enter = actionId == EditorInfo.IME_ACTION_DONE
+                        || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                        && event.getAction() == KeyEvent.ACTION_DOWN);
+                if (!enter) return false;
+                submit.run();
+                return true;
+            });
+        });
         dialog.show();
     }
 
