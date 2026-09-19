@@ -74,12 +74,12 @@ def main() -> None:
         'chosen.equals("Web stranica") && requireAdmin()',
         'chosen.equals("Odaberi drugi izvor") && requireAdmin()',
         "if (!requireAdmin()) return;",
-        "private final AdminRateLimiter adminRateLimiter = new AdminRateLimiter(5, 30_000L);",
+        "private final AdminLoginGuard adminLoginGuard = AdminLoginGuard.shared();",
         'if ("replaced".equals(tab) || "broken".equals(tab))',
-        "if (adminRateLimiter.isLocked(clickNow))",
-        "adminAuthRunning.compareAndSet(false, true)",
-        "if (!accepted) adminRateLimiter.recordFailure(completedAt)",
-        "adminAuthRunning.set(false)",
+        "if (adminLoginGuard.isLocked(clickNow))",
+        "adminLoginGuard.tryBegin()",
+        "adminLoginGuard.complete(accepted, completedAt)",
+        "adminLoginGuard.cancel()",
         "SystemClock.elapsedRealtime()",
         'else if ("Provjeri prikazane stanice".equals(chosen) && requireAdmin()) checkVisibleStreams();',
         'else if (chosen.equals("Provjeri dostupnost") && requireAdmin()) checkOne(s);',
@@ -99,6 +99,8 @@ def main() -> None:
         "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
         "brendigo" + "2025",
         "adminLockedUntilMs",
+        "private final AdminRateLimiter adminRateLimiter = new AdminRateLimiter(5, 30_000L);",
+        "private final AtomicBoolean adminAuthRunning",
     )
     require(
         "apps/android/app/src/test/java/net/radiobalkan/app/AdminAuthTest.java",
@@ -117,6 +119,21 @@ def main() -> None:
         "successClearsFailureAndLockoutState",
         "expiredLockoutAllowsFreshAttempts",
     )
+    require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/AdminLoginGuard.java",
+        "private static final AdminLoginGuard SHARED",
+        "boolean tryBegin()",
+        "void complete(boolean accepted, long nowMs)",
+        "void cancel()",
+    )
+    require(
+        "apps/android/app/src/test/java/net/radiobalkan/app/AdminLoginGuardTest.java",
+        "singleFlightRejectsSecondAttemptUntilCompletion",
+        "fiveFailedCompletionsTriggerLockout",
+        "successfulCompletionClearsFailuresAndReleasesFlight",
+        "cancelReleasesFlightWithoutCountingFailure",
+    )
+
     forbid(
         "apps/android/app/src/test/java/net/radiobalkan/app/AdminAuthTest.java",
         "brendigo" + "2025",
