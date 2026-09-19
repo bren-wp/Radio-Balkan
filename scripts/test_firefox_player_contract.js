@@ -137,7 +137,7 @@ async function main() {
   await flush();
   assert.equal(firstPlay.playing, true, 'play must enter the playing state');
   assert.ok(firstPlay.sessionId, 'play must create a session id');
-  assert.deepEqual(recentStorage.rbRecent, ['a'], 'successful Firefox background playback must persist recent history');
+  assert.deepEqual(Array.from(recentStorage.rbRecent), ['a'], 'successful Firefox background playback must persist recent history');
 
   const firstInstance = instances[instances.length - 1];
   const instanceCountBeforePause = instances.length;

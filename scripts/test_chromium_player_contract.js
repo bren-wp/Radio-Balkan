@@ -140,7 +140,7 @@ async function main() {
   assert.ok(first.sessionId, 'Chromium worker snapshot must expose the active playback session');
   assert.equal(first.playing, true);
   assert.equal(createCalls, 1, 'first playback must create one offscreen document');
-  assert.deepEqual(recentStorage.rbRecent, ['a'], 'successful Chromium background playback must persist recent history');
+  assert.deepEqual(Array.from(recentStorage.rbRecent), ['a'], 'successful Chromium background playback must persist recent history');
 
   delayedStop = deferred();
   const oldSession = offscreenSession;
@@ -157,7 +157,7 @@ async function main() {
   const afterStaleStop = await dispatch({ type: 'RB_GET_STATE' });
   assert.equal(afterStaleStop.station.name, 'Radio B', 'stale stop must not replace the newer station');
   assert.equal(afterStaleStop.playing, true, 'stale stop must not stop newer playback');
-  assert.deepEqual(recentStorage.rbRecent.slice(0, 2), ['b', 'a'], 'newer successful playback must become the newest Chromium recent item');
+  assert.deepEqual(Array.from(recentStorage.rbRecent.slice(0, 2)), ['b', 'a'], 'newer successful playback must become the newest Chromium recent item');
 
   closeGate = deferred();
   const freshStop = dispatch({ type: 'RB_STOP' });
