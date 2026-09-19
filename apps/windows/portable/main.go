@@ -1840,7 +1840,7 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 	app.hits = append(app.hits, HitRegion{R: RECT{76, 52, sidebarWidth - 14, 84}, Kind: hitAdmin, Index: -1, Value: adminValue})
 
 	app.mu.RLock()
-	tab, genre := app.tab, strings.ToLower(strings.TrimSpace(app.genre))
+	tab, genre, country := app.tab, strings.ToLower(strings.TrimSpace(app.genre)), strings.ToUpper(strings.TrimSpace(app.country))
 	app.mu.RUnlock()
 	y := int32(91)
 	drawSidebarItem(hdc, y, "⌂", "Početna", tab == "all" && genre == "", hitTab, "all")
@@ -1852,6 +1852,8 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 	drawSidebarItem(hdc, y, "♡", "Omiljene", tab == "favorites", hitTab, "favorites")
 	y += 44
 	drawSidebarItem(hdc, y, "◷", "Nedavno slušano", tab == "recent", hitTab, "recent")
+	y += 44
+	drawSidebarItem(hdc, y, "◎", "Dijaspora", country == diasporaCatalogCode, hitCountryChoice, diasporaCatalogCode)
 
 	y += 56
 	drawSidebarLabel(hdc, "BRZI ODABIR", y)
