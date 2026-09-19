@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { webcrypto } = require('node:crypto');
+const { TextEncoder } = require('node:util');
 
 class Element {
   constructor(id = '') {
@@ -169,6 +171,8 @@ const context = {
   setTimeout,
   clearTimeout,
   Promise,
+  crypto: webcrypto,
+  TextEncoder,
   document: {
     getElementById(id) {
       if (!elements[id]) throw new Error(`Unknown element id: ${id}`);
@@ -244,6 +248,20 @@ async function main() {
   assert.equal(elements.playerFav.disabled, false, 'favorite control must be enabled after a station is available');
   assert.equal(elements.playerFav.attributes['aria-pressed'], 'false', 'favorite state must be announced accessibly');
   assert.equal(elements.adminControls.hidden, true, 'advanced source controls must stay hidden before admin login');
+  elements.adminToggle.dispatch('click');
+  assert.equal(elements.adminPanel.hidden, false, 'admin toggle must open the login dialog');
+  assert.equal(elements.adminLoginView.hidden, false, 'login form must be visible before authentication');
+  elements.adminUsername.value = 'brendigo';
+  elements.adminPassword.value = 'brendigo' + String(2025);
+  elements.adminLogin.dispatch('click');
+  await flush();
+  assert.equal(elements.adminControls.hidden, false, 'configured administrator credentials must unlock advanced controls');
+  assert.equal(elements.adminLoginView.hidden, true, 'login form must hide after successful authentication');
+  assert.equal(elements.adminPassword.value, '', 'administrator password field must be cleared after authentication');
+  elements.adminLogout.dispatch('click');
+  await flush();
+  assert.equal(elements.adminPanel.hidden, true, 'logout must close the administrator panel');
+  assert.equal(elements.adminControls.hidden, true, 'logout must immediately hide advanced controls');
 
   elements.genre.value = 'jazz';
   elements.genre.dispatch('change');
