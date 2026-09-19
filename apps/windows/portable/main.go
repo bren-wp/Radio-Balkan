@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
 	_ "embed"
@@ -155,7 +156,7 @@ const (
 	WS_EX_DLGMODALFRAME            = 0x00000001
 )
 
-var appVersion = "0.0.26"
+var appVersion = "0.0.27"
 
 type WNDCLASS struct {
 	Style         uint32
@@ -382,14 +383,39 @@ var inputDialogClassOnce sync.Once
 var inputDialogClassErr error
 var activeInputDialog *inputDialogState
 
-var adminPasswordDigest = [32]byte{0x79, 0xcf, 0x89, 0x3d, 0xcf, 0xdb, 0x18, 0xec, 0xc6, 0xeb, 0xa5, 0x91, 0x89, 0x6f, 0x89, 0x6c, 0x5d, 0xd3, 0xea, 0xb9, 0x53, 0x54, 0xd4, 0xe7, 0xe4, 0x50, 0x3d, 0x13, 0x29, 0x2f, 0xe9, 0xa0}
+const adminPasswordIterations = 120000
+
+var adminPasswordSalt = [16]byte{0xc6, 0xd7, 0x9a, 0xca, 0xaf, 0xb5, 0x2b, 0xb8, 0xba, 0xc2, 0x78, 0x31, 0x3e, 0x84, 0xcc, 0xf7}
+var adminPasswordDigest = [32]byte{0x6d, 0x31, 0x9a, 0xde, 0x7c, 0x2c, 0x0f, 0x33, 0x3d, 0x1d, 0x52, 0x0e, 0xaf, 0x58, 0x20, 0x34, 0xa8, 0x0c, 0xab, 0xbc, 0x4e, 0x2f, 0x03, 0x17, 0x52, 0x7b, 0x68, 0x57, 0x6b, 0x63, 0x1f, 0x80}
+
+func deriveAdminPasswordKey(password string) [32]byte {
+	var derived [32]byte
+	var block [4]byte
+	binary.BigEndian.PutUint32(block[:], 1)
+
+	mac := hmac.New(sha256.New, []byte(password))
+	_, _ = mac.Write(adminPasswordSalt[:])
+	_, _ = mac.Write(block[:])
+	u := mac.Sum(nil)
+	copy(derived[:], u)
+
+	for iteration := 1; iteration < adminPasswordIterations; iteration++ {
+		mac.Reset()
+		_, _ = mac.Write(u)
+		u = mac.Sum(nil)
+		for i := range derived {
+			derived[i] ^= u[i]
+		}
+	}
+	return derived
+}
 
 func adminCredentialsValid(username, password string) bool {
 	if !strings.EqualFold(strings.TrimSpace(username), "brendigo") {
 		return false
 	}
-	sum := sha256.Sum256([]byte("RadioBalkanAdmin:v1:" + password))
-	return subtle.ConstantTimeCompare(sum[:], adminPasswordDigest[:]) == 1
+	derived := deriveAdminPasswordKey(password)
+	return subtle.ConstantTimeCompare(derived[:], adminPasswordDigest[:]) == 1
 }
 
 func adminModeEnabled() bool {
@@ -1902,15 +1928,17 @@ func drawHeader(hdc syscall.Handle, cr RECT) {
 	drawSelectBox(hdc, genreL, 20, genreR, 72, genreLabel, genreOpen)
 	app.hits = append(app.hits, HitRegion{R: RECT{countryL, 20, countryR, 72}, Kind: hitCountryDropdown})
 	app.hits = append(app.hits, HitRegion{R: RECT{genreL, 20, genreR, 72}, Kind: hitGenreDropdown})
-	app.mu.RLock()
-	healthRunning := app.healthRunning
-	app.mu.RUnlock()
-	checkLabel := "✓ Sve"
-	if healthRunning {
-		checkLabel = "…"
+	if adminModeEnabled() {
+		app.mu.RLock()
+		healthRunning := app.healthRunning
+		app.mu.RUnlock()
+		checkLabel := "✓ Sve"
+		if healthRunning {
+			checkLabel = "…"
+		}
+		drawIconButton(hdc, checkL, 20, checkR, 72, checkLabel, healthRunning)
+		app.hits = append(app.hits, HitRegion{R: RECT{checkL, 20, checkR, 72}, Kind: hitCheckAll, Index: -1})
 	}
-	drawIconButton(hdc, checkL, 20, checkR, 72, checkLabel, healthRunning)
-	app.hits = append(app.hits, HitRegion{R: RECT{checkL, 20, checkR, 72}, Kind: hitCheckAll, Index: -1})
 	drawIconButton(hdc, refreshL, 20, refreshR, 72, "↻", false)
 	app.hits = append(app.hits, HitRegion{R: RECT{refreshL, 20, refreshR, 72}, Kind: hitRefresh, Index: -1})
 }
@@ -2501,21 +2529,21 @@ func drawStationCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStati
 		meta += " · " + g
 	}
 	text(hdc, meta, artR+44, t+38, r-145, t+65, rgb(178, 185, 194), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	hl, hc := healthText(s.Health)
-	text(hdc, hl, artR+15, t+70, artR+112, t+93, hc, DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	x := artR + 118
-	y := t + 70
-	action := func(label string, w int32, kind HitKind) {
-		drawMiniAction(hdc, x, y, x+w, y+23, label)
-		app.hits = append(app.hits, HitRegion{R: RECT{x, y, x + w, y + 23}, Kind: kind, Index: idx, Value: key})
-		x += w + 6
-	}
 	if adminModeEnabled() {
+		hl, hc := healthText(s.Health)
+		text(hdc, hl, artR+15, t+70, artR+112, t+93, hc, DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+		x := artR + 118
+		y := t + 70
+		action := func(label string, w int32, kind HitKind) {
+			drawMiniAction(hdc, x, y, x+w, y+23, label)
+			app.hits = append(app.hits, HitRegion{R: RECT{x, y, x + w, y + 23}, Kind: kind, Index: idx, Value: key})
+			x += w + 6
+		}
 		action("Web", 40, hitWeb)
 		action("Kopiraj", 54, hitLink)
 		action("Izvor", 46, hitReplace)
+		action("✓", 26, hitCheckStation)
 	}
-	action("✓", 26, hitCheckStation)
 	app.stateMu.RLock()
 	fav := app.state.Favorites[key]
 	app.stateMu.RUnlock()
@@ -3354,8 +3382,10 @@ func handleClick(x, y int32) {
 				}
 			}
 		case hitCheckStation:
-			if idx := stationIndexFromHit(h); idx >= 0 {
-				checkStationNow(idx)
+			if requireAdmin() {
+				if idx := stationIndexFromHit(h); idx >= 0 {
+					checkStationNow(idx)
+				}
 			}
 		case hitVolumeDown:
 			adjustVolume(-5)
@@ -3372,9 +3402,11 @@ func handleClick(x, y int32) {
 		case hitPlayerStop:
 			stopCurrentPlayback()
 		case hitCheckAll:
-			setStatus("Provjeravam dostupnost svih stanica…")
-			postUI()
-			safeGo("manual-health", healthCheckAll)
+			if requireAdmin() {
+				setStatus("Provjeravam dostupnost svih stanica…")
+				postUI()
+				safeGo("manual-health", healthCheckAll)
+			}
 		case hitAbout:
 			messageBox(hwndOrZero(), "Radio Balkan", "Radio Balkan "+appVersion+"\n\nRadio stanice samo iz Hrvatske, Bosne i Hercegovine, Srbije, Slovenije, Sjeverne Makedonije, Albanije i Crne Gore.\nFavoriti i povijest slušanja rade lokalno na tvojem računalu. Napredne kontrole izvora dostupne su samo u Admin načinu rada.", MB_ICONINFORMATION)
 		case hitAdmin:
@@ -4416,7 +4448,7 @@ func healthCheckWithLimit(limit int, queueRescan bool) {
 					}
 					d, o, rp, b := doneCount, okc, repc, broken
 					mx.Unlock()
-					if d > 0 && (d%50 == 0 || d == int64(len(keys))) && !shuttingDown() {
+					if d > 0 && (d%50 == 0 || d == int64(len(keys))) && !shuttingDown() && adminModeEnabled() {
 						setStatus(fmt.Sprintf("Provjera %d/%d · dostupno %d · alternativno %d · nedostupno %d", d, len(keys), o, rp, b))
 						postUI()
 					}
@@ -4444,8 +4476,10 @@ func healthCheckWithLimit(limit int, queueRescan bool) {
 	app.healthBroken = int(broken)
 	app.mu.Unlock()
 	rebuildFilter()
-	setStatus(fmt.Sprintf("Provjera završena · dostupno %d · alternativno %d · nedostupno %d", okc, repc, broken))
-	postUI()
+	if adminModeEnabled() {
+		setStatus(fmt.Sprintf("Provjera završena · dostupno %d · alternativno %d · nedostupno %d", okc, repc, broken))
+		postUI()
+	}
 }
 
 func fetchBalkanStations() ([]RadioStation, error) {

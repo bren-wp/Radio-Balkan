@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { createHash } = require('node:crypto');
+const { pbkdf2Sync } = require('node:crypto');
 const { TextEncoder } = require('node:util');
 
 class Element {
@@ -80,7 +80,7 @@ const ids = [
   'search', 'country', 'genre', 'stations', 'status', 'refresh', 'heroPlay',
   'playerToggle', 'playerPrev', 'playerStop', 'playerNext', 'favoritesOnly', 'clearFilters', 'playerFav', 'playerState',
   'playerName', 'playerMeta', 'heroName', 'heroMeta', 'playerLogo',
-  'adminToggle', 'adminPanel', 'adminClose', 'adminRole', 'adminLoginView', 'adminControls',
+  'adminToggle', 'adminStatusBadge', 'adminPanel', 'adminClose', 'adminRole', 'adminLoginView', 'adminControls',
   'adminUsername', 'adminPassword', 'adminLogin', 'adminMessage', 'adminStationName',
   'adminSource', 'adminSaveSource', 'adminResetSource', 'adminHomepage', 'adminOpenWeb',
   'adminLogout', 'adminControlMessage'
@@ -173,9 +173,19 @@ const context = {
   Promise,
   crypto: {
     subtle: {
-      async digest(algorithm, bytes) {
-        assert.equal(String(algorithm).toUpperCase(), 'SHA-256');
-        const digest = createHash('sha256').update(Buffer.from(bytes)).digest();
+      async importKey(format, bytes, algorithm, extractable, usages) {
+        assert.equal(format, 'raw');
+        assert.equal(algorithm?.name, 'PBKDF2');
+        assert.equal(extractable, false);
+        assert.equal(Array.from(usages).join(','), 'deriveBits');
+        return { bytes: Buffer.from(bytes) };
+      },
+      async deriveBits(params, key, length) {
+        assert.equal(params?.name, 'PBKDF2');
+        assert.equal(String(params?.hash).toUpperCase(), 'SHA-256');
+        assert.equal(params?.iterations, 120000);
+        assert.equal(length, 256);
+        const digest = pbkdf2Sync(key.bytes, Buffer.from(params.salt), params.iterations, length / 8, 'sha256');
         return Uint8Array.from(digest).buffer;
       }
     }
@@ -256,20 +266,33 @@ async function main() {
   assert.equal(elements.playerFav.disabled, false, 'favorite control must be enabled after a station is available');
   assert.equal(elements.playerFav.attributes['aria-pressed'], 'false', 'favorite state must be announced accessibly');
   assert.equal(elements.adminControls.hidden, true, 'advanced source controls must stay hidden before admin login');
+  assert.equal(elements.adminStatusBadge.hidden, true, 'admin status badge must stay hidden before authentication');
   elements.adminToggle.dispatch('click');
   assert.equal(elements.adminPanel.hidden, false, 'admin toggle must open the login dialog');
   assert.equal(elements.adminLoginView.hidden, false, 'login form must be visible before authentication');
   elements.adminUsername.value = 'brendigo';
   elements.adminPassword.value = 'brendigo' + String(2025);
-  elements.adminLogin.dispatch('click');
+  let adminEnterPrevented = false;
+  elements.adminPassword.dispatch('keydown', {
+    key: 'Enter',
+    preventDefault() { adminEnterPrevented = true; }
+  });
   await flush();
+  assert.equal(adminEnterPrevented, true, 'Enter must submit the administrator login form');
   assert.equal(elements.adminControls.hidden, false, 'configured administrator credentials must unlock advanced controls');
+  assert.equal(elements.adminStatusBadge.hidden, false, 'successful login must expose a visible admin status badge');
   assert.equal(elements.adminLoginView.hidden, true, 'login form must hide after successful authentication');
   assert.equal(elements.adminPassword.value, '', 'administrator password field must be cleared after authentication');
   elements.adminLogout.dispatch('click');
   await flush();
   assert.equal(elements.adminPanel.hidden, true, 'logout must close the administrator panel');
   assert.equal(elements.adminControls.hidden, true, 'logout must immediately hide advanced controls');
+  assert.equal(elements.adminStatusBadge.hidden, true, 'logout must immediately hide the admin status badge');
+  adminOverrides['station-a'] = 'https://override.example/live';
+  elements.adminSource.value = '';
+  elements.adminSaveSource.dispatch('click');
+  await flush();
+  assert.equal(adminOverrides['station-a'], 'https://override.example/live', 'post-logout source actions must be rejected by logic, not only hidden by UI');
 
   elements.genre.value = 'jazz';
   elements.genre.dispatch('change');

@@ -49,13 +49,18 @@ def main() -> None:
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/AdminAuth.java",
         'private static final String USERNAME = "brendigo";',
-        'private static final String SALT = "RadioBalkanAdmin:v1:";',
+        "ITERATIONS = 120_000",
+        "PBKDF2WithHmacSHA256",
+        "PBEKeySpec",
         "MessageDigest.isEqual",
-        "79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0",
+        "c6d79acaafb52bb8bac278313e84ccf7",
+        "6d319ade7c2c0f333d1d520eaf582034a80cabbc4e2f0317527b68576b631f80",
     )
     forbid(
         "apps/android/app/src/main/java/net/radiobalkan/app/AdminAuth.java",
         "brendigo" + "2025",
+        "RadioBalkanAdmin:v1:",
+        "79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
@@ -69,17 +74,48 @@ def main() -> None:
         'chosen.equals("Web stranica") && requireAdmin()',
         'chosen.equals("Odaberi drugi izvor") && requireAdmin()',
         "if (!requireAdmin()) return;",
-        "adminLockedUntilMs = System.currentTimeMillis() + 30_000L",
+        "private final AdminRateLimiter adminRateLimiter = new AdminRateLimiter(5, 30_000L);",
         'if ("replaced".equals(tab) || "broken".equals(tab))',
-        "if (clickNow < adminLockedUntilMs)",
+        "if (adminRateLimiter.isLocked(clickNow))",
+        "adminAuthRunning.compareAndSet(false, true)",
+        "if (!accepted) adminRateLimiter.recordFailure(completedAt)",
+        "adminAuthRunning.set(false)",
+        "SystemClock.elapsedRealtime()",
+        'else if ("Provjeri prikazane stanice".equals(chosen) && requireAdmin()) checkVisibleStreams();',
+        'else if (chosen.equals("Provjeri dostupnost") && requireAdmin()) checkOne(s);',
+        "private void checkVisibleStreams() {\n        if (!requireAdmin()) return;",
+        "private void checkOne(RadioStation s) {\n        if (!requireAdmin()) return;",
+        "adapter.setAdminMode(true)",
+        "adapter.setAdminMode(false)",
+        "updateAdminIndicator();",
+        'text.setText(adminMode ? "Admin" : "Više");',
+        "EditorInfo.IME_ACTION_DONE",
+        "password.setOnEditorActionListener",
+        "loginButton.setEnabled(false)",
+        'loginButton.setText("Provjeravam…")',
+        "ioWorker.execute",
     )
     forbid(
         "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
         "brendigo" + "2025",
+        "adminLockedUntilMs",
     )
     require(
         "apps/android/app/src/test/java/net/radiobalkan/app/AdminAuthTest.java",
         "acceptsOnlyConfiguredAdministratorCredentials",
+    )
+    require(
+        "apps/android/app/src/main/java/net/radiobalkan/app/AdminRateLimiter.java",
+        "final class AdminRateLimiter",
+        "synchronized void recordFailure(long nowMs)",
+        "synchronized void recordSuccess()",
+        "lockedUntilMs = nowMs + lockoutMs",
+    )
+    require(
+        "apps/android/app/src/test/java/net/radiobalkan/app/AdminRateLimiterTest.java",
+        "locksAfterFiveCompletedFailuresEvenWithoutDialogState",
+        "successClearsFailureAndLockoutState",
+        "expiredLockoutAllowsFreshAttempts",
     )
     forbid(
         "apps/android/app/src/test/java/net/radiobalkan/app/AdminAuthTest.java",
@@ -308,9 +344,12 @@ def main() -> None:
         "navigationStations()",
         "ext.runtime.sendMessage({ type: 'RB_STOP' })",
         "playerStop').setAttribute('aria-busy'",
-        "const ADMIN_DIGEST = '79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0';",
+        "const ADMIN_ITERATIONS = 120000;",
+        "c6d79acaafb52bb8bac278313e84ccf7",
+        "const ADMIN_DIGEST = '6d319ade7c2c0f333d1d520eaf582034a80cabbc4e2f0317527b68576b631f80';",
         "async function adminCredentialsValid",
-        "crypto.subtle.digest('SHA-256'",
+        "crypto.subtle.importKey",
+        "crypto.subtle.deriveBits",
         "let adminMode = false;",
         "RB.adminOverrideFor(RB.key(station))",
         "RB.setAdminOverride(RB.key(current), value)",
@@ -319,6 +358,8 @@ def main() -> None:
     forbid(
         "extensions/shared/popup.js",
         "brendigo" + "2025",
+        "RadioBalkanAdmin:v1:",
+        "79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0",
     )
     require(
         "extensions/shared/popup.html",
@@ -327,6 +368,7 @@ def main() -> None:
         'id="playerStop"',
         'id="playerNext"',
         'id="adminPanel"',
+        'id="adminStatusBadge"',
         'id="adminPassword" type="password"',
         'id="adminSource"',
         'aria-live="polite"',
@@ -353,6 +395,9 @@ def main() -> None:
         "unfavoriting inside favorites view must immediately remove the station from the visible set",
         "advanced source controls must stay hidden before admin login",
         "saved admin source override must be applied without exposing it in the normal UI",
+        "post-logout source actions must be rejected by logic, not only hidden by UI",
+        "successful login must expose a visible admin status badge",
+        "Enter must submit the administrator login form",
     )
     require(
         "scripts/test_chromium_player_contract.js",
@@ -484,9 +529,18 @@ def main() -> None:
         "if shuttingDown() {",
         "func prepareShutdown()",
         "ES_PASSWORD",
+        '"crypto/hmac"',
+        "adminPasswordIterations = 120000",
+        "func deriveAdminPasswordKey(password string) [32]byte",
+        "hmac.New(sha256.New",
         "func adminCredentialsValid(username, password string) bool",
         "subtle.ConstantTimeCompare",
         "func requireAdmin() bool",
+        "case hitCheckStation:\n\t\t\tif requireAdmin() {",
+        "case hitCheckAll:\n\t\t\tif requireAdmin() {",
+        "if adminModeEnabled() {\n\t\tapp.mu.RLock()\n\t\thealthRunning := app.healthRunning",
+        "if adminModeEnabled() {\n\t\thl, hc := healthText(s.Health)",
+        "&& adminModeEnabled() {",
         "func passwordDialog(",
         "func toggleAdminSession()",
         "if adminModeEnabled()",
@@ -495,6 +549,8 @@ def main() -> None:
     forbid(
         "apps/windows/portable/main.go",
         "brendigo" + "2025",
+        "RadioBalkanAdmin:v1:",
+        "0x79, 0xcf, 0x89, 0x3d",
     )
     require(
         "apps/windows/portable/main_test.go",

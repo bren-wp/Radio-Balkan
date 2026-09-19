@@ -20,13 +20,16 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
+import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -68,6 +71,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private final AtomicBoolean healthRunning = new AtomicBoolean();
     private final AtomicBoolean autoHealthStarted = new AtomicBoolean();
     private final AtomicBoolean catalogRefreshRunning = new AtomicBoolean();
+    private final AtomicBoolean adminAuthRunning = new AtomicBoolean();
     private final Object dataLock = new Object();
     private List<RadioStation> allStations = new ArrayList<>();
     private List<RadioStation> visibleStations = new ArrayList<>();
@@ -90,8 +94,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private String currentCountryCode = "";
     private boolean playing;
     private boolean adminMode;
-    private int adminFailures;
-    private long adminLockedUntilMs;
+    private final AdminRateLimiter adminRateLimiter = new AdminRateLimiter(5, 30_000L);
     private boolean playbackStopped = true;
     private RadioStation featured;
     private Runnable searchRunnable;
@@ -466,6 +469,16 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         for (Map.Entry<String, LinearLayout> entry : bottomNavItems.entrySet()) updateBottomNavItem(entry.getKey(), entry.getValue());
     }
 
+    private void updateAdminIndicator() {
+        LinearLayout item = bottomNavItems.get("more");
+        if (item == null || item.getChildCount() < 2) return;
+        TextView icon = (TextView) item.getChildAt(0);
+        TextView text = (TextView) item.getChildAt(1);
+        icon.setText(adminMode ? "♛" : "⋯");
+        text.setText(adminMode ? "Admin" : "Više");
+        updateBottomNavItem("more", item);
+    }
+
     private void updateBottomNavItem(String action, LinearLayout item) {
         if (item == null || item.getChildCount() < 2) return;
         boolean selected = action.equals(navSelection);
@@ -525,8 +538,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         itemList.add("Filtriraj stanice");
         itemList.add("Poništi filtre");
         itemList.add("Osvježi popis");
-        itemList.add("Provjeri prikazane stanice");
         if (adminMode) {
+            itemList.add("Provjeri prikazane stanice");
             itemList.add("Rezervni izvori");
             itemList.add("Nedostupne stanice");
             itemList.add("Odjava administratora");
@@ -541,7 +554,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             else if ("Filtriraj stanice".equals(chosen)) showBrowseDialog();
             else if ("Poništi filtre".equals(chosen)) resetBrowseFilters();
             else if ("Osvježi popis".equals(chosen)) refreshCatalog();
-            else if ("Provjeri prikazane stanice".equals(chosen)) checkVisibleStreams();
+            else if ("Provjeri prikazane stanice".equals(chosen) && requireAdmin()) checkVisibleStreams();
             else if ("Rezervni izvori".equals(chosen) && requireAdmin()) { tab = "replaced"; state.setTab(tab); selectBottomNav("radio"); applyFilterAsync(); }
             else if ("Nedostupne stanice".equals(chosen) && requireAdmin()) { tab = "broken"; state.setTab(tab); selectBottomNav("radio"); applyFilterAsync(); }
             else if ("Admin prijava".equals(chosen)) showAdminLogin();
@@ -558,6 +571,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
     private void logoutAdmin() {
         adminMode = false;
+        if (adapter != null) adapter.setAdminMode(false);
+        updateAdminIndicator();
         if ("replaced".equals(tab) || "broken".equals(tab)) {
             tab = "all";
             state.setTab(tab);
@@ -569,9 +584,9 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     }
 
     private void showAdminLogin() {
-        long now = System.currentTimeMillis();
-        if (now < adminLockedUntilMs) {
-            long seconds = Math.max(1L, (adminLockedUntilMs - now + 999L) / 1000L);
+        long now = SystemClock.elapsedRealtime();
+        if (adminRateLimiter.isLocked(now)) {
+            long seconds = adminRateLimiter.remainingSeconds(now);
             Toast.makeText(this, "Previše neuspjelih pokušaja. Pokušaj ponovno za " + seconds + " s.", Toast.LENGTH_LONG).show();
             return;
         }
@@ -581,11 +596,15 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         EditText username = new EditText(this);
         username.setSingleLine(true);
         username.setHint("Korisničko ime");
+        username.setContentDescription("Administratorsko korisničko ime");
+        username.setImeOptions(EditorInfo.IME_ACTION_NEXT);
         username.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
         panel.addView(username, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
         EditText password = new EditText(this);
         password.setSingleLine(true);
         password.setHint("Lozinka");
+        password.setContentDescription("Administratorska lozinka");
+        password.setImeOptions(EditorInfo.IME_ACTION_DONE);
         password.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         panel.addView(password, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
 
@@ -596,35 +615,75 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 .setPositiveButton("Prijavi se", null)
                 .setNegativeButton("Odustani", null)
                 .create();
-        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            long clickNow = System.currentTimeMillis();
-            if (clickNow < adminLockedUntilMs) {
-                long seconds = Math.max(1L, (adminLockedUntilMs - clickNow + 999L) / 1000L);
+        dialog.setOnShowListener(ignored -> {
+            Button loginButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            Runnable submit = () -> {
+                if (!loginButton.isEnabled()) return;
+                long clickNow = SystemClock.elapsedRealtime();
+                if (adminRateLimiter.isLocked(clickNow)) {
+                    long seconds = adminRateLimiter.remainingSeconds(clickNow);
+                    password.setText("");
+                    password.setError("Prijava je zaključana još " + seconds + " s.");
+                    return;
+                }
+                if (!adminAuthRunning.compareAndSet(false, true)) {
+                    password.setError("Provjera prijave je već u tijeku");
+                    return;
+                }
+
+                String candidateUsername = username.getText().toString();
+                String candidatePassword = password.getText().toString();
                 password.setText("");
-                password.setError("Prijava je zaključana još " + seconds + " s.");
-                return;
-            }
-            if (AdminAuth.matches(username.getText().toString(), password.getText().toString())) {
-                adminMode = true;
-                adminFailures = 0;
-                adminLockedUntilMs = 0;
-                password.setText("");
-                statusText.setText("Admin način rada · brendigo");
-                Toast.makeText(this, "Administrator je prijavljen", Toast.LENGTH_SHORT).show();
-                dialog.dismiss();
-                return;
-            }
-            password.setText("");
-            adminFailures++;
-            if (adminFailures >= 5) {
-                adminFailures = 0;
-                adminLockedUntilMs = System.currentTimeMillis() + 30_000L;
-                password.setError("Previše pokušaja. Prijava je privremeno zaključana.");
-            } else {
-                password.setError("Neispravno korisničko ime ili lozinka");
-            }
-            password.requestFocus();
-        }));
+                loginButton.setEnabled(false);
+                loginButton.setText("Provjeravam…");
+
+                try {
+                    ioWorker.execute(() -> {
+                        boolean accepted = AdminAuth.matches(candidateUsername, candidatePassword);
+                        long completedAt = SystemClock.elapsedRealtime();
+                        if (!accepted) adminRateLimiter.recordFailure(completedAt);
+                        adminAuthRunning.set(false);
+                        ui.post(() -> {
+                            if (destroyed) return;
+                            if (!dialog.isShowing()) return;
+                            loginButton.setEnabled(true);
+                            loginButton.setText("Prijavi se");
+                            if (accepted) {
+                                adminMode = true;
+                                if (adapter != null) adapter.setAdminMode(true);
+                                updateAdminIndicator();
+                                adminRateLimiter.recordSuccess();
+                                statusText.setText("Admin način rada · brendigo");
+                                Toast.makeText(this, "Administrator je prijavljen", Toast.LENGTH_SHORT).show();
+                                dialog.dismiss();
+                                return;
+                            }
+                            if (adminRateLimiter.isLocked(completedAt)) {
+                                password.setError("Previše pokušaja. Prijava je privremeno zaključana.");
+                            } else {
+                                password.setError("Neispravno korisničko ime ili lozinka");
+                            }
+                            password.requestFocus();
+                        });
+                    });
+                } catch (RejectedExecutionException rejected) {
+                    adminAuthRunning.set(false);
+                    loginButton.setEnabled(true);
+                    loginButton.setText("Prijavi se");
+                    password.setError("Prijava trenutačno nije dostupna");
+                    password.requestFocus();
+                }
+            };
+            loginButton.setOnClickListener(v -> submit.run());
+            password.setOnEditorActionListener((v, actionId, event) -> {
+                boolean enter = actionId == EditorInfo.IME_ACTION_DONE
+                        || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                        && event.getAction() == KeyEvent.ACTION_DOWN);
+                if (!enter) return false;
+                submit.run();
+                return true;
+            });
+        });
         dialog.show();
     }
 
@@ -857,6 +916,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     }
 
     private void checkVisibleStreams() {
+        if (!requireAdmin()) return;
         List<RadioStation> targets = new ArrayList<>(visibleStations);
         if (targets.isEmpty()) { Toast.makeText(this, "Nema stanica za provjeru", Toast.LENGTH_SHORT).show(); return; }
         startHealthScan(targets, true);
@@ -920,6 +980,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     }
 
     private void checkOne(RadioStation s) {
+        if (!requireAdmin()) return;
         if (s == null || destroyed) return;
         statusText.setText("Provjeravam · " + s.name);
         try {
@@ -1022,8 +1083,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         List<String> options = new ArrayList<>();
         options.add("▶ Slušaj");
         options.add(state.favorites().contains(s.key()) ? "Ukloni iz omiljenih" : "Dodaj u omiljene");
-        options.add("Provjeri dostupnost");
         if (adminMode) {
+            options.add("Provjeri dostupnost");
             if (StreamResolver.isHttp(s.homepage)) options.add("Web stranica");
             options.add("Kopiraj poveznicu za reprodukciju");
             options.add("Odaberi drugi izvor");
@@ -1037,7 +1098,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             else if (chosen.equals("Web stranica") && requireAdmin()) openWeb(s);
             else if (chosen.equals("Kopiraj poveznicu za reprodukciju") && requireAdmin()) copyText(s.activeUrl);
             else if (chosen.equals("Odaberi drugi izvor") && requireAdmin()) showSourceDialog(s);
-            else if (chosen.equals("Provjeri dostupnost")) checkOne(s);
+            else if (chosen.equals("Provjeri dostupnost") && requireAdmin()) checkOne(s);
             else if (chosen.equals("Vrati automatski odabir") && requireAdmin()) {
                 state.clearAutomaticSources(s.key());
                 String manual = state.manualReplacement(s.key());

@@ -1,25 +1,31 @@
 package net.radiobalkan.app;
 
-import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.util.Locale;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 
 final class AdminAuth {
     private static final String USERNAME = "brendigo";
-    private static final String SALT = "RadioBalkanAdmin:v1:";
-    private static final byte[] EXPECTED_DIGEST = hex("79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0");
+    private static final int ITERATIONS = 120_000;
+    private static final byte[] SALT = hex("c6d79acaafb52bb8bac278313e84ccf7");
+    private static final byte[] EXPECTED_KEY = hex("6d319ade7c2c0f333d1d520eaf582034a80cabbc4e2f0317527b68576b631f80");
 
     private AdminAuth() { }
 
     static boolean matches(String username, String password) {
         String normalized = username == null ? "" : username.trim().toLowerCase(Locale.ROOT);
         if (!USERNAME.equals(normalized) || password == null) return false;
+        PBEKeySpec spec = new PBEKeySpec(password.toCharArray(), SALT, ITERATIONS, 256);
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] actual = digest.digest((SALT + password).getBytes(StandardCharsets.UTF_8));
-            return MessageDigest.isEqual(EXPECTED_DIGEST, actual);
-        } catch (Exception ignored) {
+            SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+            byte[] actual = factory.generateSecret(spec).getEncoded();
+            return MessageDigest.isEqual(EXPECTED_KEY, actual);
+        } catch (GeneralSecurityException ignored) {
             return false;
+        } finally {
+            spec.clearPassword();
         }
     }
 

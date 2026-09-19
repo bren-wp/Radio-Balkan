@@ -5,7 +5,7 @@
 Kanonska verzija nalazi se u root `VERSION` datoteci. Za novo izdanje koristi jedan sinkronizirani bump, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.27
+python scripts/bump_version.py 0.0.28
 ```
 
 `bump_version.py` prvo radi preflight svih verzijskih markera bez pisanja u source. Nova SemVer vrijednost mora biti strogo veća od trenutačne, Android `versionCode` mora rasti, a README i ovaj BUILD vodič automatski dobivaju sljedeći patch primjer. Stvarni write koristi atomske replace operacije; ako završni `scripts/check_versions.py` validator padne, alat vraća sve originalne datoteke. Za provjeru bez promjena koristi `--dry-run`.
@@ -30,7 +30,7 @@ cd extensions
 python tools/build_extensions.py
 ```
 
-Rezultat su četiri ZIP-a u `extensions/dist/`. Build dodatno provjerava JavaScript sintaksu, zaključani Radio Balkan branding, Chromium offscreen lifecycle, session-bound audio ownership te epoch/revision/command-ordering ugovore za Chromium i Firefox playere i popup UI. Regression suite u 0.0.24 dodatno izvršava Stop control lifecycle, Stop → fresh Play, bounded UUID stream refresh, country/URL safety, oversized-response fail-closed i Stop-during-refresh stale-session scenarije. U 0.0.25 dodatno se provjeravaju filter-aware Previous/Next payloadi, cold-state cleanup i transport enabled/disabled sinkronizacija. U 0.0.26 testovi dodatno zahtijevaju aktualnu stanicu za adjacent navigaciju na sva tri klijenta i potvrđuju trenutačno osvježavanje favorites-only rezultata nakon odfavoritiranja.
+Rezultat su četiri ZIP-a u `extensions/dist/`. Build dodatno provjerava JavaScript sintaksu, zaključani Radio Balkan branding, Chromium offscreen lifecycle, session-bound audio ownership te epoch/revision/command-ordering ugovore za Chromium i Firefox playere i popup UI. Regression suite u 0.0.24 dodatno izvršava Stop control lifecycle, Stop → fresh Play, bounded UUID stream refresh, country/URL safety, oversized-response fail-closed i Stop-during-refresh stale-session scenarije. U 0.0.25 dodatno se provjeravaju filter-aware Previous/Next payloadi, cold-state cleanup i transport enabled/disabled sinkronizacija. U 0.0.26 testovi dodatno zahtijevaju aktualnu stanicu za adjacent navigaciju na sva tri klijenta i potvrđuju trenutačno osvježavanje favorites-only rezultata nakon odfavoritiranja. U 0.0.27 security/UI contracti dodatno zaključavaju PBKDF2 admin verifier, logic-level RBAC za health/source kontrole, Enter/busy login lifecycle, vidljivi Admin status i post-logout odbijanje privilegirane browser source akcije.
 
 ## Android
 

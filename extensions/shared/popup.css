@@ -26,6 +26,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .brandCopy strong { font-size: 16px; line-height: 1.1; }
 .brandCopy span { color: var(--muted); font-size: 10.5px; white-space: nowrap; }
 .topbarActions { display: flex; align-items: center; gap: 4px; }
+.adminStatusBadge { display: inline-flex; align-items: center; min-height: 26px; padding: 0 8px; border: 1px solid #8c5a24; border-radius: 999px; color: var(--accent); background: #ffa52e12; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.adminStatusBadge[hidden] { display: none !important; }
 .iconButton, .playerIcon { width: 44px; height: 44px; border: 0; border-radius: 12px; color: #d5dbe3; background: transparent; cursor: pointer; font-size: 22px; }
 .iconButton:hover:not(:disabled), .playerIcon:hover:not(:disabled) { background: #ffffff0d; }
 .iconButton[aria-busy="true"] { color: var(--accent); animation: rb-spin .8s linear infinite; }
