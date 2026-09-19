@@ -69,6 +69,10 @@ public final class StreamResolverTest {
         assertFalse(StreamResolver.matchesRefreshCountry(RadioRepository.FOREIGN_CODE, "HR"));
         assertFalse(StreamResolver.matchesRefreshCountry(RadioRepository.FOREIGN_CODE, "RS"));
         assertFalse(StreamResolver.matchesRefreshCountry(RadioRepository.FOREIGN_CODE, ""));
+        assertTrue(StreamResolver.matchesRefreshCountry(RadioRepository.DIASPORA_CODE, "DE"));
+        assertTrue(StreamResolver.matchesRefreshCountry(RadioRepository.DIASPORA_CODE, "US"));
+        assertFalse(StreamResolver.matchesRefreshCountry(RadioRepository.DIASPORA_CODE, "HR"));
+        assertFalse(StreamResolver.matchesRefreshCountry(RadioRepository.DIASPORA_CODE, "BA"));
         assertTrue(StreamResolver.matchesRefreshCountry("HR", "HR"));
         assertFalse(StreamResolver.matchesRefreshCountry("HR", "US"));
     }
