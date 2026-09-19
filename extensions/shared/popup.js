@@ -814,6 +814,9 @@
       const regional = all.length - foreign - diaspora;
       $('heroMeta').textContent = `${regional} regionalnih · ${diaspora} dijaspora · ${foreign} stranih postaja`;
     }
+    const playerDetails = $('playerDetails');
+    playerDetails.disabled = !station;
+    playerDetails.setAttribute('aria-label', station ? `Otvori detalje: ${station.name}` : 'Odaberi radio stanicu');
     const playerLogo = $('playerLogo');
     playerLogo.onerror = null;
     playerLogo.src = station?.logo && RB.safeHttp(station.logo) ? station.logo : 'icon48.png';
@@ -1020,6 +1023,9 @@
   refresh.addEventListener('click', () => void load(true));
   $('clearFilters').addEventListener('click', resetFilters);
   $('heroPlay').addEventListener('click', () => void toggle());
+  $('playerDetails').addEventListener('click', event => {
+    if (current) openStationPage(current, event.currentTarget);
+  });
   $('playerToggle').addEventListener('click', () => void toggle());
   $('playerPrev').addEventListener('click', () => void playAdjacent(-1));
   $('playerStop').addEventListener('click', () => void stopPlayback());

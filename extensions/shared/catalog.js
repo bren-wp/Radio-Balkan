@@ -445,15 +445,6 @@ const RB = (() => {
     return unique;
   }
 
-  async function addRecent(stationKey) {
-    stationKey = clean(stationKey).slice(0, 512);
-    if (!stationKey) return await recent();
-    const list = await recent();
-    const next = [stationKey, ...list.filter(value => value !== stationKey)].slice(0, MAX_RECENT);
-    await storageSet({ rbRecent: next });
-    return next;
-  }
-
   async function favorites() {
     const x = await storageGet(['rbFavorites']);
     return x.rbFavorites || {};
@@ -500,7 +491,7 @@ const RB = (() => {
   }
 
   return {
-    load, favorites, setFavorite, recent, addRecent, uiPreferences, setUiPreferences, adminOverrideFor, setAdminOverride, key, fold, safeHttp, ext,
+    load, favorites, setFavorite, recent, uiPreferences, setUiPreferences, adminOverrideFor, setAdminOverride, key, fold, safeHttp, ext,
     COUNTRIES, BALKAN_COUNTRIES, ALLOWED, BALKAN_ALLOWED, FOREIGN_CODE, DIASPORA_CODE, MAX_FOREIGN, MAX_DIASPORA
   };
 })();

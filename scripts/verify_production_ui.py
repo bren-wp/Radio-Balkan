@@ -51,6 +51,7 @@ def main() -> int:
     for needle in (
         'role="list"',
         'aria-pressed="false"',
+        'id="playerDetails"',
         'id="playerToggle"',
         'id="playerPrev"',
         'id="playerStop"',
@@ -137,11 +138,16 @@ def main() -> int:
     require(errors, popup_css, ".builtWith", "extensions/shared/popup.css")
     require(errors, popup_css, ".stationPage", "extensions/shared/popup.css")
     require(errors, popup_css, ".browseIntro", "extensions/shared/popup.css")
+    require(errors, popup_css, ".discoveryRail", "extensions/shared/popup.css")
+    require(errors, popup_css, ".discoveryChip", "extensions/shared/popup.css")
+    require(errors, popup_css, ".playerStationButton", "extensions/shared/popup.css")
     require(errors, popup_css, "grid-template-columns: repeat(3, minmax(0, 1fr))", "extensions/shared/popup.css")
     require(errors, popup_css, ".emptyAction", "extensions/shared/popup.css")
     require(errors, popup_css, "@media (max-width: 380px)", "extensions/shared/popup.css")
-    require(errors, popup_css, ".player > img { display: none; }", "extensions/shared/popup.css")
+    require(errors, popup_css, ".playerStationButton > img { display: none; }", "extensions/shared/popup.css")
     require(errors, popup_css, "grid-template-columns: minmax(0, 1fr) 42px minmax(168px, auto)", "extensions/shared/popup.css")
+    require(errors, popup_js, "$('playerDetails').addEventListener('click'", "extensions/shared/popup.js")
+    require(errors, popup_js, "playerDetails.disabled = !station;", "extensions/shared/popup.js")
 
     chromium_worker = read("extensions/platform/chromium/service_worker.js")
     firefox_background = read("extensions/platform/firefox/background-firefox.js")
@@ -215,6 +221,9 @@ def main() -> int:
         "PlaybackStarter.start(this, s, state)",
         "catalogRefreshRunning.compareAndSet(false, true)",
         "updatePlaybackControls()",
+        "openCurrentStationDetails()",
+        "playerArtwork.setOnClickListener(v -> openCurrentStationDetails())",
+        "info.setOnClickListener(v -> openCurrentStationDetails())",
         "playerStop.setOnClickListener",
         "RadioPlayerService.ACTION_STOP",
         "playerPrev.setEnabled(false)",
@@ -342,6 +351,7 @@ def main() -> int:
         '{"BG", "Bugarska"}',
         'case "BG":',
         "Kind: hitStationDetails",
+        "Kind: hitStationDetails, Index: currentIdx",
         "Kind: hitStationBack",
         "Kind: hitBrendigo",
         'shellOpen("https://brendigo.com/")',
@@ -385,10 +395,14 @@ def main() -> int:
         '"Pregledaj", false, hitTab, "browse"',
         "func showStationDetails(idx int)",
         "func countryCodeByName(name string) string",
+        "func firstTag(tags string) string",
     ):
         forbid(errors, windows, needle, "Windows UI")
 
     # User-facing production surfaces must not accidentally expose common development placeholders.
+    forbid(errors, windows, "func firstTag(tags string) string", "Windows dead-code cleanup")
+    require(errors, windows, "firstPublicTag(s.Tags)", "Windows shared public-tag helper")
+
     user_surfaces = "\n".join((popup_html, popup_js, android, adapter, windows))
     if "radiobalkan.net" in user_surfaces.lower():
         errors.append("Production UI: reference-domain link must never be embedded in application surfaces")

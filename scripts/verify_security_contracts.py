@@ -236,8 +236,6 @@ def main() -> None:
         "MAX_RECENT = 50",
         "async function readJsonLimited(response, maxBytes)",
         "async function recent()",
-        "async function addRecent(stationKey)",
-        "stationKey = clean(stationKey).slice(0, 512)",
         "Promise.allSettled",
         "response.body?.getReader",
         "total > maxBytes",
@@ -248,6 +246,8 @@ def main() -> None:
         "extensions/shared/catalog.js",
         "await response.json()",
         "await response.text()",
+        "async function addRecent(",
+        "recent, addRecent",
     )
     require(
         "scripts/test_browser_catalog_contract.js",
@@ -256,7 +256,8 @@ def main() -> None:
         "dynamic API discovery must be capped before stable fallbacks are tried",
         "forced refresh must surface a real network failure",
         "UI preferences must be sanitized and persisted",
-        "recent history must sanitize, deduplicate and keep newest-first order",
+        "recent history reader must sanitize and deduplicate background-owned playback history",
+        "catalog API must not expose a second recent-history writer",
     )
     require(
         "extensions/shared/network.js",

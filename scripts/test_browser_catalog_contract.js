@@ -214,10 +214,10 @@ async function main() {
   const savedPreferences = JSON.parse(JSON.stringify(await RB.uiPreferences()));
   assert.deepEqual(savedPreferences, { country: 'HR', genre: 'pop', favoritesOnly: true }, 'UI preferences must be sanitized and persisted');
 
-  await RB.addRecent(' station-a ');
-  await RB.addRecent('station-b');
-  const savedRecent = JSON.parse(JSON.stringify(await RB.addRecent('station-a')));
-  assert.deepEqual(savedRecent, ['station-a', 'station-b'], 'recent history must sanitize, deduplicate and keep newest-first order');
+  storage.rbRecent = [' station-a ', 'station-b', 'station-a', '', ' station-b '];
+  const savedRecent = JSON.parse(JSON.stringify(await RB.recent()));
+  assert.deepEqual(savedRecent, ['station-a', 'station-b'], 'recent history reader must sanitize and deduplicate background-owned playback history');
+  assert.equal(typeof RB.addRecent, 'undefined', 'catalog API must not expose a second recent-history writer');
 
   networkOffline = true;
   await assert.rejects(() => RB.load(true), /Radio Browser trenutačno nije dostupan/, 'forced refresh must surface a real network failure');
