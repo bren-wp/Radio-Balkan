@@ -551,7 +551,7 @@ def main() -> None:
         "paths:",
         "- VERSION",
     )
-    reject(
+    forbid(
         ".github/workflows/publish.yml",
         "- apps/**",
         "- extensions/**",
