@@ -203,6 +203,8 @@ def main() -> int:
         'playLabel = "Ⅱ"',
         "Kind: hitPlayerStop",
         "canStopPlayback(currentIdx, stopped)",
+        "canAdjustVolume(vol, -5)",
+        "canAdjustVolume(vol, 5)",
         "canNavigate = canNavigateStations(len(app.stations), len(app.filtered))",
         "if canNavigate {",
         '"■"',

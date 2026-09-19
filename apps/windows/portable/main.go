@@ -2544,12 +2544,24 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	eqL := cr.Right - 390
 	drawEqualizerBars(hdc, eqL, t+25, eqL+128, t+66, playing)
 	drawSpeakerIcon(hdc, cr.Right-235, t+35, rgb(186, 193, 202))
-	drawIconButton(hdc, cr.Right-200, t+27, cr.Right-168, t+59, "−", false)
-	app.hits = append(app.hits, HitRegion{R: RECT{cr.Right - 200, t + 27, cr.Right - 168, t + 59}, Kind: hitVolumeDown, Index: -1})
+	if canAdjustVolume(vol, -5) {
+		drawIconButton(hdc, cr.Right-200, t+27, cr.Right-168, t+59, "−", false)
+		app.hits = append(app.hits, HitRegion{R: RECT{cr.Right - 200, t + 27, cr.Right - 168, t + 59}, Kind: hitVolumeDown, Index: -1})
+	} else {
+		drawRounded(hdc, cr.Right-200, t+27, cr.Right-168, t+59, 13, color(14, 20, 28), color(33, 41, 51))
+		selectFont(hdc, app.hFontBold)
+		text(hdc, "−", cr.Right-200, t+27, cr.Right-168, t+59, rgb(91, 98, 108), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	}
 	selectFont(hdc, app.hFontSmall)
 	text(hdc, fmt.Sprintf("%d%%", vol), cr.Right-164, t+27, cr.Right-112, t+59, rgb(222, 225, 230), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	drawIconButton(hdc, cr.Right-106, t+27, cr.Right-74, t+59, "+", false)
-	app.hits = append(app.hits, HitRegion{R: RECT{cr.Right - 106, t + 27, cr.Right - 74, t + 59}, Kind: hitVolumeUp, Index: -1})
+	if canAdjustVolume(vol, 5) {
+		drawIconButton(hdc, cr.Right-106, t+27, cr.Right-74, t+59, "+", false)
+		app.hits = append(app.hits, HitRegion{R: RECT{cr.Right - 106, t + 27, cr.Right - 74, t + 59}, Kind: hitVolumeUp, Index: -1})
+	} else {
+		drawRounded(hdc, cr.Right-106, t+27, cr.Right-74, t+59, 13, color(14, 20, 28), color(33, 41, 51))
+		selectFont(hdc, app.hFontBold)
+		text(hdc, "+", cr.Right-106, t+27, cr.Right-74, t+59, rgb(91, 98, 108), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	}
 }
 
 func drawEqualizerBars(hdc syscall.Handle, l, t, r, b int32, active bool) {
@@ -3015,6 +3027,16 @@ func toggleCurrentPlayback() {
 
 func canStopPlayback(current int, stopped bool) bool {
 	return current >= 0 && !stopped
+}
+
+func canAdjustVolume(volume, delta int) bool {
+	if delta < 0 {
+		return volume > 0
+	}
+	if delta > 0 {
+		return volume < 100
+	}
+	return false
 }
 
 func canNavigateStations(stationCount, filteredCount int) bool {
