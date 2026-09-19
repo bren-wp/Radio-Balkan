@@ -13,6 +13,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,6 +29,8 @@ public final class StreamResolver {
     };
     private static final Pattern ABSOLUTE_URL = Pattern.compile("https?://[^\\s\\\"'<>]+", Pattern.CASE_INSENSITIVE);
     private static final Pattern ATTR_URL = Pattern.compile("(?i)(?:href|src)\\s*=\\s*[\\\"']([^\\\"']+)[\\\"']");
+    private static final Pattern STATION_UUID = Pattern.compile("^[A-Za-z0-9._:-]{1,128}$");
+    private static final long UUID_REFRESH_BUDGET_NANOS = TimeUnit.SECONDS.toNanos(12);
 
     public static final class Resolution {
         public final String url;
@@ -182,19 +185,29 @@ public final class StreamResolver {
         return requested.equals(actual) && RadioRepository.isSupportedCountry(actual);
     }
 
+    static boolean isValidStationUuid(String stationUuid) {
+        return STATION_UUID.matcher(safe(stationUuid)).matches();
+    }
+
     public static List<String> refreshByUuid(String stationUuid, String countryCode) {
         List<String> out = new ArrayList<>();
         stationUuid = safe(stationUuid);
         countryCode = safe(countryCode).toUpperCase(Locale.ROOT);
-        if (stationUuid.isEmpty() || !RadioRepository.isSupportedCountry(countryCode)) return out;
+        if (!isValidStationUuid(stationUuid) || !RadioRepository.isSupportedCountry(countryCode)) return out;
+        final long deadline = System.nanoTime() + UUID_REFRESH_BUDGET_NANOS;
         for (String base : BASES) {
+            long remainingNanos = deadline - System.nanoTime();
+            if (remainingNanos <= 0) break;
+            int remainingMs = (int) Math.max(1L, TimeUnit.NANOSECONDS.toMillis(remainingNanos));
+            int connectTimeout = Math.max(1, Math.min(2500, remainingMs));
+            int readTimeout = Math.max(1, Math.min(3500, remainingMs));
             HttpURLConnection c = null;
             try {
                 URL u = new URL(base + "/json/stations/byuuid/" + stationUuid);
                 if (!isSafeHttpForConnection(u.toString())) continue;
                 c = (HttpURLConnection) u.openConnection();
-                c.setConnectTimeout(5000);
-                c.setReadTimeout(7000);
+                c.setConnectTimeout(connectTimeout);
+                c.setReadTimeout(readTimeout);
                 c.setUseCaches(false);
                 c.setInstanceFollowRedirects(false);
                 c.setRequestProperty("User-Agent", USER_AGENT);

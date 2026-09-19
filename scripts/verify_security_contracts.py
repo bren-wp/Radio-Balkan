@@ -93,6 +93,9 @@ def main() -> None:
         "isSafeHttpForConnection",
         "InetAddress.getAllByName",
         "allAddressesSafe",
+        "STATION_UUID",
+        "UUID_REFRESH_BUDGET_NANOS",
+        "isValidStationUuid",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/ImageLoader.java",
@@ -108,6 +111,7 @@ def main() -> None:
         "https://user:pass@example.com/live",
         "http://169.254.169.254/latest/meta-data/",
         "resolvedAddressSetRejectsAnyPrivateOrLocalTarget",
+        "stationUuidValidationRejectsPathAndOversizedInput",
     )
     forbid(
         "apps/android/app/src/main/java/net/radiobalkan/app/StreamResolver.java",
