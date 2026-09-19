@@ -947,7 +947,6 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     @Override public void onPlay(RadioStation s) {
         if (s == null) return;
         hideKeyboard();
-        requestNotificationPermission();
         String key = s.key();
         PlaybackLifecycle.UiCommand command = PlaybackLifecycle.uiCommand(key.equals(currentKey), playing, playbackStopped);
         if (command != PlaybackLifecycle.UiCommand.PLAY) {
@@ -956,6 +955,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                     : RadioPlayerService.ACTION_RESUME);
             return;
         }
+        requestNotificationPermission();
         Intent i = new Intent(this, RadioPlayerService.class).setAction(RadioPlayerService.ACTION_PLAY);
         i.putExtra(RadioPlayerService.EXTRA_KEY, key); i.putExtra(RadioPlayerService.EXTRA_NAME, s.name); i.putExtra(RadioPlayerService.EXTRA_META, s.meta());
         i.putExtra(RadioPlayerService.EXTRA_URL, s.url); i.putExtra(RadioPlayerService.EXTRA_RESOLVED, s.urlResolved); i.putExtra(RadioPlayerService.EXTRA_UUID, s.stationUuid); i.putExtra(RadioPlayerService.EXTRA_HOMEPAGE, s.homepage); i.putExtra(RadioPlayerService.EXTRA_COUNTRY, s.countryCode);

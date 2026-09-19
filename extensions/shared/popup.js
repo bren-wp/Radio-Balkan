@@ -84,6 +84,7 @@
   function closeAdminPanel() {
     $('adminPanel').hidden = true;
     $('adminPassword').value = '';
+    $('adminToggle').focus();
   }
 
   async function refreshAdminDetails() {
@@ -625,6 +626,12 @@
   $('adminToggle').addEventListener('click', openAdminPanel);
   $('adminClose').addEventListener('click', closeAdminPanel);
   $('adminPanel').addEventListener('click', event => { if (event.target === $('adminPanel')) closeAdminPanel(); });
+  $('adminPanel').addEventListener('keydown', event => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeAdminPanel();
+    }
+  });
   $('adminLogin').addEventListener('click', async () => {
     const now = Date.now();
     if (now < adminLockedUntil) {
@@ -668,8 +675,10 @@
     }
     try {
       await RB.setAdminOverride(RB.key(current), value);
-      setAdminMessage(value ? 'Admin izvor je spremljen.' : 'Vraćen je automatski izvor.', true);
+      setAdminMessage(value ? 'Admin izvor je spremljen · ponovno povezujem…' : 'Vraćen je automatski izvor · ponovno povezujem…', true);
+      const station = current;
       await refreshAdminDetails();
+      if (station && current === station) await play(station);
     } catch {
       setAdminMessage('Izvor nije moguće spremiti.', true);
     }
@@ -678,8 +687,10 @@
     if (!adminMode || !current) return;
     try {
       await RB.setAdminOverride(RB.key(current), '');
-      setAdminMessage('Vraćen je automatski izvor.', true);
+      setAdminMessage('Vraćen je automatski izvor · ponovno povezujem…', true);
+      const station = current;
       await refreshAdminDetails();
+      if (station && current === station) await play(station);
     } catch {
       setAdminMessage('Izvor nije moguće vratiti.', true);
     }
