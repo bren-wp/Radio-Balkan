@@ -1,5 +1,27 @@
 # Izdavanja
 
+## 0.0.32
+
+Izdanje 0.0.32 fokusira se na bolju početnu stranicu i jasniji first-run discovery, uz Hrvatsku kao zadanu zemlju i više odmah vidljivih stanica. Postojeći spremljeni izbor korisnika se ne prepisuje nakon nadogradnje. Nisu dodani analytics, telemetry, oglasi, javni korisnički računi, novi backend niti šire browser dozvole.
+
+- Windows, Android i browser klijenti na prvom pokretanju koriste **Hrvatsku (HR)** kao zadani country filter
+- default je namjerno first-run-only: spremljeni `Sve zemlje`, Srbija, Dijaspora, Strano ili drugi korisnički izbor ostaju sačuvani nakon nadogradnje
+- browser discovery početna jasno prikazuje **🇭🇷 Hrvatska**, a povratak na početni prikaz vraća HR bez miješanja s Top/Nedavno/žanr stanjima
+- browser početni station page size povećan je s 48 na **72** kartice prije `Prikaži još`, uz regression test koji provjerava fokus prve novootkrivene kartice nakon paginacije
+- browser više ne postavlja prvu katalog stanicu kao implicitno aktivnu prije stvarnog player statea; detalji i playback ostaju odvojene korisničke akcije
+- browser koristi jedinstveni `RB.COUNTRIES` mapping za user-facing naziv aktivnog područja, umjesto DOM `selectedIndex` ovisnosti
+- Android hero smanjen je s 224dp na **198dp**, čime je više station sadržaja odmah vidljivo bez povećavanja memorijskog/network opterećenja
+- Android Početna vraća HR, dok se ručno spremljeni country filter i dalje učitava iz lokalnog statea; `StateStore.DEFAULT_COUNTRY` centralizira first-run vrijednost
+- Windows first-run state koristi HR, ali eksplicitno spremljen prazan country filter ili druga podržana država ostaju netaknuti
+- Windows home layout je responsivan: standardna širina zadržava 6+6 home kartica, a široki prikaz ide do **8 popularnih + 8 dodatnih** kartica
+- Windows sidebar Početna je HR home; ostale regionalne države ostaju pod Zemlje i ne označavaju se kao Početna
+- postojeće dedicated station stranice, Built with Brendigo, Dijaspora/Strano katalog, playback recovery, private-network blokade, bounded timeout/response zaštite i local-only admin RBAC ostaju aktivni
+- browser catalog i state regression testovi zaključavaju HR default, očuvanje eksplicitnog all-country izbora i 72-card pagination
+- Windows unit test zaključava first-run HR i očuvanje spremljenog praznog/RS filtera
+- feature exact-head CI, post-merge `main` CI i Product screenshots workflow prošli su versions/security/UI, browser, Android i Windows build/test suite, uključujući stvarni Windows startup runtime soak
+
+Dostupnost pojedine third-party radio stanice i dalje ovisi o infrastrukturi same postaje. Radio Balkan filtrira poznato neispravne izvore i koristi bounded timeout/fallback/recovery putanje, ali ne može jamčiti neprekidnu dostupnost svakog vanjskog streama.
+
 ## 0.0.31
 
 Izdanje 0.0.31 fokusira se na čišću informacijsku arhitekturu, potpuno konzistentan dedicated station-detail ulaz iz svih ključnih korisničkih površina i dodatno uklanjanje mrtvog/dupliciranog koda. Nisu dodani analytics, telemetry, oglasi, javni korisnički računi, novi backend niti šire browser dozvole.
