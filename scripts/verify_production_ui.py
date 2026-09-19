@@ -153,7 +153,7 @@ def main() -> int:
         'dp(compact ? 36 : 40)',
         'dp(compact ? 50 : 56)',
         'root.addView(r.more',
-        'dp(104)',
+        'dp(compact ? 88 : 104)',
         '"Popularnost · " + value + " glasova"',
         '"Dostupno · zamjenski izvor"',
         '"Provjeravam dostupnost"',
