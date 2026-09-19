@@ -360,6 +360,9 @@ async function main() {
   elements.playerFav.dispatch('click');
   await flush();
   assert.match(elements.status.textContent, /^0 od 0 prikazano/, 'unfavoriting inside favorites view must immediately remove the station from the visible set');
+  elements.favoritesOnly.dispatch('click');
+  await flush();
+  assert.match(elements.status.textContent, /^48 od 60 prikazano/, 'leaving favorites-only view must restore the full visible catalog page');
 
   runtimeListener({ type: 'RB_STATE', epoch: 'epoch-b', revision: 9, station: null, playing: false, sessionId: null });
   await flush();
