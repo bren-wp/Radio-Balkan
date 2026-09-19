@@ -2514,10 +2514,11 @@ func drawStationCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStati
 	fill, border := color(17, 23, 31), color(47, 56, 68)
 	if selected {
 		fill, border = color(24, 28, 34), color(132, 89, 39)
-	} else if hovered(hitPlay, idx, key) {
+	} else if hovered(hitPlay, idx, key) || hovered(hitStationDetails, idx, key) {
 		fill, border = color(20, 27, 36), color(94, 72, 48)
 	}
 	drawRounded(hdc, l, t, r, b, 14, fill, border)
+	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitStationDetails, Index: idx, Value: key})
 	artR := l + 128
 	drawStationArtwork(hdc, l+1, t+1, artR, b-1, s, idx)
 	selectFont(hdc, app.hFontBold)
