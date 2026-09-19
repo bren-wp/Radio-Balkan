@@ -382,7 +382,6 @@ var inputDialogClassOnce sync.Once
 var inputDialogClassErr error
 var activeInputDialog *inputDialogState
 
-
 var adminPasswordDigest = [32]byte{0x79, 0xcf, 0x89, 0x3d, 0xcf, 0xdb, 0x18, 0xec, 0xc6, 0xeb, 0xa5, 0x91, 0x89, 0x6f, 0x89, 0x6c, 0x5d, 0xd3, 0xea, 0xb9, 0x53, 0x54, 0xd4, 0xe7, 0xe4, 0x50, 0x3d, 0x13, 0x29, 0x2f, 0xe9, 0xa0}
 
 func adminCredentialsValid(username, password string) bool {
@@ -6218,7 +6217,6 @@ func finishInputDialog(ok bool) {
 		procDestroyWindow.Call(uintptr(st.hwnd))
 	}
 }
-
 
 func passwordDialog(parent syscall.Handle, title, prompt string) (string, bool) {
 	if err := ensureInputDialogClass(); err != nil {
