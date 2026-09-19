@@ -17,13 +17,14 @@ Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrva
 
 ## Što donosi v0.0.25
 
-- **Potpuniji transport UI** — Windows player sada izlaže stvarni Stop gumb, Android stalni player ima Prev / Play-Pause / Stop / Next, a browser popup dobiva zaseban Stop control.
-- **Ispravan Stop → Play UX u browseru** — popup razlikuje pauziranu od zaustavljene sesije; glavni Play nakon Stop-a pokreće novi `RB_PLAY` umjesto Toggle-a prema umirovljenoj sesiji.
-- **Automatski oporavak zastarjelih browser streamova** — nakon iscrpljenja lokalnih kandidata Chromium i Firefox jednom po sesiji pokušavaju dohvatiti svježi URL po station UUID-u.
-- **Bounded i sigurniji refresh** — refresh koristi fiksne Radio Browser API hostove, 512 KiB limit odgovora, 4-sekundni per-request timeout i ukupni 9-sekundni recovery budžet; regionalna/INT country pravila ostaju zaključana.
-- **Stale-session zaštita** — STOP ili nova reprodukcijska sesija poništavaju zakašnjeli catalog refresh tako da stari async rezultat ne može ponovno pokrenuti audio.
-- **UI/UX popravci** — Windows `Prikaži sve →` uz Žanrove ima stvarni hit target, Android `Radio` navigacija više nije no-op, a Stop kontrole imaju jasna disabled/busy/accessibility stanja.
-- **Prošireni regression contracti** — testovi zaključavaju duplicate Stop single-flight, Stop → fresh Play, Android Prev/Next wrap, UUID refresh safety, oversized-response fail-closed i Stop tijekom catalog recoveryja.
+- **Dosljedan transport na svim klijentima** — browser popup sada ima Previous / Stop / Play-Pause / Next, Windows transport pravilno onemogućuje nedostupne akcije, a Android drži kontrole disabled dok player state nije spreman.
+- **Filter-aware Prev/Next u browseru** — adjacent navigacija ostaje unutar trenutno filtriranog skupa; puni katalog koristi se samo kad nema vidljivih rezultata.
+- **Ispravan cold-state UI** — autoritativni player state bez aktivne stanice čisti optimistični prvi katalog item, pa popup više ne prikazuje niti favorizira stanicu koju korisnik nije odabrao.
+- **Windows početni Play više nije no-op** — veliki player Play bez prethodnog odabira pokreće prvu filtriranu stanicu, odnosno prvu stanicu iz kataloga.
+- **Granice glasnoće su stvarno disabled** — Windows `−` na 0% i `+` na 100% više nemaju klikabilni hit-region i vizualno su nedostupni.
+- **Android stale-state cleanup** — transport ne postaje aktivan prije player statea, a neuspjeli odabir više ne ostavlja zastarjeli artwork u playeru.
+- **Release integritet** — automatski Publish workflow na `main` pokreće se samo kada se promijeni `VERSION`, pa obični source/workflow commit ne pokušava ponovno objaviti postojeći tag.
+- **Prošireni regression gateovi** — browser cold-state i filtered adjacent scenariji, Windows transport/volume availability, Android lifecycle te postojeći runtime/security/clean-worktree testovi ostaju obavezni.
 - **Bez novog telemetryja ili širih dozvola** — nema analytics SDK-a, trackinga, novog backenda ni dodatnih Android/browser dozvola.
 
 ## Zašto Radio Balkan
