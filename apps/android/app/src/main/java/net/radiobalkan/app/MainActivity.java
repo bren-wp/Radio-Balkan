@@ -101,7 +101,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private boolean receiverRegistered;
     private volatile boolean destroyed;
     private final Map<String, LinearLayout> bottomNavItems = new HashMap<>();
-    private String navSelection = "radio";
+    private String navSelection = "all";
 
     private final BroadcastReceiver playerReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
@@ -154,28 +154,6 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         registerPlayerReceiver();
         queryPlayerState();
         loadStations();
-        consumePlaybackIntent(getIntent());
-    }
-
-    @Override protected void onNewIntent(Intent intent) {
-        super.onNewIntent(intent);
-        setIntent(intent);
-        consumePlaybackIntent(intent);
-    }
-
-    private void consumePlaybackIntent(Intent intent) {
-        if (intent == null) return;
-        String json = intent.getStringExtra(StationDetailsActivity.EXTRA_PLAY_STATION_JSON);
-        if (json == null || json.trim().isEmpty() || json.length() > 32_768) return;
-        intent.removeExtra(StationDetailsActivity.EXTRA_PLAY_STATION_JSON);
-        try {
-            RadioStation requested = RadioStation.fromJson(new org.json.JSONObject(json));
-            RadioStation canonical = stationByKey(requested.key());
-            onPlay(canonical != null ? canonical : requested);
-        } catch (Throwable error) {
-            AppLog.e(this, "station-details-playback-handoff", error);
-            Toast.makeText(this, "Stanicu nije moguće otvoriti", Toast.LENGTH_SHORT).show();
-        }
     }
 
     private void buildUi() {
@@ -640,8 +618,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             else if ("Poništi filtre".equals(chosen)) resetBrowseFilters();
             else if ("Osvježi popis".equals(chosen)) refreshCatalog();
             else if ("Provjeri prikazane stanice".equals(chosen) && requireAdmin()) checkVisibleStreams();
-            else if ("Rezervni izvori".equals(chosen) && requireAdmin()) { tab = "replaced"; state.setTab(tab); selectBottomNav("radio"); applyFilterAsync(); }
-            else if ("Nedostupne stanice".equals(chosen) && requireAdmin()) { tab = "broken"; state.setTab(tab); selectBottomNav("radio"); applyFilterAsync(); }
+            else if ("Rezervni izvori".equals(chosen) && requireAdmin()) { tab = "replaced"; state.setTab(tab); selectBottomNav("all"); applyFilterAsync(); }
+            else if ("Nedostupne stanice".equals(chosen) && requireAdmin()) { tab = "broken"; state.setTab(tab); selectBottomNav("all"); applyFilterAsync(); }
             else if ("Admin prijava".equals(chosen)) showAdminLogin();
             else if ("Odjava administratora".equals(chosen)) logoutAdmin();
             else if ("O aplikaciji".equals(chosen)) showAboutDialog();
@@ -1108,16 +1086,11 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private boolean startStationPlayback(RadioStation s, boolean requestPermission) {
         if (s == null) return false;
         if (requestPermission) requestNotificationPermission();
-        String key = s.key();
-        Intent i = new Intent(this, RadioPlayerService.class).setAction(RadioPlayerService.ACTION_PLAY);
-        i.putExtra(RadioPlayerService.EXTRA_KEY, key); i.putExtra(RadioPlayerService.EXTRA_NAME, s.name); i.putExtra(RadioPlayerService.EXTRA_META, s.meta());
-        String resolvedForPlayback = !safe(s.activeUrl).isEmpty() ? s.activeUrl : s.urlResolved;
-        i.putExtra(RadioPlayerService.EXTRA_URL, s.url); i.putExtra(RadioPlayerService.EXTRA_RESOLVED, resolvedForPlayback); i.putExtra(RadioPlayerService.EXTRA_UUID, s.stationUuid); i.putExtra(RadioPlayerService.EXTRA_HOMEPAGE, s.homepage); i.putExtra(RadioPlayerService.EXTRA_COUNTRY, s.countryCode);
-        try { if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i); }
-        catch (Throwable t) { AppLog.e(this, "player-play", t); Toast.makeText(this, "Reprodukciju nije moguće pokrenuti", Toast.LENGTH_LONG).show(); return false; }
-        currentKey = key;
-        state.addRecent(key);
-        state.setLastStation(key, s.name, s.meta());
+        if (!PlaybackStarter.start(this, s, state)) {
+            Toast.makeText(this, "Reprodukciju nije moguće pokrenuti", Toast.LENGTH_LONG).show();
+            return false;
+        }
+        currentKey = s.key();
         currentCountryCode = s.flagCode();
         playerName.setText(s.name); playerMeta.setText(s.meta()); applyFlag(playerMeta, s.flagCode()); statusText.setText("Povezujem…");
         if (playerArtwork != null) { playerArtwork.setImageResource(R.drawable.ic_radio_balkan); images.load(s.favicon, playerArtwork, null); }
