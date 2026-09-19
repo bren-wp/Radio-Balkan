@@ -6,50 +6,64 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unsafe"
 )
 
 const (
-	foreignCatalogCode      = "INT"
-	foreignCatalogLimit     = 50
-	foreignCatalogScanLimit = 500
-	regionalCatalogLimit    = 7000 - foreignCatalogLimit
-	foreignCatalogRefresh   = 30 * time.Minute
-	foreignCatalogReadyPoll = 120 * time.Millisecond
+	foreignCatalogCode       = "INT"
+	diasporaCatalogCode      = "DIA"
+	foreignCatalogLimit      = 120
+	diasporaCatalogLimit     = 120
+	foreignCatalogScanLimit  = 1000
+	diasporaQueryLimit       = 100
+	supplementalCatalogLimit = foreignCatalogLimit + diasporaCatalogLimit
+	regionalCatalogLimit     = 7240 - supplementalCatalogLimit
+	foreignCatalogRefresh    = 30 * time.Minute
+	foreignCatalogReadyPoll  = 120 * time.Millisecond
 )
 
 var regionalCatalogCodes = map[string]struct{}{
 	"HR": {}, "BA": {}, "RS": {}, "SI": {}, "MK": {}, "AL": {}, "ME": {},
 }
 
-// initCatalogGroups extends the existing country selector with one application-level
-// group. INT is deliberately not an ISO country code: it represents a curated global
-// set and is never sent to Radio Browser as a real country filter by this module.
+type diasporaCatalogQuery struct {
+	Field string
+	Value string
+}
+
+// initCatalogGroups extends the existing selector with two application-level groups.
+// DIA and INT are not ISO country codes and are never sent to Radio Browser as
+// country filters.
 func initCatalogGroups() {
 	if len(balkanCountries) > 0 && balkanCountries[0].Code == "" {
 		balkanCountries[0].Name = "Sve postaje"
 	}
+	ensureCatalogGroup(diasporaCatalogCode, "Dijaspora")
+	ensureCatalogGroup(foreignCatalogCode, "Strano")
+}
+
+func ensureCatalogGroup(code, name string) {
 	for _, item := range balkanCountries {
-		if strings.EqualFold(item.Code, foreignCatalogCode) {
+		if strings.EqualFold(item.Code, code) {
 			return
 		}
 	}
-	balkanCountries = append(balkanCountries, CountryDef{Code: foreignCatalogCode, Name: "Strano"})
+	balkanCountries = append(balkanCountries, CountryDef{Code: code, Name: name})
 }
 
 func init() {
 	initCatalogGroups()
-	// Go test binaries do not create the production window. Avoid a dormant polling
-	// goroutine there while still installing the catalog-group definitions for tests.
 	if strings.HasSuffix(strings.ToLower(filepath.Base(os.Args[0])), ".test.exe") {
 		return
 	}
-	go foreignCatalogSupervisor()
+	go supplementalCatalogSupervisor()
 }
 
 func isRegionalCatalogCode(code string) bool {
@@ -61,23 +75,39 @@ func isForeignCatalogCode(code string) bool {
 	return strings.EqualFold(strings.TrimSpace(code), foreignCatalogCode)
 }
 
-func foreignCatalogSupervisor() {
-	// main assigns the App value before creating the native window. Waiting for the
-	// window therefore avoids touching App while that one-time assignment happens.
+func isDiasporaCatalogCode(code string) bool {
+	return strings.EqualFold(strings.TrimSpace(code), diasporaCatalogCode)
+}
+
+func isSupplementalCatalogCode(code string) bool {
+	return isForeignCatalogCode(code) || isDiasporaCatalogCode(code)
+}
+
+func supplementalCatalogSupervisor() {
 	for {
 		if existing, _, _ := procFindWindow.Call(uintptr(unsafe.Pointer(u16(className))), 0); existing != 0 {
 			break
 		}
 		timer := time.NewTimer(foreignCatalogReadyPoll)
-		<-timer.C
+		select {
+		case <-timer.C:
+		case <-app.done:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			return
+		}
 	}
 
 	waitForPrimaryCatalog()
 	if shuttingDown() {
 		return
 	}
-	if err := syncForeignCatalog(); err != nil {
-		logError("foreign-catalog-startup", err)
+	if err := syncSupplementalCatalog(); err != nil {
+		logError("supplemental-catalog-startup", err)
 	}
 
 	ticker := time.NewTicker(foreignCatalogRefresh)
@@ -85,8 +115,8 @@ func foreignCatalogSupervisor() {
 	for {
 		select {
 		case <-ticker.C:
-			if err := syncForeignCatalog(); err != nil && !shuttingDown() {
-				logError("foreign-catalog-periodic", err)
+			if err := syncSupplementalCatalog(); err != nil && !shuttingDown() {
+				logError("supplemental-catalog-periodic", err)
 			}
 		case <-app.done:
 			return
@@ -147,6 +177,102 @@ func fetchForeignCatalog() ([]RadioStation, error) {
 	return nil, last
 }
 
+func fetchDiasporaCatalog() ([]RadioStation, error) {
+	queries := []diasporaCatalogQuery{
+		{Field: "tag", Value: "diaspora"},
+		{Field: "name", Value: "balkan"},
+		{Field: "name", Value: "ex yu"},
+		{Field: "language", Value: "croatian"},
+		{Field: "language", Value: "serbian"},
+		{Field: "language", Value: "bosnian"},
+		{Field: "language", Value: "macedonian"},
+		{Field: "language", Value: "albanian"},
+		{Field: "language", Value: "slovenian"},
+	}
+	var last error
+	for _, base := range apiBases() {
+		rows, err := fetchDiasporaFromBase(base, queries)
+		if err != nil {
+			last = err
+			continue
+		}
+		catalog := normalizeDiasporaCatalog(rows)
+		if len(catalog) > 0 {
+			return catalog, nil
+		}
+		last = errors.New("katalog dijaspore nije vratio upotrebljive postaje")
+	}
+	if last == nil {
+		last = errors.New("katalog dijaspore nije dostupan")
+	}
+	return nil, last
+}
+
+func fetchDiasporaFromBase(base string, queries []diasporaCatalogQuery) ([]RadioStation, error) {
+	if len(queries) == 0 {
+		return nil, errors.New("nema upita za dijasporu")
+	}
+	jobs := make(chan diasporaCatalogQuery)
+	results := make(chan []RadioStation, len(queries))
+	errs := make(chan error, len(queries))
+	workers := 3
+	if workers > len(queries) {
+		workers = len(queries)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for query := range jobs {
+				if shuttingDown() {
+					return
+				}
+				endpoint := strings.TrimRight(base, "/") + "/json/stations/search?" +
+					url.QueryEscape(query.Field) + "=" + url.QueryEscape(query.Value) +
+					"&hidebroken=true&order=votes&reverse=true&limit=" + fmt.Sprint(diasporaQueryLimit)
+				var rows []RadioStation
+				if err := getJSON(endpoint, &rows); err != nil {
+					errs <- err
+					continue
+				}
+				results <- rows
+			}
+		}()
+	}
+	go func() {
+		defer close(jobs)
+		for _, query := range queries {
+			select {
+			case jobs <- query:
+			case <-app.done:
+				return
+			}
+		}
+	}()
+	go func() {
+		wg.Wait()
+		close(results)
+		close(errs)
+	}()
+
+	var out []RadioStation
+	for rows := range results {
+		out = append(out, rows...)
+	}
+	if len(out) > 0 {
+		return out, nil
+	}
+	var last error
+	for err := range errs {
+		last = err
+	}
+	if last == nil {
+		last = errors.New("katalog dijaspore nije dostupan")
+	}
+	return nil, last
+}
+
 func normalizeForeignCatalog(rows []RadioStation) []RadioStation {
 	out := make([]RadioStation, 0, minInt(len(rows), foreignCatalogScanLimit))
 	for _, station := range rows {
@@ -170,17 +296,47 @@ func normalizeForeignCatalog(rows []RadioStation) []RadioStation {
 		}
 		out = append(out, station)
 	}
-	out = dedupeStations(out)
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Votes == out[j].Votes {
-			return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
+	return sortAndCapSupplemental(out, foreignCatalogLimit)
+}
+
+func normalizeDiasporaCatalog(rows []RadioStation) []RadioStation {
+	out := make([]RadioStation, 0, minInt(len(rows), diasporaCatalogLimit*4))
+	for _, station := range rows {
+		actualCode := strings.ToUpper(strings.TrimSpace(station.CountryCode))
+		if actualCode == "" || isRegionalCatalogCode(actualCode) || station.LastCheckOK != 1 {
+			continue
 		}
-		return out[i].Votes > out[j].Votes
-	})
-	if len(out) > foreignCatalogLimit {
-		out = append([]RadioStation(nil), out[:foreignCatalogLimit]...)
+		if !safeHTTPURL(station.URLResolved) && !safeHTTPURL(station.URL) {
+			continue
+		}
+		station.CountryCode = diasporaCatalogCode
+		if strings.TrimSpace(station.Country) == "" {
+			station.Country = "Dijaspora"
+		}
+		if !containsFoldedTag(station.Tags, "dijaspora") {
+			if strings.TrimSpace(station.Tags) == "" {
+				station.Tags = "dijaspora"
+			} else {
+				station.Tags = "dijaspora," + station.Tags
+			}
+		}
+		out = append(out, station)
 	}
-	return out
+	return sortAndCapSupplemental(out, diasporaCatalogLimit)
+}
+
+func sortAndCapSupplemental(rows []RadioStation, limit int) []RadioStation {
+	rows = dedupeStations(rows)
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].Votes == rows[j].Votes {
+			return strings.ToLower(rows[i].Name) < strings.ToLower(rows[j].Name)
+		}
+		return rows[i].Votes > rows[j].Votes
+	})
+	if len(rows) > limit {
+		rows = append([]RadioStation(nil), rows[:limit]...)
+	}
+	return rows
 }
 
 func containsFoldedTag(tags, needle string) bool {
@@ -193,16 +349,55 @@ func containsFoldedTag(tags, needle string) bool {
 	return false
 }
 
-func syncForeignCatalog() error {
+func keepCurrentInSupplemental(list []RadioStation, current RadioStation, currentKey string, limit int) []RadioStation {
+	if currentKey == "" {
+		return list
+	}
+	for _, station := range list {
+		if stationKey(station) == currentKey {
+			return list
+		}
+	}
+	if len(list) >= limit && len(list) > 0 {
+		list[len(list)-1] = current
+		return list
+	}
+	return append(list, current)
+}
+
+func syncSupplementalCatalog() error {
 	if shuttingDown() {
 		return context.Canceled
 	}
-	foreign, err := fetchForeignCatalog()
-	if err != nil {
-		return err
+
+	type result struct {
+		kind string
+		list []RadioStation
+		err  error
 	}
-	if len(foreign) == 0 {
-		return errors.New("nema provjerenih stranih postaja")
+	ch := make(chan result, 2)
+	go func() {
+		list, err := fetchForeignCatalog()
+		ch <- result{kind: "foreign", list: list, err: err}
+	}()
+	go func() {
+		list, err := fetchDiasporaCatalog()
+		ch <- result{kind: "diaspora", list: list, err: err}
+	}()
+
+	var foreign, diaspora []RadioStation
+	var foreignErr, diasporaErr error
+	for i := 0; i < 2; i++ {
+		select {
+		case item := <-ch:
+			if item.kind == "foreign" {
+				foreign, foreignErr = item.list, item.err
+			} else {
+				diaspora, diasporaErr = item.list, item.err
+			}
+		case <-app.done:
+			return context.Canceled
+		}
 	}
 
 	app.mu.RLock()
@@ -217,14 +412,32 @@ func syncForeignCatalog() error {
 	app.mu.RUnlock()
 
 	regional := make([]RadioStation, 0, len(old))
+	oldForeign := make([]RadioStation, 0, foreignCatalogLimit)
+	oldDiaspora := make([]RadioStation, 0, diasporaCatalogLimit)
 	for _, station := range old {
-		if !isForeignCatalogCode(station.CountryCode) {
+		switch {
+		case isForeignCatalogCode(station.CountryCode):
+			oldForeign = append(oldForeign, station)
+		case isDiasporaCatalogCode(station.CountryCode):
+			oldDiaspora = append(oldDiaspora, station)
+		default:
 			regional = append(regional, station)
 		}
 	}
+
+	if foreignErr != nil || len(foreign) == 0 {
+		foreign = oldForeign
+	}
+	if diasporaErr != nil || len(diaspora) == 0 {
+		diaspora = oldDiaspora
+	}
+	if len(foreign) == 0 && len(diaspora) == 0 && foreignErr != nil && diasporaErr != nil {
+		return fmt.Errorf("supplementalni katalog nije dostupan: strano=%v; dijaspora=%v", foreignErr, diasporaErr)
+	}
+
 	if len(regional) > regionalCatalogLimit {
 		regional = append([]RadioStation(nil), regional[:regionalCatalogLimit]...)
-		if playing && !isForeignCatalogCode(current.CountryCode) && currentKey != "" {
+		if playing && !isSupplementalCatalogCode(current.CountryCode) && currentKey != "" {
 			found := false
 			for _, station := range regional {
 				if stationKey(station) == currentKey {
@@ -232,33 +445,24 @@ func syncForeignCatalog() error {
 					break
 				}
 			}
-			if !found {
+			if !found && len(regional) > 0 {
 				regional[len(regional)-1] = current
 			}
 		}
 	}
 
-	// Do not remove the station that is actively playing merely because its votes
-	// moved it outside today's top 50. Replace the last foreign slot with it instead.
-	if playing && isForeignCatalogCode(current.CountryCode) && currentKey != "" {
-		found := false
-		for _, station := range foreign {
-			if stationKey(station) == currentKey {
-				found = true
-				break
-			}
+	if playing && currentKey != "" {
+		if isDiasporaCatalogCode(current.CountryCode) {
+			diaspora = keepCurrentInSupplemental(diaspora, current, currentKey, diasporaCatalogLimit)
 		}
-		if !found {
-			if len(foreign) >= foreignCatalogLimit {
-				foreign[len(foreign)-1] = current
-			} else {
-				foreign = append(foreign, current)
-			}
+		if isForeignCatalogCode(current.CountryCode) {
+			foreign = keepCurrentInSupplemental(foreign, current, currentKey, foreignCatalogLimit)
 		}
 	}
 
-	combined := make([]RadioStation, 0, len(regional)+len(foreign))
+	combined := make([]RadioStation, 0, len(regional)+len(diaspora)+len(foreign))
 	combined = append(combined, regional...)
+	combined = append(combined, diaspora...)
 	combined = append(combined, foreign...)
 	combined = dedupeStations(combined)
 	prepareStations(combined)
@@ -280,4 +484,9 @@ func syncForeignCatalog() error {
 	rebuildFilter()
 	postUI()
 	return nil
+}
+
+// Kept for compatibility with existing tests and maintenance call sites.
+func syncForeignCatalog() error {
+	return syncSupplementalCatalog()
 }
