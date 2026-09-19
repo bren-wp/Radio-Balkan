@@ -283,6 +283,7 @@ func normalizeForeignCatalog(rows []RadioStation) []RadioStation {
 		if !safeHTTPURL(station.URLResolved) && !safeHTTPURL(station.URL) {
 			continue
 		}
+		station.SourceCountryCode = actualCode
 		station.CountryCode = foreignCatalogCode
 		if strings.TrimSpace(station.Country) == "" {
 			station.Country = "Strana postaja"
@@ -309,6 +310,7 @@ func normalizeDiasporaCatalog(rows []RadioStation) []RadioStation {
 		if !safeHTTPURL(station.URLResolved) && !safeHTTPURL(station.URL) {
 			continue
 		}
+		station.SourceCountryCode = actualCode
 		station.CountryCode = diasporaCatalogCode
 		if strings.TrimSpace(station.Country) == "" {
 			station.Country = "Dijaspora"
