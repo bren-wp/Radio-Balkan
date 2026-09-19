@@ -3079,7 +3079,7 @@ func playAdjacent(delta int) {
 	filtered := append([]int(nil), app.filtered...)
 	stationCount := len(app.stations)
 	app.mu.RUnlock()
-	if !canNavigateStations(stationCount, len(filtered)) {
+	if !canNavigateStations(current, stationCount, len(filtered)) {
 		return
 	}
 	if len(filtered) > 0 {
