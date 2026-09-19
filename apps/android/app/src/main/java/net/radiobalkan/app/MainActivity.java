@@ -964,7 +964,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         String key = s.key();
         Intent i = new Intent(this, RadioPlayerService.class).setAction(RadioPlayerService.ACTION_PLAY);
         i.putExtra(RadioPlayerService.EXTRA_KEY, key); i.putExtra(RadioPlayerService.EXTRA_NAME, s.name); i.putExtra(RadioPlayerService.EXTRA_META, s.meta());
-        i.putExtra(RadioPlayerService.EXTRA_URL, s.url); i.putExtra(RadioPlayerService.EXTRA_RESOLVED, s.activeUrl); i.putExtra(RadioPlayerService.EXTRA_UUID, s.stationUuid); i.putExtra(RadioPlayerService.EXTRA_HOMEPAGE, s.homepage); i.putExtra(RadioPlayerService.EXTRA_COUNTRY, s.countryCode);
+        String resolvedForPlayback = !safe(s.activeUrl).isEmpty() ? s.activeUrl : s.urlResolved;
+        i.putExtra(RadioPlayerService.EXTRA_URL, s.url); i.putExtra(RadioPlayerService.EXTRA_RESOLVED, resolvedForPlayback); i.putExtra(RadioPlayerService.EXTRA_UUID, s.stationUuid); i.putExtra(RadioPlayerService.EXTRA_HOMEPAGE, s.homepage); i.putExtra(RadioPlayerService.EXTRA_COUNTRY, s.countryCode);
         try { if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i); }
         catch (Throwable t) { AppLog.e(this, "player-play", t); Toast.makeText(this, "Reprodukciju nije moguće pokrenuti", Toast.LENGTH_LONG).show(); return false; }
         currentKey = key;

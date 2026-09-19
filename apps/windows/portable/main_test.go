@@ -29,17 +29,18 @@ func TestAdminCredentialsAcceptOnlyConfiguredAdministrator(t *testing.T) {
 	}
 }
 
-func TestRestartCurrentStationIfPlayingGuard(t *testing.T) {
-	old := app
-	defer func() { app = old }()
-	app = App{current: -1}
-	if restartCurrentStationIfPlaying("station", 0) {
-		t.Fatal("inactive player must not restart after admin source change")
+func TestSourceChangeRestartDecision(t *testing.T) {
+	if shouldRestartAfterSourceChange("", "station", true) {
+		t.Fatal("missing current station must not restart")
 	}
-	app.currentKey = "station"
-	app.playing = false
-	if restartCurrentStationIfPlaying("station", 0) {
+	if shouldRestartAfterSourceChange("station", "station", false) {
 		t.Fatal("paused player must not restart after admin source change")
+	}
+	if shouldRestartAfterSourceChange("other", "station", true) {
+		t.Fatal("unrelated playing station must not restart")
+	}
+	if !shouldRestartAfterSourceChange("station", "station", true) {
+		t.Fatal("active changed station must restart onto the new source")
 	}
 }
 

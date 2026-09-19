@@ -3771,9 +3771,13 @@ func toggleFavorite(idx int) {
 	rebuildFilter()
 	invalidate()
 }
+func shouldRestartAfterSourceChange(currentKey, changedKey string, playing bool) bool {
+	return playing && currentKey != "" && currentKey == changedKey
+}
+
 func restartCurrentStationIfPlaying(key string, fallback int) bool {
 	app.mu.RLock()
-	restart := app.playing && app.currentKey == key
+	restart := shouldRestartAfterSourceChange(app.currentKey, key, app.playing)
 	app.mu.RUnlock()
 	if !restart {
 		return false
