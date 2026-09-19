@@ -66,6 +66,7 @@ def main() -> int:
         'id="stationPagePlay"',
         'id="stationSimilarList"',
         'id="quickTop"',
+        'id="quickRecent"',
         'id="quickCountries"',
         'id="quickGenres"',
         'id="quickDiaspora"',
@@ -122,6 +123,9 @@ def main() -> int:
     require(errors, popup_js, "if (event.target.closest('.stationPlay'))", "extensions/shared/popup.js")
     require(errors, popup_js, "openStationPage(station, row)", "extensions/shared/popup.js")
     require(errors, popup_js, "function selectTop()", "extensions/shared/popup.js")
+    require(errors, popup_js, "function selectRecent()", "extensions/shared/popup.js")
+    require(errors, popup_js, "RB.addRecent(RB.key(station))", "extensions/shared/popup.js")
+    require(errors, popup_js, "viewMode === 'recent'", "extensions/shared/popup.js")
     require(errors, popup_js, "selectArea(RB.DIASPORA_CODE)", "extensions/shared/popup.js")
     require(errors, popup_js, "selectArea(RB.FOREIGN_CODE)", "extensions/shared/popup.js")
     require(errors, popup_css, ".builtWith", "extensions/shared/popup.css")
@@ -170,10 +174,16 @@ def main() -> int:
         "new RippleDrawable(",
         'navItem("⌂", "Početna", "all")',
         'navItem("★", "Top", "top")',
-        'navItem("◇", "Otkrij", "discover")',
+        'navItem("◷", "Nedavno", "recent")',
         'navItem("♡", "Omiljene", "favorites")',
         'navItem("⋯", "Više", "more")',
         "buildQuickAreas()",
+        'chip("◎ Dijaspora", false)',
+        'chip("◉ Strano", false)',
+        'chip("♫ Narodna", false)',
+        'chip("♪ Pop & Rock", false)',
+        "applyQuickFilter(",
+        "updateBrowseHeading()",
         "buildBrendigoFooter()",
         "@Override public void onDetails(RadioStation s)",
         "new Intent(this, StationDetailsActivity.class)",
@@ -211,6 +221,7 @@ def main() -> int:
         '"Promijeni izvor"',
         'navItem("○", "Profil", "profile")',
         'navItem("▥", "Radio", "radio")',
+        'navItem("◇", "Otkrij", "discover")',
         'navItem("◎", "Dijaspora", "diaspora")',
         'navItem("▥", "Radio", "radio")',
     ):
@@ -263,6 +274,11 @@ def main() -> int:
     ):
         require(errors, setup, needle, "Windows Setup UI")
 
+    android_repository = read("apps/android/app/src/main/java/net/radiobalkan/app/RadioRepository.java")
+    country_flag = read("apps/android/app/src/main/java/net/radiobalkan/app/CountryFlagDrawable.java")
+    require(errors, android_repository, '{"BG", "Bugarska"}', "Android RadioRepository")
+    require(errors, country_flag, 'case "BG":', "Android CountryFlagDrawable")
+
     windows = read("apps/windows/portable/main.go")
     for needle in (
         "case WM_GETMINMAXINFO:",
@@ -276,6 +292,8 @@ def main() -> int:
         '"Strano", country == foreignCatalogCode',
         '"Omiljene", tab == "favorites"',
         '"Nedavno", tab == "recent"',
+        '{"BG", "Bugarska"}',
+        'case "BG":',
         "Kind: hitStationDetails",
         "Kind: hitStationBack",
         "Kind: hitBrendigo",
@@ -319,11 +337,14 @@ def main() -> int:
         '"Pretraga", false, hitTab, "searchfocus"',
         '"Pregledaj", false, hitTab, "browse"',
         "func showStationDetails(idx int)",
+        "func countryCodeByName(name string) string",
     ):
         forbid(errors, windows, needle, "Windows UI")
 
     # User-facing production surfaces must not accidentally expose common development placeholders.
-    user_surfaces = "\n".join((popup_html, popup_js, android, adapter))
+    user_surfaces = "\n".join((popup_html, popup_js, android, adapter, windows))
+    if "radiobalkan.net" in user_surfaces.lower():
+        errors.append("Production UI: reference-domain link must never be embedded in application surfaces")
     for pattern in (r"\bTODO\b", r"\bFIXME\b", r"developer mode", r"debug mode", r"test mode"):
         if re.search(pattern, user_surfaces, re.IGNORECASE):
             errors.append(f"Production UI: developer placeholder matched {pattern!r}")

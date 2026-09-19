@@ -3,9 +3,9 @@
 const RBNet = (() => {
   const FOREIGN_CODE = 'INT';
   const DIASPORA_CODE = 'DIA';
-  const ALLOWED = new Set(['HR', 'BA', 'RS', 'SI', 'MK', 'AL', 'ME', DIASPORA_CODE, FOREIGN_CODE]);
+  const ALLOWED = new Set(['HR', 'BA', 'RS', 'SI', 'MK', 'AL', 'ME', 'BG', DIASPORA_CODE, FOREIGN_CODE]);
   const RADIO_BROWSER_SUFFIX = '.api.radio-browser.info';
-  const BALKAN = new Set(['HR', 'BA', 'RS', 'SI', 'MK', 'AL', 'ME']);
+  const BALKAN = new Set(['HR', 'BA', 'RS', 'SI', 'MK', 'AL', 'ME', 'BG']);
   const RADIO_BROWSER_API_BASES = Object.freeze([
     'https://de1.api.radio-browser.info',
     'https://de2.api.radio-browser.info',

@@ -45,11 +45,11 @@ public final class RadioRepository {
     public static final String[][] COUNTRIES = {
             {"", "Sve postaje"}, {"HR", "Hrvatska"}, {"BA", "Bosna i Hercegovina"},
             {"RS", "Srbija"}, {"SI", "Slovenija"}, {"MK", "Sjeverna Makedonija"},
-            {"AL", "Albanija"}, {"ME", "Crna Gora"}, {DIASPORA_CODE, "Dijaspora"},
+            {"AL", "Albanija"}, {"ME", "Crna Gora"}, {"BG", "Bugarska"}, {DIASPORA_CODE, "Dijaspora"},
             {FOREIGN_CODE, "Strano"}
     };
 
-    private static final String[] REGION_CODES = {"HR", "BA", "RS", "SI", "MK", "AL", "ME"};
+    private static final String[] REGION_CODES = {"HR", "BA", "RS", "SI", "MK", "AL", "ME", "BG"};
     private static final Set<String> REGION_SET = new LinkedHashSet<>();
     static { Collections.addAll(REGION_SET, REGION_CODES); }
 
@@ -59,11 +59,11 @@ public final class RadioRepository {
     };
     private static final int PAGE = 250;
     private static final int MAX_PER_COUNTRY = 1800;
-    private static final int MAX_FOREIGN = 120;
-    private static final int MAX_DIASPORA = 120;
-    private static final int FOREIGN_SCAN_LIMIT = 1000;
-    private static final int DIASPORA_QUERY_LIMIT = 100;
-    private static final int MAX_CATALOG = 7240;
+    private static final int MAX_FOREIGN = 180;
+    private static final int MAX_DIASPORA = 180;
+    private static final int FOREIGN_SCAN_LIMIT = 1600;
+    private static final int DIASPORA_QUERY_LIMIT = 140;
+    private static final int MAX_CATALOG = 7360;
     private static final int PRODUCTION_MIN_REGIONAL = 600;
     private static final int MAX_REDIRECTS = 4;
 

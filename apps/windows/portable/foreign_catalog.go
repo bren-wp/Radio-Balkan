@@ -19,18 +19,18 @@ import (
 const (
 	foreignCatalogCode       = "INT"
 	diasporaCatalogCode      = "DIA"
-	foreignCatalogLimit      = 120
-	diasporaCatalogLimit     = 120
-	foreignCatalogScanLimit  = 1000
-	diasporaQueryLimit       = 100
+	foreignCatalogLimit      = 180
+	diasporaCatalogLimit     = 180
+	foreignCatalogScanLimit  = 1600
+	diasporaQueryLimit       = 140
 	supplementalCatalogLimit = foreignCatalogLimit + diasporaCatalogLimit
-	regionalCatalogLimit     = 7240 - supplementalCatalogLimit
+	regionalCatalogLimit     = 7360 - supplementalCatalogLimit
 	foreignCatalogRefresh    = 30 * time.Minute
 	foreignCatalogReadyPoll  = 120 * time.Millisecond
 )
 
 var regionalCatalogCodes = map[string]struct{}{
-	"HR": {}, "BA": {}, "RS": {}, "SI": {}, "MK": {}, "AL": {}, "ME": {},
+	"HR": {}, "BA": {}, "RS": {}, "SI": {}, "MK": {}, "AL": {}, "ME": {}, "BG": {},
 }
 
 type diasporaCatalogQuery struct {
@@ -180,14 +180,18 @@ func fetchForeignCatalog() ([]RadioStation, error) {
 func fetchDiasporaCatalog() ([]RadioStation, error) {
 	queries := []diasporaCatalogQuery{
 		{Field: "tag", Value: "diaspora"},
+		{Field: "tag", Value: "balkan"},
+		{Field: "tag", Value: "exyu"},
 		{Field: "name", Value: "balkan"},
 		{Field: "name", Value: "ex yu"},
+		{Field: "name", Value: "radio diaspora"},
 		{Field: "language", Value: "croatian"},
 		{Field: "language", Value: "serbian"},
 		{Field: "language", Value: "bosnian"},
 		{Field: "language", Value: "macedonian"},
 		{Field: "language", Value: "albanian"},
 		{Field: "language", Value: "slovenian"},
+		{Field: "language", Value: "bulgarian"},
 	}
 	var last error
 	for _, base := range apiBases() {

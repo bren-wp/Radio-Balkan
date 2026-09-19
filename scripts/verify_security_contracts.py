@@ -217,7 +217,12 @@ def main() -> None:
         "MAX_CATALOG_RESPONSE_BYTES = 8 * 1024 * 1024",
         "MAX_DISCOVERED_API_BASES = 4",
         "MAX_API_BASES = 8",
+        "MAX_RECENT = 50",
         "async function readJsonLimited(response, maxBytes)",
+        "async function recent()",
+        "async function addRecent(stationKey)",
+        "stationKey = clean(stationKey).slice(0, 512)",
+        "Promise.allSettled",
         "response.body?.getReader",
         "total > maxBytes",
         "readJsonLimited(response, MAX_SERVER_RESPONSE_BYTES)",
@@ -235,6 +240,7 @@ def main() -> None:
         "dynamic API discovery must be capped before stable fallbacks are tried",
         "forced refresh must surface a real network failure",
         "UI preferences must be sanitized and persisted",
+        "recent history must sanitize, deduplicate and keep newest-first order",
     )
     require(
         "extensions/shared/network.js",
@@ -251,6 +257,7 @@ def main() -> None:
         "redirect: 'error'",
         "BALKAN.has(actualCountry)",
         "DIASPORA_CODE = 'DIA'",
+        "'BG'",
         "expectedCountry === FOREIGN_CODE || expectedCountry === DIASPORA_CODE",
     )
     require(
@@ -263,6 +270,8 @@ def main() -> None:
         "IPv6 multicast target must be rejected",
         "UUID refresh must return only safe public streams",
         "UUID refresh must reject a regional station returned under another country",
+        "Bulgarian regional station must pass exact-country refresh validation",
+        "foreign refresh must treat BG as Balkan and never remap it into INT",
         "foreign refresh must never remap a Balkan station into the INT group",
         "diaspora pseudo-country must be accepted by browser playback validation",
         "diaspora refresh must never remap a Balkan station into the DIA group",

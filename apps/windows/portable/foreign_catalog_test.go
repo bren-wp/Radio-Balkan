@@ -34,6 +34,12 @@ func TestCatalogGroupsIncludeSupplementalGroupsExactlyOnce(t *testing.T) {
 	if foreign != 1 || diaspora != 1 {
 		t.Fatalf("supplemental group counts: foreign=%d diaspora=%d; want 1/1", foreign, diaspora)
 	}
+	if !isRegionalCatalogCode("BG") || !isBalkanCode("BG") {
+		t.Fatal("BG must be a real supported Balkan country")
+	}
+	if countryNameByCode("BG") != "Bugarska" {
+		t.Fatalf("BG label = %q; want Bugarska", countryNameByCode("BG"))
+	}
 	if !isBalkanCode(foreignCatalogCode) {
 		t.Fatal("INT application group must be accepted by existing selector/state validation")
 	}
@@ -68,6 +74,7 @@ func TestNormalizeForeignCatalogFiltersSortsAndCaps(t *testing.T) {
 
 	rows = append(rows,
 		RadioStation{StationUUID: "regional", Name: "Regional", URL: "https://regional.example.com/live", CountryCode: "HR", Votes: 5000, LastCheckOK: 1},
+		RadioStation{StationUUID: "regional-bg", Name: "Regional BG", URL: "https://regional-bg.example.com/live", CountryCode: "BG", Votes: 5500, LastCheckOK: 1},
 		RadioStation{StationUUID: "broken", Name: "Broken", URL: "https://broken.example.com/live", CountryCode: "GB", Votes: 6000, LastCheckOK: 0},
 		RadioStation{StationUUID: "unsafe", Name: "Unsafe", URL: "http://127.0.0.1/live", CountryCode: "DE", Votes: 7000, LastCheckOK: 1},
 		RadioStation{StationUUID: "blank-country", Name: "Blank", URL: "https://blank.example.com/live", CountryCode: "", Votes: 8000, LastCheckOK: 1},
@@ -96,7 +103,8 @@ func TestNormalizeForeignCatalogFiltersSortsAndCaps(t *testing.T) {
 	}
 	for _, station := range got {
 		if strings.EqualFold(station.StationUUID, "regional") || strings.EqualFold(station.StationUUID, "broken") ||
-			strings.EqualFold(station.StationUUID, "unsafe") || strings.EqualFold(station.StationUUID, "blank-country") {
+			strings.EqualFold(station.StationUUID, "unsafe") || strings.EqualFold(station.StationUUID, "blank-country") ||
+			strings.EqualFold(station.StationUUID, "regional-bg") {
 			t.Fatalf("filtered station leaked into foreign catalog: %s", station.StationUUID)
 		}
 	}
@@ -132,6 +140,7 @@ func TestNormalizeDiasporaCatalogFiltersSortsAndCaps(t *testing.T) {
 	}
 	rows = append(rows,
 		RadioStation{StationUUID: "regional-dia", Name: "Regional", URL: "https://regional-dia.example.com/live", CountryCode: "BA", Votes: 9000, LastCheckOK: 1},
+		RadioStation{StationUUID: "regional-bg-dia", Name: "Regional BG", URL: "https://regional-bg-dia.example.com/live", CountryCode: "BG", Votes: 9100, LastCheckOK: 1},
 		RadioStation{StationUUID: "broken-dia", Name: "Broken", URL: "https://broken-dia.example.com/live", CountryCode: "AT", Votes: 8000, LastCheckOK: 0},
 		RadioStation{StationUUID: "unsafe-dia", Name: "Unsafe", URL: "http://127.0.0.1/live", CountryCode: "CH", Votes: 7000, LastCheckOK: 1},
 	)

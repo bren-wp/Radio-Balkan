@@ -37,6 +37,7 @@ assert.equal(RBNet.safeHttp('https://metadata.google.internal./computeMetadata/v
 assert.equal(RBNet.safeHttp('http://radio.local./live'), false, 'trailing-dot local-domain target must be rejected');
 
 assert.equal(RBNet.allowedCountry('HR'), true, 'supported Balkan station must remain playable');
+assert.equal(RBNet.allowedCountry('BG'), true, 'Bulgarian Balkan station must remain playable');
 assert.equal(RBNet.allowedCountry('INT'), true, 'curated foreign group must be playable');
 assert.equal(RBNet.allowedCountry('US'), false, 'arbitrary external country code must not bypass curated foreign selection');
 assert.equal(RBNet.validStation({ countrycode: 'INT', url: 'https://example.com/live' }), true, 'curated foreign station with a safe stream must be accepted');
@@ -104,6 +105,14 @@ async function testRefresh() {
   assert.deepEqual(Array.from(mismatched), [], 'UUID refresh must reject a regional station returned under another country');
 
   fetchHandler = async () => responseJson([{
+    stationuuid: 'bg-1',
+    countrycode: 'BG',
+    url_resolved: 'https://bulgaria.example.com/live'
+  }]);
+  const bulgaria = await RBNet.refreshCandidateUrls({ stationuuid: 'bg-1', countrycode: 'BG' });
+  assert.deepEqual(Array.from(bulgaria), ['https://bulgaria.example.com/live'], 'Bulgarian regional station must pass exact-country refresh validation');
+
+  fetchHandler = async () => responseJson([{
     stationuuid: 'world-1',
     countrycode: 'DE',
     url_resolved: 'https://world.example.com/live'
@@ -130,6 +139,22 @@ async function testRefresh() {
 
   const diasporaRegional = await RBNet.refreshCandidateUrls({ stationuuid: 'world-1', countrycode: 'DIA', sourcecountrycode: 'DE' });
   assert.deepEqual(Array.from(diasporaRegional), [], 'diaspora refresh must never remap a Balkan station into the DIA group');
+
+  fetchHandler = async () => responseJson([{
+    stationuuid: 'world-1',
+    countrycode: 'BG',
+    url_resolved: 'https://bulgaria.example.com/live'
+  }]);
+  assert.deepEqual(
+    Array.from(await RBNet.refreshCandidateUrls({ stationuuid: 'world-1', countrycode: 'INT', sourcecountrycode: 'DE' })),
+    [],
+    'foreign refresh must treat BG as Balkan and never remap it into INT'
+  );
+  assert.deepEqual(
+    Array.from(await RBNet.refreshCandidateUrls({ stationuuid: 'world-1', countrycode: 'DIA', sourcecountrycode: 'DE' })),
+    [],
+    'diaspora refresh must treat BG as Balkan and never remap it into DIA'
+  );
 
   let oversizedCalls = 0;
   fetchHandler = async () => {

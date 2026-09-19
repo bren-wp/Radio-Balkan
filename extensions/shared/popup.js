@@ -14,6 +14,7 @@
   let playing = false;
   let stopped = true;
   let favs = {};
+  let recentKeys = [];
   let favoritesOnly = false;
   let searchTimer = 0;
   let preferenceTimer = 0;
@@ -274,6 +275,7 @@
     const value = String(country.value || '').toUpperCase();
     setQuickPressed('quickAll', viewMode === 'all' && !value && !genre?.value && !favoritesOnly);
     setQuickPressed('quickTop', viewMode === 'top');
+    setQuickPressed('quickRecent', viewMode === 'recent');
     setQuickPressed('quickDiaspora', value === RB.DIASPORA_CODE);
     setQuickPressed('quickForeign', value === RB.FOREIGN_CODE);
   }
@@ -292,6 +294,18 @@
 
   function selectTop() {
     viewMode = 'top';
+    favoritesOnly = false;
+    search.value = '';
+    country.value = '';
+    if (genre) genre.value = '';
+    updateFavoritesFilterButton();
+    queueUiPreferencesSave();
+    apply();
+    updateQuickNavigation();
+  }
+
+  function selectRecent() {
+    viewMode = 'recent';
     favoritesOnly = false;
     search.value = '';
     country.value = '';
@@ -480,14 +494,20 @@
     const q = RB.fold(search.value);
     const selectedCountry = country.value;
     const selectedGenre = genre?.value || '';
+    const recentOrder = viewMode === 'recent'
+      ? new Map(recentKeys.map((key, index) => [key, index]))
+      : null;
     visible = all.filter(station =>
       (!selectedCountry || station.countrycode === selectedCountry) &&
       matchesGenre(station, selectedGenre) &&
       (!favoritesOnly || favs[RB.key(station)]) &&
+      (!recentOrder || recentOrder.has(RB.key(station))) &&
       (!q || foldedStation(station).includes(q))
     );
     if (viewMode === 'top') {
       visible = visible.slice().sort((a, b) => Number(b.votes || 0) - Number(a.votes || 0) || a.name.localeCompare(b.name)).slice(0, 50);
+    } else if (recentOrder) {
+      visible = visible.slice().sort((a, b) => recentOrder.get(RB.key(a)) - recentOrder.get(RB.key(b)));
     }
     renderLimit = PAGE;
     render();
@@ -575,7 +595,11 @@
     const fragment = document.createDocumentFragment();
     for (const station of shown) fragment.append(stationCard(station));
     if (!shown.length) {
-      const message = favoritesOnly ? 'Još nema omiljenih stanica za ovaj prikaz.' : 'Nema stanica za odabranu kombinaciju filtera.';
+      const message = favoritesOnly
+        ? 'Još nema omiljenih stanica za ovaj prikaz.'
+        : viewMode === 'recent'
+          ? 'Još nema nedavno slušanih stanica.'
+          : 'Nema stanica za odabranu kombinaciju filtera.';
       fragment.append(renderEmptyState(message, 'Poništi filtre', resetFilters));
     } else if (visible.length > renderLimit) {
       const more = document.createElement('button');
@@ -589,9 +613,10 @@
     const count = Math.min(renderLimit, visible.length);
     const activeArea = country.value ? country.options?.[country.selectedIndex]?.textContent?.split(' · ')[0] : '';
     const activeGenre = genre?.value ? GENRE_LABELS.get(genre.value) : '';
-    const context = [activeArea, activeGenre].filter(Boolean).join(' · ');
+    const activeView = viewMode === 'top' ? 'Top 50' : viewMode === 'recent' ? 'Nedavno slušane' : '';
+    const context = [activeView, activeArea, activeGenre].filter(Boolean).join(' · ');
     status.textContent = `${count} od ${visible.length} prikazano${context ? ` · ${context}` : ''}`;
-    $('clearFilters').hidden = !(search.value || country.value || genre?.value || favoritesOnly);
+    $('clearFilters').hidden = !(search.value || country.value || genre?.value || favoritesOnly || viewMode !== 'all');
   }
 
   function focusStationAt(index) {
@@ -640,6 +665,10 @@
       if (token !== commandGeneration) return;
       if (result?.error && !playing) playerStatus = 'Nedostupno';
       else playerStatus = playing ? 'Sada svira' : 'Nedostupno';
+      if (playing) {
+        recentKeys = await RB.addRecent(RB.key(station)).catch(() => recentKeys);
+        if (viewMode === 'recent') apply();
+      }
     } catch {
       if (token !== commandGeneration) return;
       playerStatus = playing ? 'Sada svira' : 'Nedostupno';
@@ -828,6 +857,7 @@
 
   $('quickAll').addEventListener('click', () => selectArea(''));
   $('quickTop').addEventListener('click', selectTop);
+  $('quickRecent').addEventListener('click', selectRecent);
   $('quickCountries').addEventListener('click', () => country.focus());
   $('quickGenres').addEventListener('click', () => genre?.focus());
   $('quickDiaspora').addEventListener('click', () => selectArea(RB.DIASPORA_CODE));
@@ -983,7 +1013,10 @@
       const preferencesPromise = uiPreferencesReady ? Promise.resolve(null) : RB.uiPreferences().catch(() => ({}));
       const loaded = await RB.load(force);
       all = loaded;
-      favs = await RB.favorites();
+      [favs, recentKeys] = await Promise.all([
+        RB.favorites(),
+        RB.recent()
+      ]);
       fillCountries();
       const preferences = await preferencesPromise;
       if (!uiPreferencesReady) restoreUiPreferences(preferences);

@@ -87,7 +87,7 @@ const ids = [
   'browsePage', 'stationPage', 'stationBack', 'stationPageTitle', 'stationPageMeta',
   'stationBreadcrumbArea', 'stationPageDescription', 'stationPageFacts', 'stationPageLogo',
   'stationPagePlay', 'stationPageFavorite', 'stationSimilarList',
-  'quickAll', 'quickTop', 'quickCountries', 'quickGenres', 'quickDiaspora', 'quickForeign'
+  'quickAll', 'quickTop', 'quickRecent', 'quickCountries', 'quickGenres', 'quickDiaspora', 'quickForeign'
 ];
 const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 elements.stationPage.hidden = true;
@@ -156,6 +156,7 @@ let stopCalls = 0;
 let playCalls = 0;
 let lastPlayedStation = null;
 let favoriteStore = {};
+let recentStore = [];
 let adminOverrides = {};
 const toggleQueue = [];
 const stopQueue = [];
@@ -251,6 +252,13 @@ const context = {
     async favorites() {
       return copy(favoriteStore);
     },
+    async recent() {
+      return copy(recentStore);
+    },
+    async addRecent(key) {
+      recentStore = [key, ...recentStore.filter(value => value !== key)].slice(0, 50);
+      return copy(recentStore);
+    },
     async setFavorite(key, value) {
       if (value) favoriteStore[key] = true;
       else delete favoriteStore[key];
@@ -320,6 +328,7 @@ async function main() {
   elements.stationPagePlay.dispatch('click');
   await flush();
   assert.equal(playCalls, playCallsBeforeDetails + 1, 'station-page play must use the existing RB_PLAY path');
+  assert.deepEqual(recentStore, ['station-a'], 'successful station playback must be recorded in local recent history');
 
   const similarButton = new Element('similar-station');
   similarButton.dataset.stationKey = 'station-b';
@@ -336,6 +345,11 @@ async function main() {
   assert.equal(elements.stationPage.hidden, true, 'back action must leave the dedicated station page');
   assert.equal(elements.browsePage.hidden, false, 'browse page must be restored after station details');
   assert.equal(stationRow.focused, true, 'returning after similar-station navigation must restore focus to the originating station card');
+
+  elements.quickRecent.dispatch('click');
+  assert.equal(elements.quickRecent.attributes['aria-pressed'], 'true', 'Nedavno must be a distinct navigation state');
+  assert.match(elements.status.textContent, /^1 od 1 prikazano · Nedavno slušane/, 'recent view must contain successfully played stations in newest-first history');
+  elements.quickAll.dispatch('click');
 
   elements.quickTop.dispatch('click');
   assert.equal(elements.quickTop.attributes['aria-pressed'], 'true', 'Top must be a distinct navigation state');
