@@ -256,6 +256,7 @@ def main() -> None:
         "if (!allowEpochChange) return false;",
         "function synchronizePlayerState()",
         "if (stopped) return play(current);",
+        "else if (!value.sessionId && !value.playing) current = null;",
         "ext.runtime.sendMessage({ type: 'RB_GET_STATE' })",
         "void synchronizePlayerState();",
         "if (revision < lastRevision) return false;",
@@ -293,6 +294,7 @@ def main() -> None:
         "previous from Radio B must select the preceding visible station",
         "next control must start the adjacent station",
         "main play control after stop must send a fresh RB_PLAY command",
+        "authoritative cold state must clear the optimistic catalog selection",
     )
     require(
         "scripts/test_chromium_player_contract.js",

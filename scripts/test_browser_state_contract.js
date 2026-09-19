@@ -348,6 +348,13 @@ async function main() {
   assert.equal(lastPlayedStation?.stationuuid, 'station-a', 'previous from Radio B must select the preceding visible station');
   assert.equal(elements.playerPrev.disabled, false, 'previous control must remain available after adjacent playback');
 
+  runtimeListener({ type: 'RB_STATE', epoch: 'epoch-b', revision: 9, station: null, playing: false, sessionId: null });
+  await flush();
+  assert.equal(elements.playerName.textContent, 'Nije odabrano', 'authoritative cold state must clear the optimistic catalog selection');
+  assert.equal(elements.playerToggle.disabled, true, 'cold player state must not expose a fake selected-station toggle');
+  assert.equal(elements.playerFav.disabled, true, 'cold player state must not favorite a station the user never selected');
+  assert.equal(elements.heroPlay.disabled, false, 'hero play must remain available and may start the first visible station');
+
   console.log('Browser popup state and UI regression tests OK');
 }
 

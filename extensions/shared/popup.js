@@ -159,6 +159,7 @@
     if (!acceptStateEnvelope(value, allowEpochChange)) return false;
     const hasRemoteStation = !!value.station;
     if (hasRemoteStation) current = value.station;
+    else if (!value.sessionId && !value.playing) current = null;
     playing = !!value.playing;
     const hasSession = !!value.sessionId;
     stopped = !playing && !hasSession;
