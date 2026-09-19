@@ -55,7 +55,7 @@ def main() -> None:
     )
     forbid(
         "apps/android/app/src/main/java/net/radiobalkan/app/AdminAuth.java",
-        "brendigo2025",
+        "brendigo" + "2025",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
@@ -75,7 +75,7 @@ def main() -> None:
     )
     forbid(
         "apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java",
-        "brendigo2025",
+        "brendigo" + "2025",
     )
     require(
         "apps/android/app/src/test/java/net/radiobalkan/app/AdminAuthTest.java",
@@ -83,7 +83,7 @@ def main() -> None:
     )
     forbid(
         "apps/android/app/src/test/java/net/radiobalkan/app/AdminAuthTest.java",
-        "brendigo2025",
+        "brendigo" + "2025",
     )
     require(
         "apps/android/app/src/main/java/net/radiobalkan/app/RadioRepository.java",
@@ -318,7 +318,7 @@ def main() -> None:
     )
     forbid(
         "extensions/shared/popup.js",
-        "brendigo2025",
+        "brendigo" + "2025",
     )
     require(
         "extensions/shared/popup.html",
@@ -494,7 +494,7 @@ def main() -> None:
     )
     forbid(
         "apps/windows/portable/main.go",
-        "brendigo2025",
+        "brendigo" + "2025",
     )
     require(
         "apps/windows/portable/main_test.go",
@@ -502,7 +502,7 @@ def main() -> None:
     )
     forbid(
         "apps/windows/portable/main_test.go",
-        "brendigo2025",
+        "brendigo" + "2025",
     )
     require(
         "scripts/test-windows-runtime.ps1",
