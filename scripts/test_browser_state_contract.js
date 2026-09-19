@@ -113,6 +113,28 @@ const stationB = {
   codec: 'AAC',
   logo: ''
 };
+const stationDiaspora = {
+  stationuuid: 'station-diaspora',
+  name: 'Radio Dijaspora',
+  country: 'Germany',
+  countrycode: 'DIA',
+  sourcecountrycode: 'DE',
+  tags: 'balkan,dijaspora',
+  bitrate: 128,
+  codec: 'MP3',
+  logo: ''
+};
+const stationForeign = {
+  stationuuid: 'station-foreign',
+  name: 'World Radio',
+  country: 'United States',
+  countrycode: 'INT',
+  sourcecountrycode: 'US',
+  tags: 'hits',
+  bitrate: 128,
+  codec: 'MP3',
+  logo: ''
+};
 const extraStations = Array.from({ length: 58 }, (_, index) => ({
   stationuuid: `station-extra-${index}`,
   name: `Radio Extra ${index}`,
@@ -224,7 +246,7 @@ const context = {
       return false;
     },
     async load() {
-      return [copy(stationA), copy(stationB), ...copy(extraStations)];
+      return [copy(stationA), copy(stationB), copy(stationDiaspora), copy(stationForeign), ...copy(extraStations)];
     },
     async favorites() {
       return copy(favoriteStore);
@@ -478,7 +500,7 @@ async function main() {
   assert.match(elements.status.textContent, /^0 od 0 prikazano/, 'unfavoriting inside favorites view must immediately remove the station from the visible set');
   elements.favoritesOnly.dispatch('click');
   await flush();
-  assert.match(elements.status.textContent, /^48 od 60 prikazano/, 'leaving favorites-only view must restore the full visible catalog page');
+  assert.match(elements.status.textContent, /^48 od 62 prikazano/, 'leaving favorites-only view must restore the full visible catalog page');
 
   runtimeListener({ type: 'RB_STATE', epoch: 'epoch-b', revision: 9, station: null, playing: false, sessionId: null });
   await flush();
