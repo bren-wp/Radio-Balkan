@@ -3771,6 +3771,17 @@ func toggleFavorite(idx int) {
 	rebuildFilter()
 	invalidate()
 }
+func restartCurrentStationIfPlaying(key string, fallback int) bool {
+	app.mu.RLock()
+	restart := app.playing && app.currentKey == key
+	app.mu.RUnlock()
+	if !restart {
+		return false
+	}
+	playStationByKey(key, fallback)
+	return true
+}
+
 func replaceStation(idx int) {
 	if !requireAdmin() {
 		return
@@ -3791,7 +3802,11 @@ func replaceStation(idx int) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		clearReplacement(idx, key)
-		setStatus("Vraćen automatski odabir · " + s.Name)
+		if restartCurrentStationIfPlaying(key, idx) {
+			setStatus("Vraćen automatski odabir · ponovno povezujem")
+		} else {
+			setStatus("Vraćen automatski odabir · " + s.Name)
+		}
 		postUI()
 		return
 	}
@@ -3807,7 +3822,11 @@ func replaceStation(idx int) {
 		}
 		rememberReplacement(idx, key, resolved)
 		rebuildFilter()
-		setStatus("Izvor promijenjen · " + s.Name)
+		if restartCurrentStationIfPlaying(key, idx) {
+			setStatus("Izvor promijenjen · ponovno povezujem")
+		} else {
+			setStatus("Izvor promijenjen · " + s.Name)
+		}
 		postUI()
 	})
 }

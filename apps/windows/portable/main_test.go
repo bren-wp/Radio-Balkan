@@ -29,6 +29,20 @@ func TestAdminCredentialsAcceptOnlyConfiguredAdministrator(t *testing.T) {
 	}
 }
 
+func TestRestartCurrentStationIfPlayingGuard(t *testing.T) {
+	old := app
+	defer func() { app = old }()
+	app = App{current: -1}
+	if restartCurrentStationIfPlaying("station", 0) {
+		t.Fatal("inactive player must not restart after admin source change")
+	}
+	app.currentKey = "station"
+	app.playing = false
+	if restartCurrentStationIfPlaying("station", 0) {
+		t.Fatal("paused player must not restart after admin source change")
+	}
+}
+
 func TestSafeHTTPURLRejectsPrivateAndCredentialedTargets(t *testing.T) {
 	tests := []string{
 		"",

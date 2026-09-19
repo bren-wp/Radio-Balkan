@@ -955,12 +955,18 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                     : RadioPlayerService.ACTION_RESUME);
             return;
         }
-        requestNotificationPermission();
+        startStationPlayback(s, true);
+    }
+
+    private boolean startStationPlayback(RadioStation s, boolean requestPermission) {
+        if (s == null) return false;
+        if (requestPermission) requestNotificationPermission();
+        String key = s.key();
         Intent i = new Intent(this, RadioPlayerService.class).setAction(RadioPlayerService.ACTION_PLAY);
         i.putExtra(RadioPlayerService.EXTRA_KEY, key); i.putExtra(RadioPlayerService.EXTRA_NAME, s.name); i.putExtra(RadioPlayerService.EXTRA_META, s.meta());
-        i.putExtra(RadioPlayerService.EXTRA_URL, s.url); i.putExtra(RadioPlayerService.EXTRA_RESOLVED, s.urlResolved); i.putExtra(RadioPlayerService.EXTRA_UUID, s.stationUuid); i.putExtra(RadioPlayerService.EXTRA_HOMEPAGE, s.homepage); i.putExtra(RadioPlayerService.EXTRA_COUNTRY, s.countryCode);
+        i.putExtra(RadioPlayerService.EXTRA_URL, s.url); i.putExtra(RadioPlayerService.EXTRA_RESOLVED, s.activeUrl); i.putExtra(RadioPlayerService.EXTRA_UUID, s.stationUuid); i.putExtra(RadioPlayerService.EXTRA_HOMEPAGE, s.homepage); i.putExtra(RadioPlayerService.EXTRA_COUNTRY, s.countryCode);
         try { if (Build.VERSION.SDK_INT >= 26) startForegroundService(i); else startService(i); }
-        catch (Throwable t) { AppLog.e(this, "player-play", t); Toast.makeText(this, "Reprodukciju nije moguće pokrenuti", Toast.LENGTH_LONG).show(); return; }
+        catch (Throwable t) { AppLog.e(this, "player-play", t); Toast.makeText(this, "Reprodukciju nije moguće pokrenuti", Toast.LENGTH_LONG).show(); return false; }
         currentKey = key;
         state.addRecent(key);
         state.setLastStation(key, s.name, s.meta());
@@ -972,6 +978,16 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         playbackStopped = false;
         updatePlaybackControls();
         adapter.setPlayback(currentKey, false);
+        return true;
+    }
+
+    private void applyAdminSourceChange(RadioStation s, String successMessage) {
+        boolean restart = s != null && s.key().equals(currentKey) && playing;
+        if (restart && startStationPlayback(s, false)) {
+            statusText.setText(successMessage + " · ponovno povezujem");
+        } else {
+            statusText.setText(successMessage + (s != null && s.key().equals(currentKey) && !playbackStopped ? " · primijenit će se pri nastavku" : ""));
+        }
     }
 
     private void playAdjacent(int delta) {
@@ -1027,7 +1043,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 s.replaced = !manual.isEmpty();
                 s.activeUrl = !manual.isEmpty() ? manual : (!s.urlResolved.isEmpty() ? s.urlResolved : s.url);
                 adapter.notifyDataSetChanged();
-                statusText.setText(manual.isEmpty() ? "Vraćen automatski odabir izvora" : "Ručni izvor ostaje aktivan");
+                applyAdminSourceChange(s, manual.isEmpty() ? "Vraćen automatski odabir izvora" : "Ručni izvor ostaje aktivan");
             }
         }).setNegativeButton("Zatvori", null).show();
     }
@@ -1057,6 +1073,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                     s.replaced = !state.autoReplacement(s.key()).isEmpty();
                     s.activeUrl = !state.autoReplacement(s.key()).isEmpty() ? state.autoReplacement(s.key()) : (!s.urlResolved.isEmpty() ? s.urlResolved : s.url);
                     adapter.notifyDataSetChanged();
+                    applyAdminSourceChange(s, "Vraćen automatski odabir izvora");
                     dialog.dismiss();
                     return;
                 }
@@ -1096,7 +1113,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                             s.activeUrl = checkedUrl;
                             s.health = "ok";
                             adapter.notifyDataSetChanged();
-                            statusText.setText("Izvor je provjeren i spremljen");
+                            applyAdminSourceChange(s, "Izvor je provjeren i spremljen");
                             dialog.dismiss();
                         });
                     });
