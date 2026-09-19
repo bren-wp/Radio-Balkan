@@ -13,6 +13,18 @@ let lastOffscreenGeneration = -1;
 
 function validStation(station) { return RBNet.validStation(station); }
 
+async function recordRecentKey(rawKey) {
+  const key = String(rawKey || '').trim().slice(0, 512);
+  if (!key) return;
+  const stored = await chrome.storage.local.get(['rbRecent']);
+  const current = Array.isArray(stored.rbRecent) ? stored.rbRecent : [];
+  const next = [key, ...current.filter(value => String(value || '').trim() !== key)]
+    .map(value => String(value || '').trim().slice(0, 512))
+    .filter(Boolean)
+    .slice(0, 50);
+  await chrome.storage.local.set({ rbRecent: next });
+}
+
 function snapshot(extra = {}) {
   return { ...state, sessionId: currentSessionId, ...extra };
 }
@@ -116,6 +128,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (requestToken !== commandGeneration || requestedSession !== currentSessionId) return snapshot({ stale: true });
         acceptOffscreenState(actual, { notify: true });
         if (!actual?.ok || !state.playing) return snapshot({ error: 'Stanica trenutačno nije dostupna' });
+        await recordRecentKey(msg.recentKey);
         return snapshot();
       }
 

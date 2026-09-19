@@ -124,8 +124,10 @@ def main() -> int:
     require(errors, popup_js, "openStationPage(station, row)", "extensions/shared/popup.js")
     require(errors, popup_js, "function selectTop()", "extensions/shared/popup.js")
     require(errors, popup_js, "function selectRecent()", "extensions/shared/popup.js")
-    require(errors, popup_js, "RB.addRecent(RB.key(station))", "extensions/shared/popup.js")
+    require(errors, popup_js, "recentKey: RB.key(station)", "extensions/shared/popup.js")
+    require(errors, popup_js, "recentKeys = await RB.recent()", "extensions/shared/popup.js")
     require(errors, popup_js, "viewMode === 'recent'", "extensions/shared/popup.js")
+    forbid(errors, popup_js, "RB.addRecent(RB.key(station))", "extensions/shared/popup.js")
     require(errors, popup_js, "selectArea(RB.DIASPORA_CODE)", "extensions/shared/popup.js")
     require(errors, popup_js, "selectArea(RB.FOREIGN_CODE)", "extensions/shared/popup.js")
     require(errors, popup_css, ".builtWith", "extensions/shared/popup.css")
@@ -134,6 +136,16 @@ def main() -> int:
     require(errors, popup_css, "@media (max-width: 380px)", "extensions/shared/popup.css")
     require(errors, popup_css, ".player > img { display: none; }", "extensions/shared/popup.css")
     require(errors, popup_css, "grid-template-columns: minmax(0, 1fr) 42px minmax(168px, auto)", "extensions/shared/popup.css")
+
+    chromium_worker = read("extensions/platform/chromium/service_worker.js")
+    firefox_background = read("extensions/platform/firefox/background-firefox.js")
+    for needle in (
+        "async function recordRecentKey(rawKey)",
+        "slice(0, 50)",
+        "await recordRecentKey(msg.recentKey)",
+    ):
+        require(errors, chromium_worker, needle, "Chromium background recent history")
+        require(errors, firefox_background, needle, "Firefox background recent history")
 
     android = read("apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java")
     adapter = read("apps/android/app/src/main/java/net/radiobalkan/app/StationAdapter.java")
@@ -284,6 +296,9 @@ def main() -> int:
     android_repository = read("apps/android/app/src/main/java/net/radiobalkan/app/RadioRepository.java")
     country_flag = read("apps/android/app/src/main/java/net/radiobalkan/app/CountryFlagDrawable.java")
     require(errors, android_repository, '{"BG", "Bugarska"}', "Android RadioRepository")
+    require(errors, android_repository, '"tag=balkan"', "Android RadioRepository")
+    require(errors, android_repository, '"name=radio%20diaspora"', "Android RadioRepository")
+    require(errors, android_repository, '"language=bulgarian"', "Android RadioRepository")
     require(errors, country_flag, 'case "BG":', "Android CountryFlagDrawable")
 
     windows = read("apps/windows/portable/main.go")

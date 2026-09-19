@@ -189,6 +189,7 @@ const runtime = {
     if (message?.type === 'RB_PLAY') {
       playCalls += 1;
       lastPlayedStation = copy(message.station);
+      if (message.recentKey) recentStore = [message.recentKey, ...recentStore.filter(value => value !== message.recentKey)].slice(0, 50);
       return copy(getState);
     }
     throw new Error(`Unexpected runtime message: ${message?.type}`);

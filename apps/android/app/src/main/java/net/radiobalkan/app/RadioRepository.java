@@ -366,17 +366,20 @@ public final class RadioRepository {
 
     private List<RadioStation> fetchDiaspora() throws Exception {
         final String[] queries = {
-                "tag=diaspora", "name=balkan", "name=ex%20yu",
+                "tag=diaspora", "tag=balkan", "tag=exyu",
+                "name=balkan", "name=ex%20yu", "name=radio%20diaspora",
                 "language=croatian", "language=serbian", "language=bosnian",
-                "language=macedonian", "language=albanian", "language=slovenian"
+                "language=macedonian", "language=albanian", "language=slovenian",
+                "language=bulgarian"
         };
         Exception last = null;
         for (String base : apiBases()) {
             if (closed) throw new InterruptedException("zatvaranje");
-            try {
-                List<RadioStation> out = new ArrayList<>();
-                for (String query : queries) {
-                    if (closed || Thread.currentThread().isInterrupted()) throw new InterruptedException("zatvaranje");
+            List<RadioStation> out = new ArrayList<>();
+            Exception baseFailure = null;
+            for (String query : queries) {
+                if (closed || Thread.currentThread().isInterrupted()) throw new InterruptedException("zatvaranje");
+                try {
                     String endpoint = base + "/json/stations/search?" + query
                             + "&hidebroken=true&order=votes&reverse=true&limit=" + DIASPORA_QUERY_LIMIT;
                     JSONArray rows = new JSONArray(get(endpoint, 3 * 1024 * 1024));
@@ -394,18 +397,20 @@ public final class RadioRepository {
                         station.refreshIndexes();
                         out.add(station);
                     }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw e;
+                } catch (Exception e) {
+                    baseFailure = e;
+                    AppLog.e(context, "diaspora-query-partial", e);
                 }
-                out = dedupe(out);
-                out.sort(Comparator.comparingInt((RadioStation station) -> station.votes).reversed()
-                        .thenComparing(station -> RadioStation.fold(station.name)));
-                if (out.size() > MAX_DIASPORA) out = new ArrayList<>(out.subList(0, MAX_DIASPORA));
-                if (!out.isEmpty()) return out;
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw e;
-            } catch (Exception e) {
-                last = e;
             }
+            out = dedupe(out);
+            out.sort(Comparator.comparingInt((RadioStation station) -> station.votes).reversed()
+                    .thenComparing(station -> RadioStation.fold(station.name)));
+            if (out.size() > MAX_DIASPORA) out = new ArrayList<>(out.subList(0, MAX_DIASPORA));
+            if (!out.isEmpty()) return out;
+            if (baseFailure != null) last = baseFailure;
         }
         if (last != null) throw last;
         return Collections.emptyList();

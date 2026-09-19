@@ -666,7 +666,7 @@
       if (result?.error && !playing) playerStatus = 'Nedostupno';
       else playerStatus = playing ? 'Sada svira' : 'Nedostupno';
       if (playing) {
-        recentKeys = await RB.addRecent(RB.key(station)).catch(() => recentKeys);
+        recentKeys = await RB.recent().catch(() => recentKeys);
         if (viewMode === 'recent') apply();
       }
     } catch {
