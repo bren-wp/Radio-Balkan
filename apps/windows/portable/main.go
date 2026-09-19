@@ -2124,6 +2124,14 @@ func popularStations(limit int) []int {
 }
 
 func drawStations(hdc syscall.Handle, cr RECT) {
+	app.mu.RLock()
+	detailOpen := strings.TrimSpace(app.detailKey) != ""
+	app.mu.RUnlock()
+	if detailOpen {
+		drawStationDetailPage(hdc, cr)
+		return
+	}
+
 	mainL := sidebarWidth + mainPad
 	mainR := cr.Right - mainPad
 	bottom := cr.Bottom - playerHeight - 16
@@ -2491,6 +2499,216 @@ func drawPopularCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStati
 	key := stationKey(s)
 	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitStationDetails, Index: idx, Value: key})
 	app.hits = append(app.hits, HitRegion{R: RECT{r - 44, b - 46, r - 8, b - 10}, Kind: hitPlay, Index: idx, Value: key})
+}
+
+func firstPublicTag(tags string) string {
+	for _, raw := range strings.Split(tags, ",") {
+		v := strings.TrimSpace(raw)
+		if v == "" || strings.EqualFold(v, "dijaspora") {
+			continue
+		}
+		if len([]rune(v)) >= 2 && len([]rune(v)) <= 32 {
+			return v
+		}
+	}
+	return ""
+}
+
+func stationPublicDescription(s RadioStation) string {
+	name := strings.TrimSpace(s.Name)
+	if name == "" {
+		name = "Ova radio stanica"
+	}
+	area := stationAreaLabel(s)
+	if strings.TrimSpace(area) == "" {
+		area = "Radio Balkan kataloga"
+	}
+	description := name + " je radio stanica iz područja " + area + ". "
+	if genre := firstPublicTag(s.Tags); genre != "" {
+		description += "Istaknuta kategorija: " + genre + ". "
+	}
+	if language := strings.TrimSpace(s.Language); language != "" {
+		description += "Jezik programa: " + language + ". "
+	}
+	description += "Slušanje koristi sigurni Radio Balkan player s ograničenim timeoutom te fallback i recovery postupkom kada je dostupan."
+	return description
+}
+
+func stationPublicFacts(s RadioStation) string {
+	facts := make([]string, 0, 4)
+	if state := strings.TrimSpace(s.State); state != "" && !strings.EqualFold(state, strings.TrimSpace(s.Country)) {
+		facts = append(facts, state)
+	}
+	if codec := strings.TrimSpace(s.Codec); codec != "" {
+		facts = append(facts, strings.ToUpper(codec))
+	}
+	if s.Bitrate > 0 {
+		facts = append(facts, fmt.Sprintf("%d kbps", s.Bitrate))
+	}
+	tags := make([]string, 0, 5)
+	for _, raw := range strings.Split(s.Tags, ",") {
+		tag := strings.TrimSpace(raw)
+		if tag == "" || strings.EqualFold(tag, "dijaspora") {
+			continue
+		}
+		duplicate := false
+		for _, existing := range tags {
+			if strings.EqualFold(existing, tag) {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			tags = append(tags, tag)
+		}
+		if len(tags) >= 5 {
+			break
+		}
+	}
+	if len(tags) > 0 {
+		facts = append(facts, "Kategorije: "+strings.Join(tags, ", "))
+	}
+	if len(facts) == 0 {
+		return "Radio uživo"
+	}
+	return strings.Join(facts, " · ")
+}
+
+func similarStationIndices(source RadioStation, sourceIdx, limit int) []int {
+	if limit <= 0 {
+		return nil
+	}
+	genre := strings.ToLower(firstPublicTag(source.Tags))
+	sourceCountry := stationComparisonCountry(source)
+	type candidate struct {
+		idx, score, votes int
+	}
+	app.mu.RLock()
+	items := make([]candidate, 0, len(app.stations))
+	for idx, station := range app.stations {
+		if idx == sourceIdx || stationKey(station) == stationKey(source) {
+			continue
+		}
+		score := 0
+		if sourceCountry != "" && stationComparisonCountry(station) == sourceCountry {
+			score += 6
+		}
+		if genre != "" && strings.Contains(strings.ToLower(station.Tags), genre) {
+			score += 4
+		}
+		if score >= 4 {
+			items = append(items, candidate{idx: idx, score: score, votes: station.Votes})
+		}
+	}
+	app.mu.RUnlock()
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].score != items[j].score {
+			return items[i].score > items[j].score
+		}
+		return items[i].votes > items[j].votes
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	out := make([]int, 0, len(items))
+	for _, item := range items {
+		out = append(out, item.idx)
+	}
+	return out
+}
+
+func drawStationDetailPage(hdc syscall.Handle, cr RECT) {
+	mainL := sidebarWidth + mainPad
+	mainR := cr.Right - mainPad
+	bottom := cr.Bottom - playerHeight - 14
+
+	app.mu.RLock()
+	idx := findStationIndexLocked(app.detailKey, -1)
+	if idx < 0 || idx >= len(app.stations) {
+		app.mu.RUnlock()
+		selectFont(hdc, app.hFontBold)
+		text(hdc, "Stanica više nije dostupna u katalogu.", mainL, 150, mainR, bottom, rgb(190, 198, 207), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+		app.hits = append(app.hits, HitRegion{R: RECT{mainL, 92, mainL + 150, 128}, Kind: hitStationBack, Index: -1})
+		return
+	}
+	station := app.stations[idx]
+	app.mu.RUnlock()
+
+	key := stationKey(station)
+	app.stateMu.RLock()
+	favorite := app.state.Favorites[key]
+	app.stateMu.RUnlock()
+
+	drawRounded(hdc, mainL, 92, mainL+148, 128, 10, color(17, 24, 33), color(52, 65, 79))
+	selectFont(hdc, app.hFontSmall)
+	text(hdc, "←  Sve stanice", mainL+10, 92, mainL+138, 128, rgb(221, 226, 232), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+	app.hits = append(app.hits, HitRegion{R: RECT{mainL, 92, mainL + 148, 128}, Kind: hitStationBack, Index: -1})
+
+	heroTop := int32(142)
+	heroBottom := int32(318)
+	drawRounded(hdc, mainL, heroTop, mainR, heroBottom, 18, color(18, 23, 31), color(88, 59, 37))
+	drawStationArtwork(hdc, mainL+20, heroTop+20, mainL+144, heroBottom-20, station, 0)
+
+	copyL := mainL + 166
+	selectFont(hdc, app.hFontSmall)
+	text(hdc, "●  UŽIVO", copyL, heroTop+19, mainR-220, heroTop+43, rgb(255, 177, 55), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+	selectFont(hdc, app.hFontTitle)
+	text(hdc, trimName(station.Name), copyL, heroTop+46, mainR-210, heroTop+88, rgb(247, 248, 250), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+	selectFont(hdc, app.hFontSmall)
+	meta := stationAreaLabel(station)
+	if genre := firstPublicTag(station.Tags); genre != "" {
+		meta += " · " + genre
+	}
+	text(hdc, meta, copyL, heroTop+91, mainR-220, heroTop+121, rgb(183, 192, 203), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+
+	playL := mainR - 198
+	drawRounded(hdc, playL, heroTop+58, mainR-20, heroTop+106, 13, color(255, 177, 55), color(255, 204, 116))
+	selectFont(hdc, app.hFontBold)
+	text(hdc, "▶  Slušaj uživo", playL+8, heroTop+58, mainR-28, heroTop+106, rgb(29, 20, 11), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	app.hits = append(app.hits, HitRegion{R: RECT{playL, heroTop + 58, mainR - 20, heroTop + 106}, Kind: hitPlay, Index: idx, Value: key})
+
+	favLabel := "♡  Dodaj u omiljene"
+	if favorite {
+		favLabel = "♥  Omiljena"
+	}
+	drawRounded(hdc, playL, heroTop+114, mainR-20, heroTop+154, 11, color(20, 27, 36), color(68, 58, 48))
+	selectFont(hdc, app.hFontSmall)
+	text(hdc, favLabel, playL+8, heroTop+114, mainR-28, heroTop+154, rgb(223, 194, 154), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	app.hits = append(app.hits, HitRegion{R: RECT{playL, heroTop + 114, mainR - 20, heroTop + 154}, Kind: hitFavorite, Index: idx, Value: key})
+
+	contentTop := int32(336)
+	drawRounded(hdc, mainL, contentTop, mainR, contentTop+158, 15, color(15, 22, 31), color(45, 56, 69))
+	selectFont(hdc, app.hFontBold)
+	text(hdc, "O radio stanici", mainL+18, contentTop+12, mainR-18, contentTop+40, rgb(246, 248, 250), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+	selectFont(hdc, app.hFontSmall)
+	text(hdc, stationPublicDescription(station), mainL+18, contentTop+45, mainR-18, contentTop+112, rgb(215, 221, 229), DT_LEFT|DT_WORDBREAK)
+	drawRounded(hdc, mainL+18, contentTop+119, mainR-18, contentTop+148, 8, color(12, 18, 25), color(43, 54, 67))
+	text(hdc, stationPublicFacts(station), mainL+29, contentTop+119, mainR-29, contentTop+148, rgb(154, 166, 179), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+
+	similarTop := contentTop + 176
+	if similarTop+98 < bottom {
+		selectFont(hdc, app.hFontBold)
+		text(hdc, "Slične stanice", mainL, similarTop, mainR, similarTop+28, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+		ids := similarStationIndices(station, idx, 4)
+		if len(ids) == 0 {
+			selectFont(hdc, app.hFontSmall)
+			text(hdc, "Nema dovoljno sličnih stanica za ovaj prikaz.", mainL, similarTop+32, mainR, similarTop+78, rgb(132, 143, 155), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+			return
+		}
+		gap := int32(10)
+		cardW := (mainR - mainL - gap*int32(len(ids)-1)) / int32(len(ids))
+		for i, candidateIdx := range ids {
+			app.mu.RLock()
+			if candidateIdx < 0 || candidateIdx >= len(app.stations) {
+				app.mu.RUnlock()
+				continue
+			}
+			candidate := app.stations[candidateIdx]
+			app.mu.RUnlock()
+			l := mainL + int32(i)*(cardW+gap)
+			drawRegionCard(hdc, l, similarTop+34, l+cardW, similarTop+96, candidateIdx, candidate, i)
+		}
+	}
 }
 
 func firstTag(tags string) string {
