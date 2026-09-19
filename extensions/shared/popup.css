@@ -39,7 +39,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .hero p { max-width: 252px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #b8c0ca; font-size: 11px; }
 .primaryButton { flex: 0 0 auto; min-width: 104px; height: 44px; padding: 0 14px; border: 1px solid #ffca72; border-radius: 13px; background: linear-gradient(180deg, var(--accent-strong), var(--accent)); color: #1d140b; font-weight: 800; cursor: pointer; box-shadow: 0 8px 20px #ff9b2830; }
 .primaryButton:hover:not(:disabled) { filter: brightness(1.04); }
-.quickAreas { display: grid; grid-template-columns: .8fr 1.25fr 1fr; gap: 7px; padding: 0 12px 8px; }
+.browsePage { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; }
+.quickAreas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 0 12px 8px; }
 .quickAreaButton { height: 34px; border: 1px solid #33404f; border-radius: 11px; background: #101720; color: #cbd2dc; cursor: pointer; font-size: 11px; font-weight: 700; }
 .quickAreaButton:hover, .quickAreaButton[aria-pressed="true"] { border-color: #9b6630; background: #221b16; color: #ffba55; }
 .tools { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 7px 8px; padding: 0 12px; }
@@ -84,18 +85,34 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .builtWith a { color: #d6a461; font-weight: 800; text-decoration: none; }
 .builtWith a:hover, .builtWith a:focus-visible { color: #ffc15b; text-decoration: underline; outline: none; }
 
-.stationPanel { position: absolute; inset: 0; z-index: 19; display: grid; place-items: center; padding: 16px; background: #05080dd6; backdrop-filter: blur(6px); }
-.stationDetailCard { width: 100%; max-width: 390px; max-height: 548px; overflow: auto; border: 1px solid #6d4a2a; border-radius: 19px; background: linear-gradient(180deg, #171d26, #0c1219); box-shadow: 0 26px 64px #000c; }
-.stationDetailHeader { min-height: 88px; display: grid; grid-template-columns: 64px minmax(0, 1fr) 42px; align-items: center; gap: 12px; padding: 12px; border-bottom: 1px solid #293442; }
-.stationDetailHeader img { width: 64px; height: 64px; border-radius: 14px; object-fit: cover; background: #1b232d; }
-.stationDetailHeading { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.stationDetailHeading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; }
-.stationDetailHeading span { color: #ffb44c; font-size: 11px; line-height: 1.35; }
-.stationDetailBody { padding: 15px 16px 17px; }
-.stationDetailBody p { margin: 0; color: #d7dde5; font-size: 12.5px; line-height: 1.58; }
-.stationFacts { margin-top: 13px; padding: 11px 12px; border: 1px solid #2d3947; border-radius: 12px; background: #101720; color: #99a5b2; font-size: 11px; line-height: 1.55; }
-.stationDetailActions { display: grid; grid-template-columns: 1fr; gap: 9px; margin-top: 15px; }
-.stationDetailActions .primaryButton, .stationDetailActions .textButton { width: 100%; min-height: 42px; }
+.stationPage { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 10px 12px 122px; scrollbar-width: thin; scrollbar-color: #513b2a transparent; }
+.stationBreadcrumb { min-height: 34px; display: flex; align-items: center; gap: 7px; color: #798594; font-size: 10.5px; }
+.backButton { min-height: 32px; padding: 0 9px; border: 1px solid #33404f; border-radius: 9px; background: #101720; color: #d7dde5; cursor: pointer; font-size: 11px; font-weight: 700; }
+.backButton:hover { border-color: #8c5b2c; color: #ffbb58; }
+.stationPageHero { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 14px; margin-top: 7px; padding: 16px; border: 1px solid #513c2d; border-radius: 18px; background: linear-gradient(135deg, #29180f, #141a22 58%, #0e141b); box-shadow: 0 14px 32px #0005; }
+.stationPageHero > img { width: 88px; height: 88px; border-radius: 16px; object-fit: cover; background: #1b232d; box-shadow: 0 9px 24px #0007; }
+.stationPageHeading { min-width: 0; }
+.stationPageHeading h1 { margin: 7px 0 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 21px; line-height: 1.13; }
+.stationPageHeading p { margin: 0; color: #b6bfca; font-size: 11.5px; line-height: 1.45; }
+.stationPageActions { display: grid; grid-template-columns: 1.35fr 1fr; gap: 8px; margin-top: 10px; }
+.stationPageActions .primaryButton, .stationPageActions .textButton { width: 100%; min-height: 44px; }
+.stationFavoriteButton { border-color: #4b3c30; background: #12171e; color: #e2c49b; }
+.stationFavoriteButton[aria-pressed="true"] { border-color: #9f6630; background: #241b14; color: #ffc15b; }
+.stationPageContent { margin-top: 11px; padding: 15px 16px 17px; border: 1px solid #293442; border-radius: 16px; background: #0f161f; }
+.stationPageContent h2 { margin: 0 0 8px; font-size: 14px; }
+.stationPageContent > p { margin: 0; color: #d4dbe3; font-size: 12.5px; line-height: 1.62; }
+.similarSection { margin-top: 17px; }
+.sectionHeading { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.sectionHeading h2 { margin: 0; }
+.sectionHeading span { color: #788493; font-size: 9.5px; }
+.similarList { display: grid; gap: 7px; }
+.similarStation { width: 100%; min-height: 52px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #2b3744; border-radius: 11px; background: #111922; color: #edf0f4; text-align: left; cursor: pointer; }
+.similarStation:hover { border-color: #76502d; background: #171d25; }
+.similarStation strong, .similarStation span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.similarStation strong { font-size: 12px; }
+.similarStation span { margin-top: 3px; color: #909ba8; font-size: 9.5px; }
+.similarStation b { color: #ffb64f; font-size: 15px; }
+
 .adminPanel { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: #05080dcc; backdrop-filter: blur(5px); }
 .adminCard { width: 100%; max-width: 388px; max-height: 560px; overflow: auto; border: 1px solid #6f4a29; border-radius: 18px; background: linear-gradient(180deg, #171b22, #0d1219); box-shadow: 0 24px 60px #000c; }
 .adminHeader { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 16px; border-bottom: 1px solid #27323f; }
@@ -137,9 +154,11 @@ button:disabled { cursor: default; opacity: .46; box-shadow: none; }
   .hero p { max-width: 205px; }
   .primaryButton { min-width: 92px; padding: 0 10px; }
   .brandCopy span { font-size: 9.5px; }
-  .quickAreas { grid-template-columns: .7fr 1.2fr .9fr; gap: 5px; }
-  .quickAreaButton { padding: 0 5px; font-size: 10px; }
-  .stationDetailActions { grid-template-columns: 1fr; }
+  .quickAreas { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+  .quickAreaButton { padding: 0 4px; font-size: 9.5px; }
+  .stationPageActions { grid-template-columns: 1fr; }
+  .stationPageHero { grid-template-columns: 72px minmax(0, 1fr); padding: 13px; }
+  .stationPageHero > img { width: 72px; height: 72px; }
   .player { grid-template-columns: minmax(0, 1fr) 42px minmax(168px, auto); }
   .player > img { display: none; }
 }
