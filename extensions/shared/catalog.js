@@ -150,7 +150,7 @@ const RB = (() => {
       primary.countrycode = DIASPORA_CODE;
       primary.sourcecountrycode = a.sourcecountrycode || b.sourcecountrycode || '';
       if (!String(primary.tags || '').toLowerCase().includes('dijaspora')) {
-        primary.tags = primary.tags ? `dijaspora,${primary.tags}` : 'dijaspora';
+        primary.tags = primary.tags ? `${primary.tags},dijaspora` : 'dijaspora';
       }
     }
     return normalize(primary);
@@ -293,7 +293,7 @@ const RB = (() => {
               if (!station.name || (!safeHttp(station.url) && !safeHttp(station.url_resolved))) continue;
               station.sourcecountrycode = sourceCode;
               station.countrycode = DIASPORA_CODE;
-              station.tags = station.tags ? `dijaspora,${station.tags}` : 'dijaspora';
+              station.tags = station.tags ? `${station.tags},dijaspora` : 'dijaspora';
               if (!station.country) station.country = 'Dijaspora';
               mapped.push(station);
             }
