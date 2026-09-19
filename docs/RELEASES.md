@@ -1,5 +1,22 @@
 # Izdavanja
 
+## 0.0.27
+
+Izdanje 0.0.27 uvodi lokalni administratorski sloj bez promjene osnovnog modela korištenja: običan korisnik i dalje ne treba račun za slušanje radija. Nisu dodani analytics, telemetry, oglasni SDK, remote executable code, novi account backend niti šire browser dozvole.
+
+- Windows, Android i browser popup imaju lokalni Admin login i eksplicitni logout; adminsko stanje nije trajno i nakon restartanja/zatvaranja klijenta ponovno je potrebna prijava
+- source URL, homepage, ručne source-management kontrole, administratorski health detalji i maintenance prikazi skriveni su običnom korisniku i privilegirane akcije imaju logic-level session guard
+- Windows i Android health/check hitovi više ne ostaju aktivni običnom korisniku; Android station adapter običnom korisniku prikazuje popularnost bez internog health statusa
+- lokalni verifier na sva tri runtimea koristi PBKDF2-HMAC-SHA256 s 120.000 iteracija, 128-bitnim saltom i 256-bitnim izvedenim ključem; produkcijski source ne sadrži plaintext administratorsku lozinku
+- pet uzastopnih neuspjelih prijava aktivira 30-sekundni in-memory lockout; administratorska lozinka je maskirana, čisti se iz inputa i ne zapisuje se u log
+- Android admin KDF radi izvan UI threada, login gumb ima disabled/busy stanje i podržava IME/Enter submit
+- browser admin login ima single-flight submit, `aria-busy`, Enter submit, vidljivi `ADMIN` badge i regression test koji potvrđuje da source akcija nakon logouta nema učinka
+- Android donja navigacija jasno prikazuje `Admin` dok je administratorska sesija aktivna te se odmah vraća na obični `Više` nakon logouta
+- postojeći v0.0.26 current-station Previous/Next i favorites-only hardening ostaje aktivan
+- development gate prije version bumpa prošao je `versions`, `browser`, `android` i `windows`, uključujući Android release unit/lint/build i stvarni Windows runtime soak + clean-worktree
+
+Lokalni Admin model nije server-side identitet niti sigurnosna granica protiv osobe koja kontrolira vlastiti executable, source, debugger ili lokalni storage. Njegova svrha je odvojiti obični UI od maintenance funkcija i otežati neovlašteno korištenje u normalnom runtimeu; ta granica je detaljno dokumentirana u `docs/SECURITY.md`.
+
 ## 0.0.26
 
 Izdanje 0.0.26 fokusirano je na konzistentno stanje adjacent transporta i browser Omiljenih nakon v0.0.25. Nisu dodane nove dozvole, analytics, telemetry, korisnički račun niti novi backend.

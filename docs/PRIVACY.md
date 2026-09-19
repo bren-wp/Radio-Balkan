@@ -1,13 +1,14 @@
 # Privatnost
 
-Radio Balkan je projektiran bez korisničkog računa, behavioral trackinga, oglasnih SDK-ova i telemetry sustava. Aplikacije kontaktiraju samo izvore potrebne za katalog, logotipe, provjeru dostupnosti i reprodukciju javnih radio streamova.
+Radio Balkan je projektiran bez obveznog korisničkog računa za slušanje, behavioral trackinga, oglasnih SDK-ova i telemetry sustava. Aplikacije kontaktiraju samo izvore potrebne za katalog, logotipe, provjeru dostupnosti i reprodukciju javnih radio streamova.
 
 ## Lokalno spremljeni podaci
 
 - favoriti, nedavne stanice, odabrani izvori i postavke playera ostaju lokalno na uređaju
 - browser ekstenzije lokalno spremaju katalog/cache te UI preference poput države, žanra i filtra Omiljenih
 - Windows i Android mogu voditi ograničene lokalne dijagnostičke logove radi stabilnosti i otkrivanja grešaka
-- projekt ne zahtijeva korisničke lozinke, račun, profil ni cloud sinkronizaciju
+- običan korisnik ne treba korisničku lozinku, račun, profil ni cloud sinkronizaciju
+- administratorska prijava iz 0.0.27 provjerava se isključivo lokalno; Admin session i lockout state nisu cloud-sinkronizirani, a plaintext lozinka se ne sprema u aplikacijski state
 
 Lokalni cache i preference služe samo funkcionalnosti i performansama aplikacije. Ne postoji kod koji ih šalje Brendigu ili oglašivačima.
 
