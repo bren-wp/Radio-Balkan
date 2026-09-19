@@ -280,6 +280,8 @@ const (
 	hitGenreChoice
 	hitAbout
 	hitAdmin
+	hitStationDetails
+	hitBrendigo
 )
 
 type HitRegion struct {
