@@ -180,6 +180,9 @@ async function main() {
   assert.ok(RB.COUNTRIES.some(([code, name]) => code === 'DIA' && name === 'Dijaspora'));
   assert.ok(RB.COUNTRIES.some(([code, name]) => code === 'BG' && name === 'Bugarska'));
 
+  const defaultPreferences = JSON.parse(JSON.stringify(await RB.uiPreferences()));
+  assert.deepEqual(defaultPreferences, { country: 'HR', genre: '', favoritesOnly: false }, 'first-run browser preferences must default to Croatia');
+
   const catalog = await RB.load(true);
   const foreign = catalog.filter(item => item.countrycode === RB.FOREIGN_CODE);
   const diaspora = catalog.filter(item => item.countrycode === RB.DIASPORA_CODE);
@@ -213,6 +216,10 @@ async function main() {
   await RB.setUiPreferences({ country: ' hr ', genre: 'POP', favoritesOnly: 1 });
   const savedPreferences = JSON.parse(JSON.stringify(await RB.uiPreferences()));
   assert.deepEqual(savedPreferences, { country: 'HR', genre: 'pop', favoritesOnly: true }, 'UI preferences must be sanitized and persisted');
+
+  await RB.setUiPreferences({ country: '', genre: '', favoritesOnly: false });
+  const savedAllCountries = JSON.parse(JSON.stringify(await RB.uiPreferences()));
+  assert.deepEqual(savedAllCountries, { country: '', genre: '', favoritesOnly: false }, 'explicit all-country selection must survive after first run');
 
   storage.rbRecent = [' station-a ', 'station-b', 'station-a', '', ' station-b '];
   const savedRecent = JSON.parse(JSON.stringify(await RB.recent()));

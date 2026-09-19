@@ -2,7 +2,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const ext = RB.ext;
-  const PAGE = 48;
+  const PAGE = 72;
   const GENRE_LABELS = new Map([
     ['domaca', 'Domaća / regionalna'], ['pop', 'Pop & Rock'], ['folk', 'Narodna / Folk'],
     ['electronic', 'Elektronička'], ['jazz', 'Jazz'], ['classical', 'Klasična'],
@@ -273,13 +273,18 @@
 
   function updateQuickNavigation() {
     const value = String(country.value || '').toUpperCase();
-    setQuickPressed('quickAll', viewMode === 'all' && !value && !genre?.value && !favoritesOnly);
+    setQuickPressed('quickAll', viewMode === 'all' && value === 'HR' && !genre?.value && !favoritesOnly);
     setQuickPressed('quickTop', viewMode === 'top');
     setQuickPressed('quickRecent', viewMode === 'recent');
     setQuickPressed('quickDiaspora', value === RB.DIASPORA_CODE);
     setQuickPressed('quickForeign', value === RB.FOREIGN_CODE);
     setQuickPressed('quickFolk', viewMode === 'all' && !value && genre?.value === 'folk' && !favoritesOnly);
     setQuickPressed('quickPop', viewMode === 'all' && !value && genre?.value === 'pop' && !favoritesOnly);
+  }
+
+  function areaLabel(code) {
+    code = String(code || '').toUpperCase();
+    return RB.COUNTRIES.find(([value]) => value === code)?.[1] || '';
   }
 
   function updateBrowseIntro() {
@@ -307,7 +312,7 @@
       title.textContent = GENRE_LABELS.get(genreValue) || 'Žanr';
       hint.textContent = area ? 'Filtrirano po području i glazbenoj kategoriji' : 'Radio stanice prema odabranoj glazbenoj kategoriji';
     } else if (area) {
-      title.textContent = country.options?.[country.selectedIndex]?.textContent?.split(' · ')[0] || 'Radio stanice';
+      title.textContent = areaLabel(area) || 'Radio stanice';
       hint.textContent = 'Provjerene postaje iz odabranog područja';
     } else {
       title.textContent = 'Sve stanice';
@@ -659,7 +664,7 @@
     list.replaceChildren(fragment);
     updateBrowseIntro();
     const count = Math.min(renderLimit, visible.length);
-    const activeArea = country.value ? country.options?.[country.selectedIndex]?.textContent?.split(' · ')[0] : '';
+    const activeArea = areaLabel(country.value);
     const activeGenre = genre?.value ? GENRE_LABELS.get(genre.value) : '';
     const activeView = viewMode === 'top' ? 'Top 50' : viewMode === 'recent' ? 'Nedavno slušane' : '';
     const context = [activeView, activeArea, activeGenre].filter(Boolean).join(' · ');
@@ -906,7 +911,7 @@
     closeStationPage();
   });
 
-  $('quickAll').addEventListener('click', () => selectArea(''));
+  $('quickAll').addEventListener('click', () => selectArea('HR'));
   $('quickTop').addEventListener('click', selectTop);
   $('quickRecent').addEventListener('click', selectRecent);
   $('quickCountries').addEventListener('click', () => country.focus());
@@ -1076,7 +1081,6 @@
       fillCountries();
       const preferences = await preferencesPromise;
       if (!uiPreferencesReady) restoreUiPreferences(preferences);
-      if (!current && all.length) current = all[0];
       apply();
       const readToken = commandGeneration;
       const playerState = await ext.runtime.sendMessage({ type: 'RB_GET_STATE' }).catch(() => null);

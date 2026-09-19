@@ -127,6 +127,10 @@ def main() -> int:
     require(errors, popup_js, "function closeStationPage()", "extensions/shared/popup.js")
     require(errors, popup_js, "if (event.target.closest('.stationPlay'))", "extensions/shared/popup.js")
     require(errors, popup_js, "openStationPage(station, row)", "extensions/shared/popup.js")
+    require(errors, popup_js, "const PAGE = 72;", "extensions/shared/popup.js")
+    require(errors, popup_js, "function areaLabel(code)", "extensions/shared/popup.js")
+    require(errors, popup_js, "selectArea('HR')", "extensions/shared/popup.js")
+    forbid(errors, popup_js, "if (!current && all.length) current = all[0];", "extensions/shared/popup.js")
     require(errors, popup_js, "function selectTop()", "extensions/shared/popup.js")
     require(errors, popup_js, "function selectRecent()", "extensions/shared/popup.js")
     require(errors, popup_js, "recentKey: RB.key(station)", "extensions/shared/popup.js")
@@ -158,6 +162,10 @@ def main() -> int:
     ):
         require(errors, chromium_worker, needle, "Chromium background recent history")
         require(errors, firefox_background, needle, "Firefox background recent history")
+
+    state_store = read("apps/android/app/src/main/java/net/radiobalkan/app/StateStore.java")
+    require(errors, state_store, 'DEFAULT_COUNTRY = "HR"', "Android StateStore")
+    require(errors, state_store, 'prefs.getString("country", DEFAULT_COUNTRY)', "Android StateStore")
 
     android = read("apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java")
     adapter = read("apps/android/app/src/main/java/net/radiobalkan/app/StationAdapter.java")
@@ -202,6 +210,8 @@ def main() -> int:
         'Button sort = chip("Filtriraj ⌄", false)',
         "new RippleDrawable(",
         'navItem("⌂", "Početna", "all")',
+        'tab = "all"; country = "HR"; genre = "";',
+        'dp(198)',
         'navItem("★", "Top", "top")',
         'navItem("◷", "Nedavno", "recent")',
         'navItem("♡", "Omiljene", "favorites")',
@@ -336,6 +346,10 @@ def main() -> int:
         require(errors, windows_catalog, needle, "Windows supplemental catalog")
 
     windows = read("apps/windows/portable/main.go")
+    require(errors, windows, 'st.CountryCode = "HR"', "Windows first-run country default")
+    require(errors, windows, 'country == "HR"', "Windows home navigation")
+    require(errors, windows, 'homeColumns := 6', "Windows responsive home cards")
+    require(errors, windows, 'homeColumns = 8', "Windows responsive home cards")
     for needle in (
         "case WM_GETMINMAXINFO:",
         "info.PtMinTrackSize.X = 1100",

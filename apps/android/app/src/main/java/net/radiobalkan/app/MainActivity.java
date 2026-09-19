@@ -146,7 +146,9 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             tab = "all";
             state.setTab("all");
         }
-        navSelection = "all".equals(tab) && (!country.isEmpty() || !genre.isEmpty()) ? "filter" : navSelectionForTab(tab);
+        navSelection = "all".equals(tab)
+                ? (("HR".equalsIgnoreCase(country) && genre.isEmpty()) ? "all" : ((!country.isEmpty() || !genre.isEmpty()) ? "filter" : "all"))
+                : navSelectionForTab(tab);
         images = new ImageLoader();
         repository = new RadioRepository(this);
         buildUi();
@@ -172,7 +174,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.addView(buildHero(), marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(224), 0, 3, 0, 12));
+        header.addView(buildHero(), marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(198), 0, 3, 0, 10));
         header.addView(buildQuickAreas(), marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48), 0, 0, 0, 8));
 
         LinearLayout stationsHeader = new LinearLayout(this);
@@ -517,7 +519,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             if ("more".equals(action)) { showAppMenu(); return; }
             selectBottomNav(action);
             if ("all".equals(action)) {
-                tab = "all"; country = ""; genre = "";
+                tab = "all"; country = "HR"; genre = "";
                 state.setTab(tab); state.setCountry(country); state.setGenre(genre);
                 applyFilterAsync(); list.smoothScrollToPosition(0);
             } else if ("top".equals(action)) {

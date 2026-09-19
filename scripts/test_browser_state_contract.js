@@ -262,7 +262,7 @@ const context = {
       return copy(favoriteStore);
     },
     async uiPreferences() {
-      return {};
+      return { country: 'HR', genre: '', favoritesOnly: false };
     },
     async setUiPreferences() {
       return {};
@@ -302,7 +302,10 @@ async function main() {
   assert.equal(elements.playerDetails.disabled, false, 'current-station details control must be enabled when a station is active');
   assert.equal(elements.adminControls.hidden, true, 'advanced source controls must stay hidden before admin login');
   assert.equal(elements.adminStatusBadge.hidden, true, 'admin status badge must stay hidden before authentication');
-  assert.equal(elements.quickAll.attributes['aria-pressed'], 'true', 'all-stations navigation must be selected initially');
+  assert.equal(elements.country.value, 'HR', 'first-run browser home must default to Croatia');
+  assert.equal(elements.quickAll.attributes['aria-pressed'], 'true', 'Croatia home navigation must be selected initially');
+  assert.equal(elements.browseTitle.textContent, 'Hrvatska', 'default browse heading must identify Croatia');
+  assert.match(elements.status.textContent, /^59 od 59 prikazano · Hrvatska/, 'Croatia home must render the complete fixture without a 48-card first-page cap');
 
   const playCallsBeforePlayerDetails = playCalls;
   elements.playerDetails.dispatch('click', { currentTarget: elements.playerDetails });
@@ -356,7 +359,8 @@ async function main() {
   assert.equal(elements.browseTitle.textContent, 'Nedavno slušane', 'recent navigation must expose a distinct home heading');
   assert.match(elements.status.textContent, /^1 od 1 prikazano · Nedavno slušane/, 'recent view must contain successfully played stations in newest-first history');
   elements.quickAll.dispatch('click');
-  assert.equal(elements.browseTitle.textContent, 'Sve stanice', 'all navigation must restore the default browse heading');
+  assert.equal(elements.country.value, 'HR', 'home navigation must restore Croatia');
+  assert.equal(elements.browseTitle.textContent, 'Hrvatska', 'home navigation must restore the Croatia browse heading');
 
   elements.quickTop.dispatch('click');
   assert.equal(elements.quickTop.attributes['aria-pressed'], 'true', 'Top must be a distinct navigation state');
