@@ -46,7 +46,6 @@ def main() -> int:
 
     popup_html = read("extensions/shared/popup.html")
     popup_js = read("extensions/shared/popup.js")
-    enhancements_js = read("extensions/shared/enhancements.js")
     popup_css = read("extensions/shared/popup.css")
 
     for needle in (
@@ -62,8 +61,13 @@ def main() -> int:
         'id="adminPassword" type="password"',
         'id="adminSource"',
         'id="clearFilters"',
-        'id="stationPanel"',
-        'id="stationDetailPlay"',
+        'id="stationPage"',
+        'id="stationBack"',
+        'id="stationPagePlay"',
+        'id="stationSimilarList"',
+        'id="quickTop"',
+        'id="quickCountries"',
+        'id="quickGenres"',
         'id="quickDiaspora"',
         'href="https://brendigo.com/"',
         'Built with',
@@ -110,13 +114,15 @@ def main() -> int:
     require(errors, popup_css, "width: 44px", "extensions/shared/popup.css")
     require(errors, popup_css, ".station:focus-visible", "extensions/shared/popup.css")
     require(errors, popup_css, "button:active:not(:disabled)", "extensions/shared/popup.css")
-    require(errors, enhancements_js, "event.stopImmediatePropagation()", "extensions/shared/enhancements.js")
-    require(errors, enhancements_js, "openDetails(row)", "extensions/shared/enhancements.js")
-    require(errors, enhancements_js, "play.click()", "extensions/shared/enhancements.js")
-    require(errors, enhancements_js, "selectArea('DIA')", "extensions/shared/enhancements.js")
-    require(errors, enhancements_js, "selectArea('INT')", "extensions/shared/enhancements.js")
+    require(errors, popup_js, "function openStationPage(station, returnFocus = null)", "extensions/shared/popup.js")
+    require(errors, popup_js, "function closeStationPage()", "extensions/shared/popup.js")
+    require(errors, popup_js, "if (event.target.closest('.stationPlay'))", "extensions/shared/popup.js")
+    require(errors, popup_js, "openStationPage(station, row)", "extensions/shared/popup.js")
+    require(errors, popup_js, "function selectTop()", "extensions/shared/popup.js")
+    require(errors, popup_js, "selectArea(RB.DIASPORA_CODE)", "extensions/shared/popup.js")
+    require(errors, popup_js, "selectArea(RB.FOREIGN_CODE)", "extensions/shared/popup.js")
     require(errors, popup_css, ".builtWith", "extensions/shared/popup.css")
-    require(errors, popup_css, ".stationPanel", "extensions/shared/popup.css")
+    require(errors, popup_css, ".stationPage", "extensions/shared/popup.css")
     require(errors, popup_css, ".emptyAction", "extensions/shared/popup.css")
     require(errors, popup_css, "@media (max-width: 380px)", "extensions/shared/popup.css")
     require(errors, popup_css, ".player > img { display: none; }", "extensions/shared/popup.css")
@@ -275,7 +281,7 @@ def main() -> int:
         forbid(errors, windows, needle, "Windows UI")
 
     # User-facing production surfaces must not accidentally expose common development placeholders.
-    user_surfaces = "\n".join((popup_html, popup_js, enhancements_js, android, adapter))
+    user_surfaces = "\n".join((popup_html, popup_js, android, adapter))
     for pattern in (r"\bTODO\b", r"\bFIXME\b", r"developer mode", r"debug mode", r"test mode"):
         if re.search(pattern, user_surfaces, re.IGNORECASE):
             errors.append(f"Production UI: developer placeholder matched {pattern!r}")
