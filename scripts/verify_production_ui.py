@@ -191,6 +191,7 @@ def main() -> int:
         "transportAvailability(currentIdx, stationCount, stopped)",
         "drawIconButtonState",
         "refreshBusy := refreshRunning || loading",
+        'if safeHTTPURL(strings.TrimSpace(s.Homepage)) {',
         '"■"',
     ):
         require(errors, windows, needle, "Windows UI")

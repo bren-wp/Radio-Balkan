@@ -2400,7 +2400,9 @@ func drawStationCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStati
 		app.hits = append(app.hits, HitRegion{R: RECT{x, y, x + w, y + 23}, Kind: kind, Index: idx, Value: key})
 		x += w + 6
 	}
-	action("Web", 40, hitWeb)
+	if safeHTTPURL(strings.TrimSpace(s.Homepage)) {
+		action("Web", 40, hitWeb)
+	}
 	action("Kopiraj", 54, hitLink)
 	action("✓", 26, hitCheckStation)
 	action("Izvor", 46, hitReplace)
