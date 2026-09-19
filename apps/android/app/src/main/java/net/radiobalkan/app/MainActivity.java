@@ -20,6 +20,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
@@ -583,9 +584,9 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     }
 
     private void showAdminLogin() {
-        long now = System.currentTimeMillis();
-        if (now < adminLockedUntilMs) {
-            long seconds = Math.max(1L, (adminLockedUntilMs - now + 999L) / 1000L);
+        long now = SystemClock.elapsedRealtime();
+        if (adminRateLimiter.isLocked(now)) {
+            long seconds = adminRateLimiter.remainingSeconds(now);
             Toast.makeText(this, "Previše neuspjelih pokušaja. Pokušaj ponovno za " + seconds + " s.", Toast.LENGTH_LONG).show();
             return;
         }
@@ -618,7 +619,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             Button loginButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
             Runnable submit = () -> {
                 if (!loginButton.isEnabled()) return;
-                long clickNow = System.currentTimeMillis();
+                long clickNow = SystemClock.elapsedRealtime();
                 if (adminRateLimiter.isLocked(clickNow)) {
                     long seconds = adminRateLimiter.remainingSeconds(clickNow);
                     password.setText("");
@@ -639,7 +640,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 try {
                     ioWorker.execute(() -> {
                         boolean accepted = AdminAuth.matches(candidateUsername, candidatePassword);
-                        long completedAt = System.currentTimeMillis();
+                        long completedAt = SystemClock.elapsedRealtime();
                         if (!accepted) adminRateLimiter.recordFailure(completedAt);
                         adminAuthRunning.set(false);
                         ui.post(() -> {
