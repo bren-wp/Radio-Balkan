@@ -71,7 +71,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private final AtomicBoolean healthRunning = new AtomicBoolean();
     private final AtomicBoolean autoHealthStarted = new AtomicBoolean();
     private final AtomicBoolean catalogRefreshRunning = new AtomicBoolean();
-    private final AtomicBoolean adminAuthRunning = new AtomicBoolean();
+    private final AdminLoginGuard adminLoginGuard = AdminLoginGuard.shared();
     private final Object dataLock = new Object();
     private List<RadioStation> allStations = new ArrayList<>();
     private List<RadioStation> visibleStations = new ArrayList<>();
@@ -94,7 +94,6 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private String currentCountryCode = "";
     private boolean playing;
     private boolean adminMode;
-    private final AdminRateLimiter adminRateLimiter = new AdminRateLimiter(5, 30_000L);
     private boolean playbackStopped = true;
     private RadioStation featured;
     private Runnable searchRunnable;
@@ -648,8 +647,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
     private void showAdminLogin() {
         long now = SystemClock.elapsedRealtime();
-        if (adminRateLimiter.isLocked(now)) {
-            long seconds = adminRateLimiter.remainingSeconds(now);
+        if (adminLoginGuard.isLocked(now)) {
+            long seconds = adminLoginGuard.remainingSeconds(now);
             Toast.makeText(this, "Previše neuspjelih pokušaja. Pokušaj ponovno za " + seconds + " s.", Toast.LENGTH_LONG).show();
             return;
         }
@@ -683,13 +682,13 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             Runnable submit = () -> {
                 if (!loginButton.isEnabled()) return;
                 long clickNow = SystemClock.elapsedRealtime();
-                if (adminRateLimiter.isLocked(clickNow)) {
-                    long seconds = adminRateLimiter.remainingSeconds(clickNow);
+                if (adminLoginGuard.isLocked(clickNow)) {
+                    long seconds = adminLoginGuard.remainingSeconds(clickNow);
                     password.setText("");
                     password.setError("Prijava je zaključana još " + seconds + " s.");
                     return;
                 }
-                if (!adminAuthRunning.compareAndSet(false, true)) {
+                if (!adminLoginGuard.tryBegin()) {
                     password.setError("Provjera prijave je već u tijeku");
                     return;
                 }
@@ -704,8 +703,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                     ioWorker.execute(() -> {
                         boolean accepted = AdminAuth.matches(candidateUsername, candidatePassword);
                         long completedAt = SystemClock.elapsedRealtime();
-                        if (!accepted) adminRateLimiter.recordFailure(completedAt);
-                        adminAuthRunning.set(false);
+                        adminLoginGuard.complete(accepted, completedAt);
                         ui.post(() -> {
                             if (destroyed) return;
                             if (!dialog.isShowing()) return;
@@ -715,13 +713,12 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                                 adminMode = true;
                                 if (adapter != null) adapter.setAdminMode(true);
                                 updateAdminIndicator();
-                                adminRateLimiter.recordSuccess();
                                 statusText.setText("Admin način rada · brendigo");
                                 Toast.makeText(this, "Administrator je prijavljen", Toast.LENGTH_SHORT).show();
                                 dialog.dismiss();
                                 return;
                             }
-                            if (adminRateLimiter.isLocked(completedAt)) {
+                            if (adminLoginGuard.isLocked(completedAt)) {
                                 password.setError("Previše pokušaja. Prijava je privremeno zaključana.");
                             } else {
                                 password.setError("Neispravno korisničko ime ili lozinka");
@@ -730,7 +727,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                         });
                     });
                 } catch (RejectedExecutionException rejected) {
-                    adminAuthRunning.set(false);
+                    adminLoginGuard.cancel();
                     loginButton.setEnabled(true);
                     loginButton.setText("Prijavi se");
                     password.setError("Prijava trenutačno nije dostupna");
