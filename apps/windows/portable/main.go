@@ -5247,6 +5247,23 @@ func mergeStationRecord(a, b RadioStation) RadioStation {
 	if primary.LastCheckOK < other.LastCheckOK {
 		primary.LastCheckOK = other.LastCheckOK
 	}
+	if isDiasporaCatalogCode(a.CountryCode) || isDiasporaCatalogCode(b.CountryCode) {
+		primary.CountryCode = diasporaCatalogCode
+		if primary.SourceCountryCode == "" {
+			if a.SourceCountryCode != "" {
+				primary.SourceCountryCode = a.SourceCountryCode
+			} else {
+				primary.SourceCountryCode = b.SourceCountryCode
+			}
+		}
+		if !containsFoldedTag(primary.Tags, "dijaspora") {
+			if strings.TrimSpace(primary.Tags) == "" {
+				primary.Tags = "dijaspora"
+			} else {
+				primary.Tags = primary.Tags + ",dijaspora"
+			}
+		}
+	}
 	return primary
 }
 
