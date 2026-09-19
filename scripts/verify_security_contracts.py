@@ -233,6 +233,8 @@ def main() -> None:
         "async function refreshCandidateUrls(station)",
         "redirect: 'error'",
         "BALKAN.has(actualCountry)",
+        "DIASPORA_CODE = 'DIA'",
+        "expectedCountry === FOREIGN_CODE || expectedCountry === DIASPORA_CODE",
     )
     require(
         "scripts/test_browser_network_contract.js",
@@ -245,6 +247,8 @@ def main() -> None:
         "UUID refresh must return only safe public streams",
         "UUID refresh must reject a regional station returned under another country",
         "foreign refresh must never remap a Balkan station into the INT group",
+        "diaspora pseudo-country must be accepted by browser playback validation",
+        "diaspora refresh must never remap a Balkan station into the DIA group",
         "oversized refresh responses must fail closed",
     )
     require(
@@ -360,6 +364,28 @@ def main() -> None:
         "brendigo" + "2025",
         "RadioBalkanAdmin:v1:",
         "79cf893dcfdb18ecc6eba591896f896c5dd3eab95354d4e7e4503d13292fe9a0",
+    )
+    require(
+        "extensions/shared/enhancements.js",
+        "event.stopImmediatePropagation()",
+        "openDetails(row)",
+        "play.click()",
+        "selectArea('DIA')",
+        "selectArea('INT')",
+    )
+    forbid(
+        "extensions/shared/enhancements.js",
+        "adminSource",
+        "adminHomepage",
+        "url_resolved",
+        "sourcecountrycode",
+    )
+    require(
+        "scripts/test_browser_ui_enhancements.js",
+        "station-card click must not reach the legacy row autoplay handler",
+        "opening details must not implicitly start playback",
+        "detail play must delegate to the existing station playback button",
+        "public detail description must not expose a stream URL",
     )
     require(
         "extensions/shared/popup.html",
