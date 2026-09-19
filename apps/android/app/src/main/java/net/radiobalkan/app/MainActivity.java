@@ -112,10 +112,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             String name = safe(intent.getStringExtra(RadioPlayerService.EXTRA_NAME));
             String meta = safe(intent.getStringExtra(RadioPlayerService.EXTRA_META));
             currentCountryCode = safe(intent.getStringExtra(RadioPlayerService.EXTRA_COUNTRY));
-            if (currentCountryCode.isEmpty()) {
-                RadioStation match = stationByKey(currentKey);
-                if (match != null) currentCountryCode = match.countryCode;
-            }
+            RadioStation match = stationByKey(currentKey);
+            if (match != null) currentCountryCode = match.flagCode();
             String now = safe(intent.getStringExtra(RadioPlayerService.EXTRA_NOW_PLAYING));
             String status = safe(intent.getStringExtra(RadioPlayerService.EXTRA_STATUS));
             playerName.setText(name.isEmpty() ? "Odaberi radio stanicu" : name);
@@ -772,7 +770,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             int count = code.isEmpty() ? total : counts.getOrDefault(code, 0);
             Button b = chip(count > 0 ? name + " · " + count : name, code.equalsIgnoreCase(country));
             b.setTag(code);
-            applyFlag(b, code);
+            if (code.isEmpty() || RadioRepository.DIASPORA_CODE.equals(code) || RadioRepository.FOREIGN_CODE.equals(code)) clearFlag(b);
+            else applyFlag(b, code);
             countryButtons.add(b);
             b.setOnClickListener(v -> {
                 country = code;
@@ -932,7 +931,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                     } else {
                         heroName.setText(featured.name);
                         heroMeta.setText(featured.meta());
-                        applyFlag(heroMeta, featured.countryCode);
+                        applyFlag(heroMeta, featured.flagCode());
                     }
                     updatePlaybackControls();
                 });
@@ -1100,8 +1099,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         currentKey = key;
         state.addRecent(key);
         state.setLastStation(key, s.name, s.meta());
-        currentCountryCode = s.countryCode;
-        playerName.setText(s.name); playerMeta.setText(s.meta()); applyFlag(playerMeta, s.countryCode); statusText.setText("Povezujem…");
+        currentCountryCode = s.flagCode();
+        playerName.setText(s.name); playerMeta.setText(s.meta()); applyFlag(playerMeta, s.flagCode()); statusText.setText("Povezujem…");
         if (playerArtwork != null) { playerArtwork.setImageResource(R.drawable.ic_radio_balkan); images.load(s.favicon, playerArtwork, null); }
         if (playerEqualizer != null) playerEqualizer.setActive(false);
         playing = false;
