@@ -17,14 +17,13 @@ Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrva
 
 ## Što donosi v0.0.26
 
-- **Dosljedan transport na svim klijentima** — browser popup sada ima Previous / Stop / Play-Pause / Next, Windows transport pravilno onemogućuje nedostupne akcije, a Android drži kontrole disabled dok player state nije spreman.
-- **Filter-aware Prev/Next u browseru** — adjacent navigacija ostaje unutar trenutno filtriranog skupa; puni katalog koristi se samo kad nema vidljivih rezultata.
-- **Ispravan cold-state UI** — autoritativni player state bez aktivne stanice čisti optimistični prvi katalog item, pa popup više ne prikazuje niti favorizira stanicu koju korisnik nije odabrao.
-- **Windows početni Play više nije no-op** — veliki player Play bez prethodnog odabira pokreće prvu filtriranu stanicu, odnosno prvu stanicu iz kataloga.
-- **Granice glasnoće su stvarno disabled** — Windows `−` na 0% i `+` na 100% više nemaju klikabilni hit-region i vizualno su nedostupni.
-- **Android stale-state cleanup** — transport ne postaje aktivan prije player statea, a neuspjeli odabir više ne ostavlja zastarjeli artwork u playeru.
-- **Release integritet** — automatski Publish workflow na `main` pokreće se samo kada se promijeni `VERSION`, pa obični source/workflow commit ne pokušava ponovno objaviti postojeći tag.
-- **Prošireni regression gateovi** — browser cold-state i filtered adjacent scenariji, Windows transport/volume availability, Android lifecycle te postojeći runtime/security/clean-worktree testovi ostaju obavezni.
+- **Adjacent transport traži stvarnu trenutnu stanicu** — Previous/Next su disabled na cold startu i ne mogu pokrenuti reprodukciju prije stvarnog odabira stanice.
+- **Isto pravilo na Windowsu, Androidu i browserima** — browser `playAdjacent`, Android `PlaybackLifecycle.canNavigate` i Windows `canNavigateStations` koriste current-station guard.
+- **Renderer i click handler su usklađeni** — Windows ne samo da prikazuje disabled Prev/Next nego i funkcionalni handler koristi isti availability contract.
+- **Omiljene se osvježavaju odmah** — promjena favorite statusa ponovno primjenjuje aktivne browser filtre; odfavoritirana stanica odmah nestaje iz prikaza Omiljene.
+- **Cold-state regression zaštita** — browser testovi zaključavaju da Prev/Next bez aktualne stanice ostaju disabled i ne šalju `RB_PLAY`.
+- **Android lifecycle regression zaštita** — JVM testovi zahtijevaju i aktualnu stanicu i najmanje dva kandidata prije adjacent navigacije.
+- **Windows transport testovi su stroži** — pokrivaju no-current, single/multiple catalog i filtered scenarije, uz postojeći runtime soak i clean-worktree gate.
 - **Bez novog telemetryja ili širih dozvola** — nema analytics SDK-a, trackinga, novog backenda ni dodatnih Android/browser dozvola.
 
 ## Zašto Radio Balkan

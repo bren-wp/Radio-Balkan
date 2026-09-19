@@ -1,15 +1,14 @@
-# Radio Balkan 0.0.25 — Android
+# Radio Balkan 0.0.26 — Android
 
 Nativni Android klijent (`minSdk 26`, `targetSdk 36`) bez telemetry SDK-a i bez vlastitog backend servisa za reprodukciju.
 
-## Produkcijski fokus u 0.0.25
+## Produkcijski fokus u 0.0.26
 
-- Prev / Play-Pause / Stop / Next ostaju inicijalno disabled dok player state nije spreman
-- neuspjeli odabir ili povratak bez valjane aktualne stanice čisti stale player artwork
-- postojeća adjacent wrap-around navigacija, explicit Stop → fresh Play i `PlaybackLifecycle` testovi ostaju aktivni
+- `PlaybackLifecycle.canNavigate(size, hasCurrent)` centralizira adjacent availability
+- Previous/Next ostaju disabled dok nema aktualne stanice, čak i ako katalog već sadrži više postaja
+- JVM testovi zahtijevaju current station + najmanje dva kandidata
+- postojeća wrap-around adjacent navigacija, explicit Stop → fresh Play i stale-artwork cleanup ostaju aktivni
 - foreground fail-closed, `MediaPlayer.prepareAsync()` watchdog, sigurni fallback kandidati, audio focus, MediaSession i noisy-headset lifecycle ostaju aktivni
-- startup health scan ostaje odgođen i ograničen; URL/DNS/redirect i response limiti ostaju aktivni
-- release ostaje R8-minificiran/resource-shrinkan; potpisani APK zahtijeva signing secrets izvan repozitorija
 - nema novih dozvola, telemetryja ili trackinga
 
 ## Produkcijski build

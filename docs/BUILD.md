@@ -30,7 +30,7 @@ cd extensions
 python tools/build_extensions.py
 ```
 
-Rezultat su četiri ZIP-a u `extensions/dist/`. Build dodatno provjerava JavaScript sintaksu, zaključani Radio Balkan branding, Chromium offscreen lifecycle, session-bound audio ownership te epoch/revision/command-ordering ugovore za Chromium i Firefox playere i popup UI. Regression suite u 0.0.24 dodatno izvršava Stop control lifecycle, Stop → fresh Play, bounded UUID stream refresh, country/URL safety, oversized-response fail-closed i Stop-during-refresh stale-session scenarije. U 0.0.25 dodatno se provjeravaju filter-aware Previous/Next payloadi, cold-state cleanup i transport enabled/disabled sinkronizacija.
+Rezultat su četiri ZIP-a u `extensions/dist/`. Build dodatno provjerava JavaScript sintaksu, zaključani Radio Balkan branding, Chromium offscreen lifecycle, session-bound audio ownership te epoch/revision/command-ordering ugovore za Chromium i Firefox playere i popup UI. Regression suite u 0.0.24 dodatno izvršava Stop control lifecycle, Stop → fresh Play, bounded UUID stream refresh, country/URL safety, oversized-response fail-closed i Stop-during-refresh stale-session scenarije. U 0.0.25 dodatno se provjeravaju filter-aware Previous/Next payloadi, cold-state cleanup i transport enabled/disabled sinkronizacija. U 0.0.26 testovi dodatno zahtijevaju aktualnu stanicu za adjacent navigaciju na sva tri klijenta i potvrđuju trenutačno osvježavanje favorites-only rezultata nakon odfavoritiranja.
 
 ## Android
 
