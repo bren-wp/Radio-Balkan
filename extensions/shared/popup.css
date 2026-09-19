@@ -40,9 +40,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .primaryButton { flex: 0 0 auto; min-width: 104px; height: 44px; padding: 0 14px; border: 1px solid #ffca72; border-radius: 13px; background: linear-gradient(180deg, var(--accent-strong), var(--accent)); color: #1d140b; font-weight: 800; cursor: pointer; box-shadow: 0 8px 20px #ff9b2830; }
 .primaryButton:hover:not(:disabled) { filter: brightness(1.04); }
 .browsePage { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; }
-.quickAreas { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 0 12px 8px; }
+.quickAreas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 0 12px 8px; }
 .quickAreaButton { height: 34px; border: 1px solid #33404f; border-radius: 11px; background: #101720; color: #cbd2dc; cursor: pointer; font-size: 11px; font-weight: 700; }
 .quickAreaButton:hover, .quickAreaButton[aria-pressed="true"] { border-color: #9b6630; background: #221b16; color: #ffba55; }
+.browseIntro { min-height: 42px; display: flex; align-items: center; padding: 2px 14px 7px; }
+.browseIntro > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.browseIntro h2 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 1.2; }
+.browseIntro span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #7f8a98; font-size: 9.5px; }
 .tools { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 7px 8px; padding: 0 12px; }
 .searchField { grid-column: 1 / -1; height: 40px; display: flex; align-items: center; gap: 7px; padding: 0 11px; border: 1px solid var(--border); border-radius: 12px; background: #101821; color: #8b96a4; }
 .searchField:focus-within, .selectField:focus-within { border-color: #9f6a34; box-shadow: 0 0 0 1px #9f6a3422; }

@@ -83,12 +83,13 @@ async function mockFetch(raw) {
     }
     return response([station(1, code)]);
   }
-  if (url.includes('/json/stations/search?') && url.includes('hidebroken=true') && url.includes('limit=140') &&
-      (url.includes('tag=diaspora') || url.includes('tag=balkan') || url.includes('tag=exyu') ||
-       url.includes('name=balkan') || url.includes('name=ex%20yu') || url.includes('name=radio%20diaspora') ||
+  if (url.includes('/json/stations/search?') && url.includes('hidebroken=true') && url.includes('limit=160') &&
+      (url.includes('tag=diaspora') || url.includes('tag=balkan') || url.includes('tag=exyu') || url.includes('tag=ex-yu') ||
+       url.includes('name=balkan') || url.includes('name=ex%20yu') || url.includes('name=ex-yu') || url.includes('name=radio%20diaspora') ||
+       url.includes('name=yugo') || url.includes('name=jugoslav') ||
        url.includes('language=croatian') || url.includes('language=serbian') || url.includes('language=bosnian') ||
        url.includes('language=macedonian') || url.includes('language=albanian') || url.includes('language=slovenian') ||
-       url.includes('language=bulgarian'))) {
+       url.includes('language=bulgarian') || url.includes('language=montenegrin') || url.includes('language=serbo-croatian'))) {
     if (networkOffline) throw new Error('simulated offline diaspora catalog');
     const parsed = new URL(url);
     if (parsed.hostname.startsWith('dyn')) {
@@ -111,7 +112,7 @@ async function mockFetch(raw) {
     diaspora.push(station(seed * 100 + 92, 'DE', 1, 'http://127.0.0.1/private'));
     return response(diaspora);
   }
-  if (url.includes('/json/stations/search?hidebroken=true&order=votes&reverse=true&limit=1600')) {
+  if (url.includes('/json/stations/search?hidebroken=true&order=votes&reverse=true&limit=2000')) {
     if (networkOffline) throw new Error('simulated offline catalog');
     const parsed = new URL(url);
     if (parsed.hostname.startsWith('dyn')) {
@@ -119,7 +120,7 @@ async function mockFetch(raw) {
       throw new Error('simulated dynamic API failure');
     }
     const foreign = [];
-    for (let i = 0; i < 220; i += 1) foreign.push(station(i, i % 2 ? 'US' : 'GB'));
+    for (let i = 0; i < 320; i += 1) foreign.push(station(i, i % 2 ? 'US' : 'GB'));
     foreign.push(station(500, 'HR'));
     foreign.push(station(501, 'US', 0));
     foreign.push(station(502, 'DE', 1, 'http://localhost./private'));
@@ -184,8 +185,8 @@ async function main() {
   const diaspora = catalog.filter(item => item.countrycode === RB.DIASPORA_CODE);
   const regional = catalog.filter(item => balkanCodes.has(item.countrycode));
 
-  assert.equal(foreign.length, 180, 'foreign catalog must be capped at 180 stations');
-  assert.equal(diaspora.length, 180, 'diaspora catalog must be capped at 180 stations');
+  assert.equal(foreign.length, 240, 'foreign catalog must be capped at 240 stations');
+  assert.equal(diaspora.length, 240, 'diaspora catalog must be capped at 240 stations');
   assert.equal(regional.length, 8, 'regional catalog must retain all eight Balkan country batches');
   assert.ok(diaspora.every(item => item.lastcheckok === 1), 'diaspora catalog must keep only healthy Radio Browser entries');
   assert.ok(diaspora.every(item => !balkanCodes.has(item.sourcecountrycode)), 'diaspora catalog must represent stations hosted outside supported Balkan countries');
