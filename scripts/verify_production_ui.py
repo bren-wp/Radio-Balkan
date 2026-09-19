@@ -351,6 +351,7 @@ def main() -> int:
         '{"BG", "Bugarska"}',
         'case "BG":',
         "Kind: hitStationDetails",
+        "Kind: hitStationDetails, Index: currentIdx",
         "Kind: hitStationBack",
         "Kind: hitBrendigo",
         'shellOpen("https://brendigo.com/")',
@@ -393,7 +394,6 @@ def main() -> int:
         '"Pretraga", false, hitTab, "searchfocus"',
         '"Pregledaj", false, hitTab, "browse"',
         "func showStationDetails(idx int)",
-        "Kind: hitStationDetails, Index: currentIdx",
         "func countryCodeByName(name string) string",
         "func firstTag(tags string) string",
     ):
