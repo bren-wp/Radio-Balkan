@@ -76,6 +76,8 @@ def main() -> int:
     ):
         require(errors, popup_html, needle, "extensions/shared/popup.html")
     forbid(errors, popup_html, '>Ništa<', "extensions/shared/popup.html")
+    forbid(errors, popup_html, 'id="stationPanel"', "extensions/shared/popup.html")
+    forbid(errors, popup_html, 'role="dialog" aria-labelledby="station', "extensions/shared/popup.html")
 
     for needle in (
         "function syncStationPlaybackUi()",
@@ -115,6 +117,7 @@ def main() -> int:
     require(errors, popup_css, ".station:focus-visible", "extensions/shared/popup.css")
     require(errors, popup_css, "button:active:not(:disabled)", "extensions/shared/popup.css")
     require(errors, popup_js, "function openStationPage(station, returnFocus = null)", "extensions/shared/popup.js")
+    require(errors, popup_js, "if (returnFocus && !detailReturnFocus) detailReturnFocus = returnFocus;", "extensions/shared/popup.js")
     require(errors, popup_js, "function closeStationPage()", "extensions/shared/popup.js")
     require(errors, popup_js, "if (event.target.closest('.stationPlay'))", "extensions/shared/popup.js")
     require(errors, popup_js, "openStationPage(station, row)", "extensions/shared/popup.js")
@@ -209,6 +212,7 @@ def main() -> int:
         'navItem("○", "Profil", "profile")',
         'navItem("▥", "Radio", "radio")',
         'navItem("◎", "Dijaspora", "diaspora")',
+        'navItem("▥", "Radio", "radio")',
     ):
         forbid(errors, android, needle, "Android MainActivity")
 
