@@ -152,7 +152,7 @@ const (
 	WS_EX_DLGMODALFRAME            = 0x00000001
 )
 
-var appVersion = "0.0.25"
+var appVersion = "0.0.26"
 
 type WNDCLASS struct {
 	Style         uint32
@@ -2453,7 +2453,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	}
 	playing = app.playing
 	stopped = app.audioStopped
-	canNavigate = canNavigateStations(len(app.stations), len(app.filtered))
+	canNavigate = canNavigateStations(currentIdx, len(app.stations), len(app.filtered))
 	app.mu.RUnlock()
 	app.stateMu.RLock()
 	vol := app.state.Volume
@@ -3039,7 +3039,10 @@ func canAdjustVolume(volume, delta int) bool {
 	return false
 }
 
-func canNavigateStations(stationCount, filteredCount int) bool {
+func canNavigateStations(current, stationCount, filteredCount int) bool {
+	if current < 0 {
+		return false
+	}
 	count := stationCount
 	if filteredCount > 0 {
 		count = filteredCount
@@ -3076,7 +3079,7 @@ func playAdjacent(delta int) {
 	filtered := append([]int(nil), app.filtered...)
 	stationCount := len(app.stations)
 	app.mu.RUnlock()
-	if !canNavigateStations(stationCount, len(filtered)) {
+	if !canNavigateStations(current, stationCount, len(filtered)) {
 		return
 	}
 	if len(filtered) > 0 {

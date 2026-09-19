@@ -133,19 +133,21 @@ func TestWriteFileDurablePersistsCompleteContent(t *testing.T) {
 func TestTransportAvailabilityUsesVisibleStationCount(t *testing.T) {
 	tests := []struct {
 		name         string
+		current      int
 		stationCount int
 		filtered     int
 		want         bool
 	}{
-		{"empty", 0, 0, false},
-		{"one station", 1, 0, false},
-		{"two stations", 2, 0, true},
-		{"single filtered result", 5, 1, false},
-		{"multiple filtered results", 5, 2, true},
+		{"empty", -1, 0, 0, false},
+		{"no current station", -1, 5, 5, false},
+		{"one station", 0, 1, 0, false},
+		{"two stations", 0, 2, 0, true},
+		{"single filtered result", 0, 5, 1, false},
+		{"multiple filtered results", 0, 5, 2, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := canNavigateStations(tc.stationCount, tc.filtered); got != tc.want {
+			if got := canNavigateStations(tc.current, tc.stationCount, tc.filtered); got != tc.want {
 				t.Fatalf("navigation availability = %v, want %v", got, tc.want)
 			}
 		})

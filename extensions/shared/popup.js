@@ -394,10 +394,10 @@
   }
 
   async function playAdjacent(delta) {
-    if (activeCommandToken || !delta) return;
+    if (activeCommandToken || !delta || !current) return;
     const source = navigationStations();
     if (source.length < 2) return;
-    const currentKey = current ? RB.key(current) : '';
+    const currentKey = RB.key(current);
     let index = source.findIndex(station => RB.key(station) === currentKey);
     if (index < 0) index = delta > 0 ? -1 : 0;
     const nextIndex = (index + (delta > 0 ? 1 : -1) + source.length) % source.length;
@@ -494,7 +494,7 @@
     $('playerStop').setAttribute('aria-busy', String(commandBusy));
     $('playerStop').setAttribute('aria-label', commandBusy ? 'Radnja je u tijeku' : (stopped ? 'Reprodukcija je zaustavljena' : 'Zaustavi reprodukciju'));
     const navigationCount = navigationStations().length;
-    const canNavigate = navigationCount > 1 && !commandBusy;
+    const canNavigate = !!station && navigationCount > 1 && !commandBusy;
     $('playerPrev').disabled = !canNavigate;
     $('playerNext').disabled = !canNavigate;
     $('playerPrev').setAttribute('aria-busy', String(commandBusy));
@@ -550,8 +550,7 @@
     const key = RB.key(current);
     try {
       favs = await RB.setFavorite(key, !favs[key]);
-      updatePlayer();
-      render();
+      apply();
     } catch {
       playerStatus = 'Omiljene nisu spremljene';
       updatePlayer();

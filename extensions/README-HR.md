@@ -1,16 +1,15 @@
-# Radio Balkan browser ekstenzije 0.0.25
+# Radio Balkan browser ekstenzije 0.0.26
 
 Produkcijski source za Chrome, Edge, Opera i Firefox.
 
-## Produkcijski fokus u 0.0.25
+## Produkcijski fokus u 0.0.26
 
-- popup player izlaže **Previous / Stop / Play-Pause / Next**
-- Previous/Next rade unutar aktivno filtriranog skupa; puni katalog je fallback samo kada nema vidljivih rezultata
-- promjena filtera odmah sinkronizira enabled/disabled stanje adjacent kontrola
-- compact 360 px prikaz skriva samo dekorativni artwork kako naziv stanice i transport ostanu čitljivi
-- autoritativni cold state bez remote stanice čisti lokalni optimistic current item, pa se stanica koju korisnik nije odabrao ne prikazuje kao aktivna niti se može favorizirati iz playera
-- testovi provjeravaju konkretan station payload za Previous/Next, Stop → fresh Play, cold-state cleanup i postojeće session/epoch/revision zaštite
-- 12-sekundni `audio.play()` timeout, 15-sekundni stall recovery i bounded UUID refresh iz v0.0.24 ostaju aktivni
+- Previous/Next zahtijevaju stvarnu `current` stanicu; cold start više ne može implicitno pokrenuti adjacent playback
+- cold-state regression test provjerava disabled Prev/Next i potvrđuje da klik ne šalje `RB_PLAY`
+- filter-aware adjacent navigacija iz v0.0.25 ostaje aktivna nakon stvarnog odabira stanice
+- promjena favorite statusa ponovno primjenjuje filtre
+- odfavoritiranje u favorites-only prikazu odmah uklanja stanicu iz vidljivog seta, bez dodatnog refresh događaja
+- postojeći Stop → fresh Play, session/epoch/revision guardovi, 12-sekundni `audio.play()` timeout, stall recovery i bounded UUID refresh ostaju aktivni
 - nema novih browser dozvola, remote codea ni telemetry koda
 
 ## Build

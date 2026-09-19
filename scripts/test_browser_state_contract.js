@@ -121,6 +121,7 @@ let toggleCalls = 0;
 let stopCalls = 0;
 let playCalls = 0;
 let lastPlayedStation = null;
+let favoriteStore = {};
 const toggleQueue = [];
 const stopQueue = [];
 
@@ -192,10 +193,12 @@ const context = {
       return [copy(stationA), copy(stationB), ...copy(extraStations)];
     },
     async favorites() {
-      return {};
+      return copy(favoriteStore);
     },
-    async setFavorite() {
-      return {};
+    async setFavorite(key, value) {
+      if (value) favoriteStore[key] = true;
+      else delete favoriteStore[key];
+      return copy(favoriteStore);
     },
     async uiPreferences() {
       return {};
@@ -348,11 +351,31 @@ async function main() {
   assert.equal(lastPlayedStation?.stationuuid, 'station-a', 'previous from Radio B must select the preceding visible station');
   assert.equal(elements.playerPrev.disabled, false, 'previous control must remain available after adjacent playback');
 
+  elements.playerFav.dispatch('click');
+  await flush();
+  assert.equal(elements.playerFav.attributes['aria-pressed'], 'true', 'player favorite must reflect the saved favorite state');
+  elements.favoritesOnly.dispatch('click');
+  await flush();
+  assert.match(elements.status.textContent, /^1 od 1 prikazano/, 'favorites filter must contain the newly favorited current station');
+  elements.playerFav.dispatch('click');
+  await flush();
+  assert.match(elements.status.textContent, /^0 od 0 prikazano/, 'unfavoriting inside favorites view must immediately remove the station from the visible set');
+  elements.favoritesOnly.dispatch('click');
+  await flush();
+  assert.match(elements.status.textContent, /^48 od 60 prikazano/, 'leaving favorites-only view must restore the full visible catalog page');
+
   runtimeListener({ type: 'RB_STATE', epoch: 'epoch-b', revision: 9, station: null, playing: false, sessionId: null });
   await flush();
   assert.equal(elements.playerName.textContent, 'Nije odabrano', 'authoritative cold state must clear the optimistic catalog selection');
   assert.equal(elements.playerToggle.disabled, true, 'cold player state must not expose a fake selected-station toggle');
   assert.equal(elements.playerFav.disabled, true, 'cold player state must not favorite a station the user never selected');
+  assert.equal(elements.playerPrev.disabled, true, 'cold player state must not expose previous navigation without a current station');
+  assert.equal(elements.playerNext.disabled, true, 'cold player state must not expose next navigation without a current station');
+  const coldAdjacentCalls = playCalls;
+  elements.playerNext.dispatch('click');
+  elements.playerPrev.dispatch('click');
+  await flush();
+  assert.equal(playCalls, coldAdjacentCalls, 'cold adjacent controls must not start playback without a current station');
   assert.equal(elements.heroPlay.disabled, false, 'hero play must remain available and may start the first visible station');
 
   console.log('Browser popup state and UI regression tests OK');

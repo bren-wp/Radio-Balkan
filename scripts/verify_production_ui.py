@@ -126,6 +126,7 @@ def main() -> int:
         "playerArtwork.setImageResource(R.drawable.ic_radio_balkan)",
         "playerPrev.setOnClickListener",
         "playerNext.setOnClickListener",
+        "PlaybackLifecycle.canNavigate(navigationCount, !currentKey.isEmpty())",
         "PlaybackLifecycle.adjacentIndex",
         "StreamResolver.isSafeHttp(s.homepage)",
         "ui.removeCallbacksAndMessages(null)",
@@ -205,7 +206,7 @@ def main() -> int:
         "canStopPlayback(currentIdx, stopped)",
         "canAdjustVolume(vol, -5)",
         "canAdjustVolume(vol, 5)",
-        "canNavigate = canNavigateStations(len(app.stations), len(app.filtered))",
+        "canNavigate = canNavigateStations(currentIdx, len(app.stations), len(app.filtered))",
         "if canNavigate {",
         '"■"',
     ):

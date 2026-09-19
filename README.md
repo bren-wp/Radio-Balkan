@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.25" src="assets/badges/version.svg">
+  <img alt="version 0.0.26" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -15,16 +15,15 @@
 
 Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrvatske i regije bez korisničkog računa, bez telemetry sustava i bez teškog web runtimea u Windows aplikaciji. Projekt objedinjuje nativni Windows klijent, nativni Android klijent i produkcijske ekstenzije za Chrome, Edge, Opera i Firefox.
 
-## Što donosi v0.0.25
+## Što donosi v0.0.26
 
-- **Dosljedan transport na svim klijentima** — browser popup sada ima Previous / Stop / Play-Pause / Next, Windows transport pravilno onemogućuje nedostupne akcije, a Android drži kontrole disabled dok player state nije spreman.
-- **Filter-aware Prev/Next u browseru** — adjacent navigacija ostaje unutar trenutno filtriranog skupa; puni katalog koristi se samo kad nema vidljivih rezultata.
-- **Ispravan cold-state UI** — autoritativni player state bez aktivne stanice čisti optimistični prvi katalog item, pa popup više ne prikazuje niti favorizira stanicu koju korisnik nije odabrao.
-- **Windows početni Play više nije no-op** — veliki player Play bez prethodnog odabira pokreće prvu filtriranu stanicu, odnosno prvu stanicu iz kataloga.
-- **Granice glasnoće su stvarno disabled** — Windows `−` na 0% i `+` na 100% više nemaju klikabilni hit-region i vizualno su nedostupni.
-- **Android stale-state cleanup** — transport ne postaje aktivan prije player statea, a neuspjeli odabir više ne ostavlja zastarjeli artwork u playeru.
-- **Release integritet** — automatski Publish workflow na `main` pokreće se samo kada se promijeni `VERSION`, pa obični source/workflow commit ne pokušava ponovno objaviti postojeći tag.
-- **Prošireni regression gateovi** — browser cold-state i filtered adjacent scenariji, Windows transport/volume availability, Android lifecycle te postojeći runtime/security/clean-worktree testovi ostaju obavezni.
+- **Adjacent transport traži stvarnu trenutnu stanicu** — Previous/Next su disabled na cold startu i ne mogu pokrenuti reprodukciju prije stvarnog odabira stanice.
+- **Isto pravilo na Windowsu, Androidu i browserima** — browser `playAdjacent`, Android `PlaybackLifecycle.canNavigate` i Windows `canNavigateStations` koriste current-station guard.
+- **Renderer i click handler su usklađeni** — Windows ne samo da prikazuje disabled Prev/Next nego i funkcionalni handler koristi isti availability contract.
+- **Omiljene se osvježavaju odmah** — promjena favorite statusa ponovno primjenjuje aktivne browser filtre; odfavoritirana stanica odmah nestaje iz prikaza Omiljene.
+- **Cold-state regression zaštita** — browser testovi zaključavaju da Prev/Next bez aktualne stanice ostaju disabled i ne šalju `RB_PLAY`.
+- **Android lifecycle regression zaštita** — JVM testovi zahtijevaju i aktualnu stanicu i najmanje dva kandidata prije adjacent navigacije.
+- **Windows transport testovi su stroži** — pokrivaju no-current, single/multiple catalog i filtered scenarije, uz postojeći runtime soak i clean-worktree gate.
 - **Bez novog telemetryja ili širih dozvola** — nema analytics SDK-a, trackinga, novog backenda ni dodatnih Android/browser dozvola.
 
 ## Zašto Radio Balkan
@@ -65,7 +64,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.25 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.25):
+Gotovi v0.0.26 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.26):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -105,7 +104,7 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.26
+python scripts/bump_version.py 0.0.27
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.

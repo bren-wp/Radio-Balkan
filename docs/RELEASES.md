@@ -1,5 +1,24 @@
 # Izdavanja
 
+## 0.0.26
+
+Izdanje 0.0.26 fokusirano je na konzistentno stanje adjacent transporta i browser Omiljenih nakon v0.0.25. Nisu dodane nove dozvole, analytics, telemetry, korisnički račun niti novi backend.
+
+- browser Previous/Next više nisu dostupni bez stvarno odabrane aktualne stanice, čak ni kada katalog sadrži više postaja
+- `playAdjacent` faila zatvoreno ako nema `current`, pa cold-state klik ne može implicitno pokrenuti prvu ili zadnju stanicu
+- browser executable regression test potvrđuje da cold-state Previous/Next ostaju disabled i da klik ne šalje `RB_PLAY`
+- Android uvodi `PlaybackLifecycle.canNavigate(size, hasCurrent)`; adjacent transport zahtijeva aktualnu stanicu i najmanje dva kandidata
+- Android JVM testovi pokrivaju no-current, single-candidate i multi-candidate navigation availability
+- Windows `canNavigateStations` prima current index i vraća false kada nema aktualne stanice
+- Windows renderer i `playAdjacent` handler koriste isti helper, čime se uklanja razlika između vizualno disabled i funkcionalno aktivnog stanja
+- Windows Go regression tablica pokriva no-current, single/multiple catalog i filtered scenarije
+- browser promjena favorite statusa sada ponovno primjenjuje aktivne filtre
+- uklanjanje aktualne stanice iz Omiljenih dok je uključen favorites-only prikaz odmah mijenja prikaz s `1 od 1` na `0 od 0`, bez čekanja na dodatni refresh
+- development CI prije version bumpa prošao je `versions`, `browser`, `android` i `windows`, uključujući stvarni Windows runtime soak i clean-worktree
+- verzija je sinkronizirana na `0.0.26`, uz Android `versionCode 26`
+
+Dostupnost stvarnih radio streamova i dalje ovisi o third-party infrastrukturi; ovo izdanje poboljšava UI/state konzistentnost i sprječava nenamjerne akcije, ali ne tvrdi da svaka vanjska stanica mora uvijek biti dostupna.
+
 ## 0.0.25
 
 Izdanje 0.0.25 nastavlja UI/UX i transport hardening nakon v0.0.24 te zatvara release-integrity problem pronađen nakon mergea PR-a #25. Nisu dodane nove dozvole, analytics, telemetry, korisnički račun niti novi backend.
