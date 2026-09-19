@@ -246,7 +246,7 @@ const context = {
       return false;
     },
     async load() {
-      return [copy(stationA), copy(stationB), copy(stationDiaspora), copy(stationForeign), ...copy(extraStations)];
+      return [copy(stationA), copy(stationB), ...copy(extraStations), copy(stationDiaspora), copy(stationForeign)];
     },
     async favorites() {
       return copy(favoriteStore);
