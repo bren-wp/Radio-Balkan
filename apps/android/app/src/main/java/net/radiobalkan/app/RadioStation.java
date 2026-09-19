@@ -16,6 +16,7 @@ public final class RadioStation {
     public String tags = "";
     public String country = "";
     public String countryCode = "";
+    public String sourceCountryCode = "";
     public String state = "";
     public String language = "";
     public int votes;
@@ -42,6 +43,7 @@ public final class RadioStation {
         s.tags = clean(o.optString("tags", ""));
         s.country = clean(o.optString("country", ""));
         s.countryCode = clean(o.optString("countrycode", "")).toUpperCase(Locale.ROOT);
+        s.sourceCountryCode = clean(o.optString("sourcecountrycode", "")).toUpperCase(Locale.ROOT);
         s.state = clean(o.optString("state", ""));
         s.language = clean(o.optString("language", ""));
         s.votes = Math.max(0, o.optInt("votes", 0));
@@ -67,6 +69,7 @@ public final class RadioStation {
             o.put("tags", tags);
             o.put("country", country);
             o.put("countrycode", countryCode);
+            o.put("sourcecountrycode", sourceCountryCode);
             o.put("state", state);
             o.put("language", language);
             o.put("votes", votes);
@@ -85,6 +88,10 @@ public final class RadioStation {
         if (!stationUuid.isEmpty()) return stationUuid;
         String base = countryCode + "|" + fold(name) + "|" + (!urlResolved.isEmpty() ? urlResolved : url);
         return base.length() > 512 ? base.substring(0, 512) : base;
+    }
+
+    public String flagCode() {
+        return sourceCountryCode == null || sourceCountryCode.trim().isEmpty() ? countryCode : sourceCountryCode;
     }
 
     public String meta() {
