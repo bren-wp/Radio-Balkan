@@ -211,23 +211,23 @@ type BITMAPINFO struct {
 }
 
 type RadioStation struct {
-	ChangeUUID  string `json:"changeuuid"`
-	StationUUID string `json:"stationuuid"`
-	Name        string `json:"name"`
-	URL         string `json:"url"`
-	URLResolved string `json:"url_resolved"`
-	Homepage    string `json:"homepage"`
-	Favicon     string `json:"favicon"`
-	Tags        string `json:"tags"`
+	ChangeUUID        string `json:"changeuuid"`
+	StationUUID       string `json:"stationuuid"`
+	Name              string `json:"name"`
+	URL               string `json:"url"`
+	URLResolved       string `json:"url_resolved"`
+	Homepage          string `json:"homepage"`
+	Favicon           string `json:"favicon"`
+	Tags              string `json:"tags"`
 	Country           string `json:"country"`
 	CountryCode       string `json:"countrycode"`
 	SourceCountryCode string `json:"sourcecountrycode,omitempty"`
 	State             string `json:"state"`
-	Language    string `json:"language"`
-	Votes       int    `json:"votes"`
-	Codec       string `json:"codec"`
-	Bitrate     int    `json:"bitrate"`
-	LastCheckOK int    `json:"lastcheckok"`
+	Language          string `json:"language"`
+	Votes             int    `json:"votes"`
+	Codec             string `json:"codec"`
+	Bitrate           int    `json:"bitrate"`
+	LastCheckOK       int    `json:"lastcheckok"`
 
 	Health      string `json:"-"`
 	ActiveURL   string `json:"-"`
