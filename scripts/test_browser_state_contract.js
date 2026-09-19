@@ -121,6 +121,7 @@ let toggleCalls = 0;
 let stopCalls = 0;
 let playCalls = 0;
 let lastPlayedStation = null;
+let favoriteStore = {};
 const toggleQueue = [];
 const stopQueue = [];
 
@@ -192,10 +193,12 @@ const context = {
       return [copy(stationA), copy(stationB), ...copy(extraStations)];
     },
     async favorites() {
-      return {};
+      return copy(favoriteStore);
     },
-    async setFavorite() {
-      return {};
+    async setFavorite(key, value) {
+      if (value) favoriteStore[key] = true;
+      else delete favoriteStore[key];
+      return copy(favoriteStore);
     },
     async uiPreferences() {
       return {};
@@ -347,6 +350,16 @@ async function main() {
   assert.equal(playCalls, afterNextCalls + 1, 'previous control must start the previous visible station');
   assert.equal(lastPlayedStation?.stationuuid, 'station-a', 'previous from Radio B must select the preceding visible station');
   assert.equal(elements.playerPrev.disabled, false, 'previous control must remain available after adjacent playback');
+
+  elements.playerFav.dispatch('click');
+  await flush();
+  assert.equal(elements.playerFav.attributes['aria-pressed'], 'true', 'player favorite must reflect the saved favorite state');
+  elements.favoritesOnly.dispatch('click');
+  await flush();
+  assert.match(elements.status.textContent, /^1 od 1 prikazano/, 'favorites filter must contain the newly favorited current station');
+  elements.playerFav.dispatch('click');
+  await flush();
+  assert.match(elements.status.textContent, /^0 od 0 prikazano/, 'unfavoriting inside favorites view must immediately remove the station from the visible set');
 
   runtimeListener({ type: 'RB_STATE', epoch: 'epoch-b', revision: 9, station: null, playing: false, sessionId: null });
   await flush();

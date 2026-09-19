@@ -550,8 +550,7 @@
     const key = RB.key(current);
     try {
       favs = await RB.setFavorite(key, !favs[key]);
-      updatePlayer();
-      render();
+      apply();
     } catch {
       playerStatus = 'Omiljene nisu spremljene';
       updatePlayer();

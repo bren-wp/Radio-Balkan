@@ -297,6 +297,7 @@ def main() -> None:
         "main play control after stop must send a fresh RB_PLAY command",
         "authoritative cold state must clear the optimistic catalog selection",
         "cold adjacent controls must not start playback without a current station",
+        "unfavoriting inside favorites view must immediately remove the station from the visible set",
     )
     require(
         "scripts/test_chromium_player_contract.js",
