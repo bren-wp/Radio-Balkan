@@ -2181,7 +2181,7 @@ func drawCountryBrowsePage(hdc syscall.Handle, cr RECT) {
 		selectFont(hdc, app.hFontSmall)
 		text(hdc, fmt.Sprintf("%d stanica", count), l+62, t+41, r-54, t+68, rgb(145, 155, 168), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 		text(hdc, "›", r-40, t, r-14, b, rgb(255, 174, 55), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-		app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitCountryChoice, Index: -1, Value: item.Code})
+		app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitTab, Index: -1, Value: "country:" + item.Code})
 	}
 }
 
@@ -2218,7 +2218,7 @@ func drawGenreBrowsePage(hdc syscall.Handle, cr RECT) {
 		selectFont(hdc, app.hFontSmall)
 		text(hdc, fmt.Sprintf("%d stanica", counts[item.Value]), l+62, t+38, r-52, t+65, rgb(145, 155, 168), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 		text(hdc, "›", r-40, t, r-14, b, rgb(255, 174, 55), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-		app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitGenreChoice, Index: -1, Value: item.Value})
+		app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitTab, Index: -1, Value: "genre:" + item.Value})
 	}
 }
 
@@ -3623,10 +3623,35 @@ func handleClick(x, y int32) {
 		case hitGenreChoice:
 			selectGenre(h.Value)
 		case hitTab:
-			if strings.HasPrefix(h.Value, "genre:") {
-				g := strings.TrimPrefix(h.Value, "genre:")
+			if strings.HasPrefix(h.Value, "country:") {
+				code := strings.ToUpper(strings.TrimSpace(strings.TrimPrefix(h.Value, "country:")))
+				if !isRegionalCatalogCode(code) {
+					break
+				}
 				app.mu.Lock()
 				app.tab = "all"
+				app.country = code
+				app.genre = ""
+				app.scroll = 0
+				app.countryMenuOpen = false
+				app.genreMenuOpen = false
+				app.mu.Unlock()
+				app.stateMu.Lock()
+				app.state.Tab = "all"
+				app.state.CountryCode = code
+				app.state.Genre = ""
+				app.stateMu.Unlock()
+				rebuildGenres()
+				rebuildFilter()
+				scheduleStateSave()
+				invalidate()
+				break
+			}
+			if strings.HasPrefix(h.Value, "genre:") {
+				g := strings.TrimSpace(strings.TrimPrefix(h.Value, "genre:"))
+				app.mu.Lock()
+				app.tab = "all"
+				app.country = ""
 				app.genre = g
 				app.scroll = 0
 				app.countryMenuOpen = false
@@ -3634,6 +3659,7 @@ func handleClick(x, y int32) {
 				app.mu.Unlock()
 				app.stateMu.Lock()
 				app.state.Tab = "all"
+				app.state.CountryCode = ""
 				app.state.Genre = g
 				app.stateMu.Unlock()
 				rebuildGenres()
