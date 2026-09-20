@@ -45,6 +45,8 @@ def main() -> int:
     errors: list[str] = []
 
     popup_html = read("extensions/shared/popup.html")
+    require(errors, popup_html, 'id="discoveryPanel"', "Browser dedicated discovery panel")
+    require(errors, popup_html, 'aria-controls="discoveryPanel"', "Browser dedicated discovery navigation")
     popup_js = read("extensions/shared/popup.js")
     popup_css = read("extensions/shared/popup.css")
 
@@ -354,16 +356,16 @@ def main() -> int:
     require(errors, windows, 'case width >= 930:', "Windows responsive home cards")
     require(errors, windows, 'return 4', "Windows responsive home cards")
     require(errors, windows, 'return 3', "Windows responsive home cards")
-    require(errors, windows, 'popular := popularStations(columns * 3)', "Windows dense home catalog")
-    require(errors, windows, 'balkan := regionalDiscoveryStations(columns, excluded)', "Windows dense home catalog")
+    require(errors, windows, 'popular := popularStations(columns)', "Windows dense home catalog")
+    require(errors, windows, 'balkan := discoveryStations(columns*2, excluded', "Windows dense home catalog")
     for needle in (
         "case WM_GETMINMAXINFO:",
         "info.PtMinTrackSize.X = 1100",
         "info.PtMinTrackSize.Y = 720",
         'drawSidebarLabel(hdc, "BIBLIOTEKA", y)',
         '"Top", tab == "popular"',
-        '"Zemlje", isRegionalCatalogCode(country)',
-        '"Žanrovi", genre != ""',
+        '"Zemlje", tab == "countries"',
+        '"Žanrovi", tab == "genres"',
         '"Dijaspora", country == diasporaCatalogCode',
         '"Strano", country == foreignCatalogCode',
         '"Omiljene", tab == "favorites"',
@@ -383,7 +385,14 @@ def main() -> int:
         '"Popularno u Hrvatskoj"',
         '"Hrvatska"',
         '"Balkan"',
-        'RECT{mainR - 150, 433, mainR, 461}, Kind: hitCountryDropdown',
+        '"Narodna / Folk"',
+        '"Pop & Rock"',
+        "func drawCountryBrowsePage(hdc syscall.Handle, cr RECT)",
+        "func drawGenreBrowsePage(hdc syscall.Handle, cr RECT)",
+        "func browseGridColumns(width int32) int",
+        "st.WindowWidth = 1360",
+        "st.WindowHeight = 820",
+        'Value: "countries"',
         'action("Kopiraj", 54, hitLink)',
         'setStatus("Poveznica za reprodukciju je kopirana")',
         'Prazno polje vraća automatski odabir.',
