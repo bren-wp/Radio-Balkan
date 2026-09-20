@@ -2272,10 +2272,10 @@ func addExcluded(excluded map[int]struct{}, ids []int) {
 }
 
 func homeCatalogContentHeight() int {
-	// Compact intro plus five discovery sections with nine dense card rows.
+	// Compact intro plus country-led discovery sections with ten dense card rows.
 	// Keep this in sync with drawStations so the final rows remain reachable
 	// even at the minimum supported client height.
-	return 860
+	return 980
 }
 
 func homeCatalogEnabled(clientHeight int32, tab, search, genre, country string) bool {
@@ -2373,9 +2373,17 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 			return strings.EqualFold(strings.TrimSpace(st.CountryCode), "HR")
 		})
 		addExcluded(excluded, croatia)
+		bosnia := discoveryStations(columns, excluded, func(st RadioStation) bool {
+			return strings.EqualFold(strings.TrimSpace(st.CountryCode), "BA")
+		})
+		addExcluded(excluded, bosnia)
+		serbia := discoveryStations(columns, excluded, func(st RadioStation) bool {
+			return strings.EqualFold(strings.TrimSpace(st.CountryCode), "RS")
+		})
+		addExcluded(excluded, serbia)
 		balkan := discoveryStations(columns*2, excluded, func(st RadioStation) bool {
 			code := strings.ToUpper(strings.TrimSpace(st.CountryCode))
-			return code != "HR" && isRegionalCatalogCode(code)
+			return code != "HR" && code != "BA" && code != "RS" && isRegionalCatalogCode(code)
 		})
 		addExcluded(excluded, balkan)
 		folk := discoveryStations(columns, excluded, func(st RadioStation) bool {
@@ -2454,7 +2462,9 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 		y := contentTop + 52
 		y = drawSection("Popularno u Hrvatskoj", "Top", hitTab, "popular", popular, y, 1)
 		y = drawSection("Hrvatska", "Sve hrvatske", hitTab, "all", croatia, y, 3)
-		y = drawSection("Balkan", "Zemlje", hitTab, "countries", balkan, y, 3)
+		y = drawSection("Bosna i Hercegovina", "Sve zemlje", hitTab, "country:BA", bosnia, y, 1)
+		y = drawSection("Srbija", "Sve zemlje", hitTab, "country:RS", serbia, y, 1)
+		y = drawSection("Ostatak Balkana", "Zemlje", hitTab, "countries", balkan, y, 2)
 		y = drawSection("Narodna / Folk", "Žanrovi", hitTab, "genre:folk", folk, y, 1)
 		_ = drawSection("Pop & Rock", "Žanrovi", hitTab, "genre:pop", popRock, y, 1)
 		return
