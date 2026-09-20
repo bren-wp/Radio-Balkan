@@ -353,20 +353,25 @@ func putLE32(dst []byte, v uint32) {
 
 
 func TestHomeCatalogEnabledAtMinimumWindowHeight(t *testing.T) {
-	if !homeCatalogEnabled(720, "all", "", "") {
-		t.Fatal("dense home must remain enabled at the minimum supported window height")
+	if !homeCatalogEnabled(640, "all", "", "", "HR") {
+		t.Fatal("dense home must remain enabled within the client area of the minimum outer window")
 	}
-	if homeCatalogEnabled(699, "all", "", "") {
-		t.Fatal("dense home must fall back below its safe height")
+	if homeCatalogEnabled(639, "all", "", "", "HR") {
+		t.Fatal("dense home must fall back below its safe client height")
 	}
-	if homeCatalogEnabled(720, "popular", "", "") {
+	if homeCatalogEnabled(720, "popular", "", "", "HR") {
 		t.Fatal("non-home tabs must use the library view")
 	}
-	if homeCatalogEnabled(720, "all", "radio", "") {
+	if homeCatalogEnabled(720, "all", "radio", "", "HR") {
 		t.Fatal("search results must use the library view")
 	}
-	if homeCatalogEnabled(720, "all", "", "rock") {
+	if homeCatalogEnabled(720, "all", "", "rock", "HR") {
 		t.Fatal("genre results must use the library view")
+	}
+	for _, country := range []string{"", "BA", "RS", "DIA", "INT"} {
+		if homeCatalogEnabled(720, "all", "", "", country) {
+			t.Fatalf("Croatia home must not render for country %q", country)
+		}
 	}
 }
 
