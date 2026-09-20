@@ -2636,7 +2636,7 @@ func stationPublicDescription(s RadioStation) string {
 	if language := strings.TrimSpace(s.Language); language != "" {
 		description += "Jezik programa: " + language + ". "
 	}
-	description += "Slušanje koristi sigurni Radio Balkan player s ograničenim timeoutom te fallback i recovery postupkom kada je dostupan."
+	description += "Ako se veza sa stanicom privremeno prekine, Radio Balkan automatski pokušava ponovno uspostaviti reprodukciju."
 	return description
 }
 
