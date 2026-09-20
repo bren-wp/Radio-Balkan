@@ -503,3 +503,27 @@ func TestHomeGridColumnsStayWithinDenseThreeToSixColumnContract(t *testing.T) {
 		}
 	}
 }
+
+func TestCompactPlayerTransportDoesNotOverlapFavorite(t *testing.T) {
+	cx := playerTransportCenter(1024)
+	if left := cx - 116; left <= 432 {
+		t.Fatalf("compact previous-track hit starts at %d; must be right of favorite x=432", left)
+	}
+	if got := playerTransportCenter(1240); got != 620 {
+		t.Fatalf("normal-width transport center = %d; want 620", got)
+	}
+}
+
+func TestGenreBrowseScrollsAtCompactMinimumHeight(t *testing.T) {
+	compactContentWidth := int32(1024) - sidebarWidth - mainPad*2
+	if got := browsePageMaxScroll(680, compactContentWidth, "genres"); got <= 0 {
+		t.Fatalf("compact genre browse max scroll = %d; want positive", got)
+	}
+	if got := browsePageMaxScroll(680, compactContentWidth, "countries"); got != 0 {
+		t.Fatalf("compact country browse max scroll = %d; want 0", got)
+	}
+	normalContentWidth := int32(1240) - sidebarWidth - mainPad*2
+	if got := browsePageMaxScroll(820, normalContentWidth, "genres"); got != 0 {
+		t.Fatalf("normal genre browse max scroll = %d; want 0", got)
+	}
+}
