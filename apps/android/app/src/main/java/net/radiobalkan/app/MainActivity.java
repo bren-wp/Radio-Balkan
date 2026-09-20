@@ -174,13 +174,13 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.addView(buildHero(), marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(198), 0, 3, 0, 10));
+        header.addView(buildHero(), marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(168), 0, 3, 0, 8));
         header.addView(buildQuickAreas(), marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48), 0, 0, 0, 8));
 
         LinearLayout stationsHeader = new LinearLayout(this);
         stationsHeader.setGravity(Gravity.CENTER_VERTICAL);
         stationsTitle = label("Sve stanice", 25, Color.WHITE, true);
-        stationsHeader.addView(stationsTitle, new LinearLayout.LayoutParams(0, dp(54), 1f));
+        stationsHeader.addView(stationsTitle, new LinearLayout.LayoutParams(0, dp(46), 1f));
         Button sort = chip("Filtriraj ⌄", false);
         sort.setTextSize(14);
         sort.setBackground(interactiveRounded(0x00000000, 0x00000000, 12, 0x24FFFFFF));
@@ -303,13 +303,13 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
         LinearLayout copy = new LinearLayout(this);
         copy.setOrientation(LinearLayout.VERTICAL);
-        copy.setPadding(dp(18), dp(19), dp(16), dp(14));
+        copy.setPadding(dp(16), dp(12), dp(14), dp(10));
         TextView eyebrow = label("UŽIVO S BALKANA", 11, 0xFFFFB13D, true);
-        copy.addView(eyebrow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(26)));
+        copy.addView(eyebrow, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(22)));
         heroName = label("Radio Balkan", isCompactWidth() ? 27 : 30, Color.WHITE, true);
-        copy.addView(heroName, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+        copy.addView(heroName, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
         heroMeta = label("Odaberi stanicu i počni slušati", 14, 0xFFD2D4D8, false);
-        copy.addView(heroMeta, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(30)));
+        copy.addView(heroMeta, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)));
         heroPlay = new Button(this);
         heroPlay.setText("▶   Slušaj uživo");
         heroPlay.setAllCaps(false);
@@ -325,8 +325,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         heroPlay.setEnabled(false);
         heroPlay.setContentDescription("Odaberi stanicu za reprodukciju");
         heroPlay.setOnClickListener(v -> { if (featured != null) onPlay(featured); });
-        LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(dp(176), dp(54));
-        buttonLp.setMargins(0, dp(14), 0, 0);
+        LinearLayout.LayoutParams buttonLp = new LinearLayout.LayoutParams(dp(176), dp(48));
+        buttonLp.setMargins(0, dp(8), 0, 0);
         copy.addView(heroPlay, buttonLp);
         hero.addView(copy, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         return hero;

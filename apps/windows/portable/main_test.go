@@ -350,3 +350,46 @@ func putLE32(dst []byte, v uint32) {
 	dst[2] = byte(v >> 16)
 	dst[3] = byte(v >> 24)
 }
+
+
+func TestHomeCatalogEnabledAtMinimumWindowHeight(t *testing.T) {
+	if !homeCatalogEnabled(640, "all", "", "", "HR") {
+		t.Fatal("dense home must remain enabled within the client area of the minimum outer window")
+	}
+	if homeCatalogEnabled(639, "all", "", "", "HR") {
+		t.Fatal("dense home must fall back below its safe client height")
+	}
+	if homeCatalogEnabled(720, "popular", "", "", "HR") {
+		t.Fatal("non-home tabs must use the library view")
+	}
+	if homeCatalogEnabled(720, "all", "radio", "", "HR") {
+		t.Fatal("search results must use the library view")
+	}
+	if homeCatalogEnabled(720, "all", "", "rock", "HR") {
+		t.Fatal("genre results must use the library view")
+	}
+	for _, country := range []string{"", "BA", "RS", "DIA", "INT"} {
+		if homeCatalogEnabled(720, "all", "", "", country) {
+			t.Fatalf("Croatia home must not render for country %q", country)
+		}
+	}
+}
+
+func TestHomeGridColumnsStayWithinDenseThreeToFiveColumnContract(t *testing.T) {
+	tests := []struct {
+		width int32
+		want  int
+	}{
+		{760, 3},
+		{929, 3},
+		{930, 4},
+		{1179, 4},
+		{1180, 5},
+		{1500, 5},
+	}
+	for _, tc := range tests {
+		if got := homeGridColumns(tc.width); got != tc.want {
+			t.Fatalf("homeGridColumns(%d) = %d; want %d", tc.width, got, tc.want)
+		}
+	}
+}

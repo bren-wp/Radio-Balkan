@@ -21,7 +21,6 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
-	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -2077,13 +2076,32 @@ func genreDisplayName(g string) string {
 	}
 }
 
+func homeCatalogEnabled(clientHeight int32, tab, search, genre, country string) bool {
+	return clientHeight >= 640 &&
+		tab == "all" &&
+		strings.TrimSpace(search) == "" &&
+		strings.TrimSpace(genre) == "" &&
+		strings.EqualFold(strings.TrimSpace(country), "HR")
+}
+
 func shouldShowPopular() bool {
 	app.mu.RLock()
 	defer app.mu.RUnlock()
-	// The rich home composition is intentionally only used when it fits without
-	// colliding with the persistent player. Smaller windows fall back to the
-	// virtualized station library instead of clipping controls.
-	return app.clientHeight >= 840 && app.tab == "all" && strings.TrimSpace(app.search) == "" && strings.TrimSpace(app.genre) == ""
+	// WM_GETMINMAXINFO constrains the outer window, while clientHeight excludes
+	// title-bar/frame chrome. Keep this threshold below the outer 720px minimum
+	// and keep the catalog content above the persistent player.
+	return homeCatalogEnabled(app.clientHeight, app.tab, app.search, app.genre, app.country)
+}
+
+func homeGridColumns(width int32) int {
+	switch {
+	case width >= 1180:
+		return 5
+	case width >= 930:
+		return 4
+	default:
+		return 3
+	}
 }
 
 func popularStations(limit int) []int {
@@ -2118,6 +2136,36 @@ func popularStations(limit int) []int {
 	return best
 }
 
+func regionalDiscoveryStations(limit int, excluded map[int]struct{}) []int {
+	if limit <= 0 {
+		return nil
+	}
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	items := make([]int, 0, limit*2)
+	for idx, st := range app.stations {
+		if _, skip := excluded[idx]; skip {
+			continue
+		}
+		code := strings.ToUpper(strings.TrimSpace(st.CountryCode))
+		if code == "HR" || !isRegionalCatalogCode(code) {
+			continue
+		}
+		items = append(items, idx)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		left, right := app.stations[items[i]], app.stations[items[j]]
+		if left.Votes != right.Votes {
+			return left.Votes > right.Votes
+		}
+		return strings.ToLower(left.Name) < strings.ToLower(right.Name)
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return append([]int(nil), items...)
+}
+
 func drawStations(hdc syscall.Handle, cr RECT) {
 	app.mu.RLock()
 	detailOpen := strings.TrimSpace(app.detailKey) != ""
@@ -2133,97 +2181,85 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 	showHome := shouldShowPopular()
 
 	if showHome {
-		homeColumns := 6
-		if mainR-mainL >= 1120 {
-			homeColumns = 8
+		width := mainR - mainL
+		columns := homeGridColumns(width)
+		popular := popularStations(columns * 3)
+		excluded := make(map[int]struct{}, len(popular))
+		for _, idx := range popular {
+			excluded[idx] = struct{}{}
 		}
-		ids := popularStations(1 + homeColumns*2)
-		if len(ids) > 0 {
-			app.mu.RLock()
-			featuredIdx := ids[0]
-			var featured RadioStation
-			if featuredIdx >= 0 && featuredIdx < len(app.stations) {
-				featured = app.stations[featuredIdx]
-			}
-			totalStations := len(app.stations)
-			app.mu.RUnlock()
-			drawHomeHero(hdc, mainL, 82, mainR, 300, featuredIdx, featured, totalStations)
-		}
+		balkan := regionalDiscoveryStations(columns, excluded)
 
-		// Popular stations adapt between six and eight cards on wider windows.
+		app.mu.RLock()
+		croatiaCount := len(app.filtered)
+		app.mu.RUnlock()
+
+		// Compact catalog header: no oversized hero, no empty decorative space.
+		drawRounded(hdc, mainL, 92, mainR, 144, 14, color(17, 23, 31), color(63, 52, 43))
 		selectFont(hdc, app.hFontBold)
-		text(hdc, "Popularne stanice", mainL, 315, mainR-120, 345, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+		text(hdc, "Radio Balkan · Hrvatska", mainL+18, 96, mainR-180, 119, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 		selectFont(hdc, app.hFontSmall)
-		text(hdc, "Prikaži sve  →", mainR-130, 315, mainR, 345, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
-		app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 315, mainR, 345}, Kind: hitTab, Index: -1, Value: "popular"})
-		cards := ids
-		if len(cards) > 1 {
-			cards = cards[1:]
-		}
-		if len(cards) > homeColumns {
-			cards = cards[:homeColumns]
-		}
-		gap := int32(12)
-		cardW := (mainR - mainL - gap*int32(homeColumns-1)) / int32(homeColumns)
-		for i, idx := range cards {
-			l := mainL + int32(i)*(cardW+gap)
-			app.mu.RLock()
-			if idx < 0 || idx >= len(app.stations) {
+		text(hdc, "Odaberi karticu za detalje ili ▶ za reprodukciju", mainL+18, 118, mainR-180, 139, rgb(163, 172, 183), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+		text(hdc, fmt.Sprintf("%d hrvatskih stanica", croatiaCount), mainR-170, 96, mainR-18, 139, rgb(255, 177, 55), DT_RIGHT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+
+		gapX := int32(10)
+		gapY := int32(10)
+		cardH := int32(68)
+		cardW := (width - gapX*int32(columns-1)) / int32(columns)
+		drawRow := func(ids []int, y int32) {
+			for i, idx := range ids {
+				if i >= columns {
+					break
+				}
+				app.mu.RLock()
+				if idx < 0 || idx >= len(app.stations) {
+					app.mu.RUnlock()
+					continue
+				}
+				st := app.stations[idx]
 				app.mu.RUnlock()
-				continue
+				l := mainL + int32(i)*(cardW+gapX)
+				drawRegionCard(hdc, l, y, l+cardW, y+cardH, idx, st, i)
 			}
-			st := app.stations[idx]
-			app.mu.RUnlock()
-			drawPopularCard(hdc, l, 350, l+cardW, 510, idx, st, i)
 		}
 
-		// Genre artwork row.
 		selectFont(hdc, app.hFontBold)
-		text(hdc, "Žanrovi", mainL, 528, mainR-120, 556, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-		selectFont(hdc, app.hFontSmall)
-		text(hdc, "Prikaži sve  →", mainR-130, 528, mainR, 556, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
-		app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 528, mainR, 558}, Kind: hitGenreDropdown, Index: -1})
-		genres := []struct{ Label, Value string }{
-			{"Pop", "pop"}, {"Rock", "rock"}, {"Elektronička", "electronic"},
-			{"Jazz", "jazz"}, {"Klasična", "classical"}, {"Hip Hop", "hiphop"},
+		text(hdc, "Popularno u Hrvatskoj", mainL, 151, mainR, 175, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+		firstEnd := columns
+		if firstEnd > len(popular) {
+			firstEnd = len(popular)
 		}
-		genreW := (mainR - mainL - gap*5) / 6
-		for i, g := range genres {
-			l := mainL + int32(i)*(genreW+gap)
-			drawGenreTile(hdc, l, 562, l+genreW, 646, g.Label, g.Value, i)
+		drawRow(popular[:firstEnd], 177)
+
+		selectFont(hdc, app.hFontBold)
+		text(hdc, "Hrvatska", mainL, 255, mainR-130, 279, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+		selectFont(hdc, app.hFontSmall)
+		text(hdc, "Prikaži sve  →", mainR-130, 255, mainR, 279, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
+		app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 253, mainR, 281}, Kind: hitTab, Index: -1, Value: "all"})
+		croatia := popular[firstEnd:]
+		secondEnd := columns
+		if secondEnd > len(croatia) {
+			secondEnd = len(croatia)
+		}
+		drawRow(croatia[:secondEnd], 281)
+		if len(croatia) > secondEnd {
+			thirdEnd := secondEnd + columns
+			if thirdEnd > len(croatia) {
+				thirdEnd = len(croatia)
+			}
+			drawRow(croatia[secondEnd:thirdEnd], 281+cardH+gapY)
 		}
 
-		// Compact regional row at the bottom of the home view.
-		selectFont(hdc, app.hFontBold)
-		text(hdc, "Stanice iz regije", mainL, 660, mainR-120, 688, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-		selectFont(hdc, app.hFontSmall)
-		text(hdc, "Prikaži sve  →", mainR-130, 660, mainR, 688, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
-		app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 660, mainR, 690}, Kind: hitTab, Index: -1, Value: "all"})
-		region := ids
-		regionStart := 1 + len(cards)
-		if len(region) > regionStart {
-			region = region[regionStart:]
-		} else {
-			region = nil
-		}
-		if len(region) > homeColumns {
-			region = region[:homeColumns]
-		}
-		regW := (mainR - mainL - gap*int32(homeColumns-1)) / int32(homeColumns)
-		for i, idx := range region {
-			app.mu.RLock()
-			if idx < 0 || idx >= len(app.stations) {
-				app.mu.RUnlock()
-				continue
-			}
-			st := app.stations[idx]
-			app.mu.RUnlock()
-			l := mainL + int32(i)*(regW+gap)
-			drawRegionCard(hdc, l, 695, l+regW, 760, idx, st, i)
+		if len(balkan) > 0 {
+			selectFont(hdc, app.hFontBold)
+			text(hdc, "Balkan", mainL, 435, mainR-130, 459, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+			selectFont(hdc, app.hFontSmall)
+			text(hdc, "Zemlje  →", mainR-130, 435, mainR, 459, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
+			app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 433, mainR, 461}, Kind: hitCountryDropdown, Index: -1})
+			drawRow(balkan, 461)
 		}
 		return
 	}
-
 	// Library/search/filter pages use the efficient virtualized two-column grid.
 	gridTop := int32(132)
 	selectFont(hdc, app.hFontBold)
@@ -2303,129 +2339,21 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 	drawStationScrollBar(hdc, cr, gridTop, bottom, currentFilteredCount, scroll, step)
 }
 
-func drawHomeHero(hdc syscall.Handle, l, t, r, b int32, idx int, st RadioStation, total int) {
-	if r-l < 620 || idx < 0 {
-		return
-	}
-	gap := int32(16)
-	infoW := int32(330)
-	featureR := r - infoW - gap
-	drawRounded(hdc, l, t, featureR, b, 16, color(14, 19, 26), color(67, 72, 82))
-	app.hits = append(app.hits, HitRegion{R: RECT{l, t, featureR, b}, Kind: hitStationDetails, Index: idx, Value: stationKey(st)})
-	drawFeatureBackdrop(hdc, l+2, t+2, featureR-2, b-2)
-	// Opaque left readability panel, visually approximating the generated gradient.
-	leftPanelR := l + (featureR-l)*46/100
-	fill := RECT{l + 2, t + 2, leftPanelR, b - 2}
-	br := createBrush(color(12, 17, 23))
-	procFillRect.Call(uintptr(hdc), uintptr(unsafe.Pointer(&fill)), uintptr(br))
-	procDeleteObject.Call(uintptr(br))
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, "UŽIVO S BALKANA", l+24, t+17, leftPanelR-18, t+42, rgb(255, 177, 61), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-	selectFont(hdc, app.hFontTitle)
-	text(hdc, trimName(st.Name), l+24, t+44, leftPanelR-16, t+83, rgb(250, 250, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, "Glazba koja povezuje regiju.", l+24, t+84, leftPanelR-16, t+110, rgb(205, 209, 215), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	drawCountryFlag(hdc, l+24, t+122, l+48, t+137, stationFlagCode(st))
-	text(hdc, stationMeta(st), l+56, t+114, leftPanelR-16, t+144, rgb(185, 192, 201), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	heroKey := stationKey(st)
-	app.mu.RLock()
-	heroCurrent := app.currentKey == heroKey
-	heroPlaying := heroCurrent && app.playing
-	app.mu.RUnlock()
-	heroFill := color(255, 176, 58)
-	if hovered(hitPlay, idx, heroKey) {
-		heroFill = color(255, 188, 78)
-	}
-	drawRounded(hdc, l+24, b-62, l+186, b-18, 13, heroFill, color(255, 198, 102))
-	selectFont(hdc, app.hFontBold)
-	heroLabel := "▶  Slušaj uživo"
-	if heroPlaying {
-		heroLabel = "Ⅱ  Pauziraj"
-	} else if heroCurrent {
-		heroLabel = "▶  Nastavi"
-	}
-	text(hdc, heroLabel, l+30, b-62, l+180, b-18, rgb(19, 20, 24), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	app.hits = append(app.hits, HitRegion{R: RECT{l + 24, b - 62, l + 186, b - 18}, Kind: hitPlay, Index: idx, Value: heroKey})
-
-	// Companion info/wave card.
-	drawRounded(hdc, featureR+gap, t, r, b, 16, color(22, 22, 23), color(63, 61, 61))
-	drawWaveGraphic(hdc, featureR+gap+18, t+18, r-18, t+116)
-	selectFont(hdc, app.hFontBold)
-	text(hdc, "Balkan zvuči bolje", featureR+gap+22, t+126, r-22, t+151, rgb(246, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-	text(hdc, "zajedno.", featureR+gap+22, t+150, r-22, t+176, rgb(246, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, fmt.Sprintf("Otkrij nove stanice i priče.  %d ukupno", total), featureR+gap+22, t+178, r-20, b-15, rgb(172, 177, 185), DT_LEFT|DT_WORDBREAK)
-}
-
-func drawWaveGraphic(hdc syscall.Handle, l, t, r, b int32) {
-	pen, _, _ := procCreatePen.Call(0, 1, rgb(181, 108, 37))
-	old, _, _ := procSelectObject.Call(uintptr(hdc), pen)
-	for line := 0; line < 5; line++ {
-		lastY := int32(0)
-		for x := l; x <= r; x += 4 {
-			phase := float64(x-l) / float64(r-l) * 6.28318
-			y := t + (b-t)/2 + int32(float64(16+line*5)*math.Sin(phase+float64(line)*0.58))
-			if x == l {
-				procMoveToEx.Call(uintptr(hdc), uintptr(x), uintptr(y), 0)
-			} else {
-				procLineTo.Call(uintptr(hdc), uintptr(x), uintptr(y))
-			}
-			lastY = y
-			_ = lastY
-		}
-	}
-	procSelectObject.Call(uintptr(hdc), old)
-	procDeleteObject.Call(pen)
-}
-
-func drawFeatureBackdrop(hdc syscall.Handle, l, t, r, b int32) {
-	base := createBrush(color(31, 22, 18))
-	rc := RECT{l, t, r, b}
-	procFillRect.Call(uintptr(hdc), uintptr(unsafe.Pointer(&rc)), uintptr(base))
-	procDeleteObject.Call(uintptr(base))
-	pen, _, _ := procCreatePen.Call(0, 2, rgb(126, 76, 38))
-	old, _, _ := procSelectObject.Call(uintptr(hdc), pen)
-	for y := t + 18; y < b; y += 24 {
-		procMoveToEx.Call(uintptr(hdc), uintptr(l+8), uintptr(y), 0)
-		procLineTo.Call(uintptr(hdc), uintptr(r-8), uintptr(y+int32((y-t)/24)%3*7))
-	}
-	procSelectObject.Call(uintptr(hdc), old)
-	procDeleteObject.Call(pen)
-}
-
-func drawGenreTile(hdc syscall.Handle, l, t, r, b int32, label, value string, slot int) {
-	border := color(53, 61, 73)
-	if hovered(hitTab, -1, "genre:"+value) {
-		border = color(140, 88, 38)
-	}
-	palette := []uint32{color(74, 39, 25), color(35, 49, 68), color(37, 57, 52), color(56, 42, 69), color(67, 58, 31), color(66, 36, 42)}
-	fill := palette[slot%len(palette)]
-	drawRounded(hdc, l, t, r, b, 12, fill, border)
-	// Decorative equalizer bars are cheaper than six embedded genre bitmaps.
-	for i := int32(0); i < 7; i++ {
-		h := int32(10 + ((slot+int(i)*3)%5)*8)
-		x := l + 12 + i*8
-		br := createBrush(color(151, 96, 43))
-		rc := RECT{x, b - 34 - h, x + 3, b - 34}
-		procFillRect.Call(uintptr(hdc), uintptr(unsafe.Pointer(&rc)), uintptr(br))
-		procDeleteObject.Call(uintptr(br))
-	}
-	shade := RECT{l + 1, b - 31, r - 1, b - 1}
-	br := createBrush(color(15, 17, 21))
-	procFillRect.Call(uintptr(hdc), uintptr(unsafe.Pointer(&shade)), uintptr(br))
-	procDeleteObject.Call(uintptr(br))
-	selectFont(hdc, app.hFontBold)
-	text(hdc, label, l+12, b-35, r-10, b-3, rgb(247, 248, 250), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitTab, Index: -1, Value: "genre:" + value})
-}
-
 func drawRegionCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStation, slot int) {
 	key := stationKey(s)
+	app.mu.RLock()
+	selected := app.currentKey != "" && app.currentKey == key
+	selectedPlaying := selected && app.playing
+	app.mu.RUnlock()
 	border := color(49, 57, 68)
-	if hovered(hitPlay, idx, key) || hovered(hitStationDetails, idx, key) {
+	fill := color(20, 25, 33)
+	if selected {
+		border = color(175, 112, 45)
+		fill = color(28, 27, 29)
+	} else if hovered(hitPlay, idx, key) || hovered(hitStationDetails, idx, key) {
 		border = color(133, 88, 40)
 	}
-	drawRounded(hdc, l, t, r, b, 10, color(20, 25, 33), border)
+	drawRounded(hdc, l, t, r, b, 10, fill, border)
 	artR := l + 58
 	drawStationArtwork(hdc, l+6, t+7, artR-5, b-7, s, slot)
 	selectFont(hdc, app.hFontBold)
@@ -2435,7 +2363,11 @@ func drawRegionCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStatio
 	meta := stationAreaLabel(s)
 	text(hdc, meta, artR+31, t+31, r-40, t+54, rgb(160, 168, 178), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 	drawCircle(hdc, r-34, t+18, r-10, t+42, color(45, 49, 57), color(105, 74, 40))
-	text(hdc, "▶", r-32, t+18, r-12, t+42, rgb(246, 248, 250), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	playLabel := "▶"
+	if selectedPlaying {
+		playLabel = "Ⅱ"
+	}
+	text(hdc, playLabel, r-32, t+18, r-12, t+42, rgb(246, 248, 250), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitStationDetails, Index: idx, Value: key})
 	app.hits = append(app.hits, HitRegion{R: RECT{r - 38, t + 14, r - 6, t + 46}, Kind: hitPlay, Index: idx, Value: key})
 }
@@ -2464,43 +2396,6 @@ func drawStationScrollBar(hdc syscall.Handle, cr RECT, top, bottom int32, count,
 	}
 	thumbY := int(top) + scroll*(trackH-thumbH)/maxScroll
 	drawRounded(hdc, trackL, int32(thumbY), trackR, int32(thumbY+thumbH), 4, color(118, 83, 64), color(118, 83, 64))
-}
-
-func drawPopularCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStation, theme int) {
-	border := color(50, 58, 70)
-	if hovered(hitPlay, idx, stationKey(s)) || hovered(hitStationDetails, idx, stationKey(s)) {
-		border = color(133, 88, 40)
-	}
-	drawRounded(hdc, l, t, r, b, 12, color(18, 24, 33), border)
-	imageBottom := t + 91
-	drawStationArtwork(hdc, l+1, t+1, r-1, imageBottom, s, theme)
-	// Bottom information panel.
-	panel := RECT{l + 1, imageBottom - 1, r - 1, b - 1}
-	br := createBrush(color(21, 27, 37))
-	procFillRect.Call(uintptr(hdc), uintptr(unsafe.Pointer(&panel)), uintptr(br))
-	procDeleteObject.Call(uintptr(br))
-	selectFont(hdc, app.hFontBold)
-	text(hdc, trimName(s.Name), l+12, imageBottom+4, r-42, imageBottom+29, rgb(247, 248, 250), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	drawCountryFlag(hdc, l+12, imageBottom+34, l+32, imageBottom+47, stationFlagCode(s))
-	selectFont(hdc, app.hFontSmall)
-	meta := stationAreaLabel(s)
-	genre := firstPublicTag(s.Tags)
-	if genre != "" && meta != "" {
-		meta += " · " + genre
-	}
-	text(hdc, meta, l+38, imageBottom+28, r-42, imageBottom+53, rgb(171, 179, 189), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	bitrate := ""
-	if s.Bitrate > 0 {
-		bitrate = fmt.Sprintf("◉  %d kbps", s.Bitrate)
-	} else {
-		bitrate = "◉  uživo"
-	}
-	text(hdc, bitrate, l+12, b-25, r-48, b-6, rgb(130, 140, 151), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-	drawCircle(hdc, r-40, b-42, r-12, b-14, color(49, 56, 66), color(92, 69, 37))
-	text(hdc, "▶", r-38, b-41, r-14, b-14, rgb(248, 249, 250), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	key := stationKey(s)
-	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitStationDetails, Index: idx, Value: key})
-	app.hits = append(app.hits, HitRegion{R: RECT{r - 44, b - 46, r - 8, b - 10}, Kind: hitPlay, Index: idx, Value: key})
 }
 
 func firstPublicTag(tags string) string {
@@ -2537,7 +2432,15 @@ func stationPublicDescription(s RadioStation) string {
 }
 
 func stationPublicFacts(s RadioStation) string {
-	facts := make([]string, 0, 4)
+	facts := make([]string, 0, 6)
+	if language := strings.TrimSpace(s.Language); language != "" {
+		facts = append(facts, "Jezik: "+language)
+	}
+	if strings.EqualFold(strings.TrimSpace(s.Health), "ok") || s.LastCheckOK == 1 {
+		facts = append(facts, "Dostupnost: potvrđena")
+	} else {
+		facts = append(facts, "Dostupnost: provjera pri reprodukciji")
+	}
 	if state := strings.TrimSpace(s.State); state != "" && !strings.EqualFold(state, strings.TrimSpace(s.Country)) {
 		facts = append(facts, state)
 	}
@@ -2664,9 +2567,19 @@ func drawStationDetailPage(hdc syscall.Handle, cr RECT) {
 	text(hdc, meta, copyL, heroTop+91, mainR-220, heroTop+121, rgb(183, 192, 203), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 
 	playL := mainR - 198
+	app.mu.RLock()
+	detailCurrent := app.currentKey == key
+	detailPlaying := detailCurrent && app.playing
+	app.mu.RUnlock()
+	playLabel := "▶  Slušaj uživo"
+	if detailPlaying {
+		playLabel = "Ⅱ  Pauziraj"
+	} else if detailCurrent {
+		playLabel = "▶  Nastavi"
+	}
 	drawRounded(hdc, playL, heroTop+58, mainR-20, heroTop+106, 13, color(255, 177, 55), color(255, 204, 116))
 	selectFont(hdc, app.hFontBold)
-	text(hdc, "▶  Slušaj uživo", playL+8, heroTop+58, mainR-28, heroTop+106, rgb(29, 20, 11), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	text(hdc, playLabel, playL+8, heroTop+58, mainR-28, heroTop+106, rgb(29, 20, 11), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	app.hits = append(app.hits, HitRegion{R: RECT{playL, heroTop + 58, mainR - 20, heroTop + 106}, Kind: hitPlay, Index: idx, Value: key})
 
 	favLabel := "♡  Dodaj u omiljene"
