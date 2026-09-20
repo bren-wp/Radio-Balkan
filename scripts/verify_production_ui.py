@@ -394,7 +394,7 @@ def main() -> int:
         "func browseGridColumns(width int32) int",
         "st.WindowWidth = 1360",
         "st.WindowHeight = 820",
-        'Value: "countries"',
+        'hitTab, "countries"',
         'action("Kopiraj", 54, hitLink)',
         'setStatus("Poveznica za reprodukciju je kopirana")',
         'Prazno polje vraća automatski odabir.',
