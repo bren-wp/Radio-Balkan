@@ -91,6 +91,27 @@ func TestNavigationTabsIncludeInAppCountryAndGenrePages(t *testing.T) {
 	}
 }
 
+func TestRegionalRefreshPreservesSupplementalCatalogGroups(t *testing.T) {
+	regional := []RadioStation{
+		{StationUUID: "hr", Name: "HR", CountryCode: "HR", URL: "https://example.com/hr"},
+		{StationUUID: "rs", Name: "RS", CountryCode: "RS", URL: "https://example.com/rs"},
+	}
+	previous := []RadioStation{
+		{StationUUID: "dia", Name: "Diaspora", CountryCode: diasporaCatalogCode, SourceCountryCode: "DE", URL: "https://example.com/dia", Votes: 10},
+		{StationUUID: "int", Name: "Foreign", CountryCode: foreignCatalogCode, SourceCountryCode: "US", URL: "https://example.com/int", Votes: 9},
+	}
+	got := preserveSupplementalStations(regional, previous)
+	seen := map[string]bool{}
+	for _, station := range got {
+		seen[station.CountryCode] = true
+	}
+	for _, code := range []string{"HR", "RS", diasporaCatalogCode, foreignCatalogCode} {
+		if !seen[code] {
+			t.Fatalf("refreshed catalog lost %q group: %#v", code, got)
+		}
+	}
+}
+
 func TestRegionalFetchCodesExcludeApplicationGroups(t *testing.T) {
 	codes := regionalFetchCodes()
 	if len(codes) != 8 {
