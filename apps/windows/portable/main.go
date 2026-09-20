@@ -21,7 +21,6 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
-	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -2335,122 +2334,6 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 	drawStationScrollBar(hdc, cr, gridTop, bottom, currentFilteredCount, scroll, step)
 }
 
-func drawHomeHero(hdc syscall.Handle, l, t, r, b int32, idx int, st RadioStation, total int) {
-	if r-l < 620 || idx < 0 {
-		return
-	}
-	gap := int32(16)
-	infoW := int32(330)
-	featureR := r - infoW - gap
-	drawRounded(hdc, l, t, featureR, b, 16, color(14, 19, 26), color(67, 72, 82))
-	app.hits = append(app.hits, HitRegion{R: RECT{l, t, featureR, b}, Kind: hitStationDetails, Index: idx, Value: stationKey(st)})
-	drawFeatureBackdrop(hdc, l+2, t+2, featureR-2, b-2)
-	// Opaque left readability panel, visually approximating the generated gradient.
-	leftPanelR := l + (featureR-l)*46/100
-	fill := RECT{l + 2, t + 2, leftPanelR, b - 2}
-	br := createBrush(color(12, 17, 23))
-	procFillRect.Call(uintptr(hdc), uintptr(unsafe.Pointer(&fill)), uintptr(br))
-	procDeleteObject.Call(uintptr(br))
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, "UŽIVO S BALKANA", l+24, t+17, leftPanelR-18, t+42, rgb(255, 177, 61), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-	selectFont(hdc, app.hFontTitle)
-	text(hdc, trimName(st.Name), l+24, t+44, leftPanelR-16, t+83, rgb(250, 250, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, "Glazba koja povezuje regiju.", l+24, t+84, leftPanelR-16, t+110, rgb(205, 209, 215), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	drawCountryFlag(hdc, l+24, t+122, l+48, t+137, stationFlagCode(st))
-	text(hdc, stationMeta(st), l+56, t+114, leftPanelR-16, t+144, rgb(185, 192, 201), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	heroKey := stationKey(st)
-	app.mu.RLock()
-	heroCurrent := app.currentKey == heroKey
-	heroPlaying := heroCurrent && app.playing
-	app.mu.RUnlock()
-	heroFill := color(255, 176, 58)
-	if hovered(hitPlay, idx, heroKey) {
-		heroFill = color(255, 188, 78)
-	}
-	drawRounded(hdc, l+24, b-62, l+186, b-18, 13, heroFill, color(255, 198, 102))
-	selectFont(hdc, app.hFontBold)
-	heroLabel := "▶  Slušaj uživo"
-	if heroPlaying {
-		heroLabel = "Ⅱ  Pauziraj"
-	} else if heroCurrent {
-		heroLabel = "▶  Nastavi"
-	}
-	text(hdc, heroLabel, l+30, b-62, l+180, b-18, rgb(19, 20, 24), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	app.hits = append(app.hits, HitRegion{R: RECT{l + 24, b - 62, l + 186, b - 18}, Kind: hitPlay, Index: idx, Value: heroKey})
-
-	// Companion info/wave card.
-	drawRounded(hdc, featureR+gap, t, r, b, 16, color(22, 22, 23), color(63, 61, 61))
-	drawWaveGraphic(hdc, featureR+gap+18, t+18, r-18, t+116)
-	selectFont(hdc, app.hFontBold)
-	text(hdc, "Balkan zvuči bolje", featureR+gap+22, t+126, r-22, t+151, rgb(246, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-	text(hdc, "zajedno.", featureR+gap+22, t+150, r-22, t+176, rgb(246, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, fmt.Sprintf("Otkrij nove stanice i priče.  %d ukupno", total), featureR+gap+22, t+178, r-20, b-15, rgb(172, 177, 185), DT_LEFT|DT_WORDBREAK)
-}
-
-func drawWaveGraphic(hdc syscall.Handle, l, t, r, b int32) {
-	pen, _, _ := procCreatePen.Call(0, 1, rgb(181, 108, 37))
-	old, _, _ := procSelectObject.Call(uintptr(hdc), pen)
-	for line := 0; line < 5; line++ {
-		lastY := int32(0)
-		for x := l; x <= r; x += 4 {
-			phase := float64(x-l) / float64(r-l) * 6.28318
-			y := t + (b-t)/2 + int32(float64(16+line*5)*math.Sin(phase+float64(line)*0.58))
-			if x == l {
-				procMoveToEx.Call(uintptr(hdc), uintptr(x), uintptr(y), 0)
-			} else {
-				procLineTo.Call(uintptr(hdc), uintptr(x), uintptr(y))
-			}
-			lastY = y
-			_ = lastY
-		}
-	}
-	procSelectObject.Call(uintptr(hdc), old)
-	procDeleteObject.Call(pen)
-}
-
-func drawFeatureBackdrop(hdc syscall.Handle, l, t, r, b int32) {
-	base := createBrush(color(31, 22, 18))
-	rc := RECT{l, t, r, b}
-	procFillRect.Call(uintptr(hdc), uintptr(unsafe.Pointer(&rc)), uintptr(base))
-	procDeleteObject.Call(uintptr(base))
-	pen, _, _ := procCreatePen.Call(0, 2, rgb(126, 76, 38))
-	old, _, _ := procSelectObject.Call(uintptr(hdc), pen)
-	for y := t + 18; y < b; y += 24 {
-		procMoveToEx.Call(uintptr(hdc), uintptr(l+8), uintptr(y), 0)
-		procLineTo.Call(uintptr(hdc), uintptr(r-8), uintptr(y+int32((y-t)/24)%3*7))
-	}
-	procSelectObject.Call(uintptr(hdc), old)
-	procDeleteObject.Call(pen)
-}
-
-func drawGenreTile(hdc syscall.Handle, l, t, r, b int32, label, value string, slot int) {
-	border := color(53, 61, 73)
-	if hovered(hitTab, -1, "genre:"+value) {
-		border = color(140, 88, 38)
-	}
-	palette := []uint32{color(74, 39, 25), color(35, 49, 68), color(37, 57, 52), color(56, 42, 69), color(67, 58, 31), color(66, 36, 42)}
-	fill := palette[slot%len(palette)]
-	drawRounded(hdc, l, t, r, b, 12, fill, border)
-	// Decorative equalizer bars are cheaper than six embedded genre bitmaps.
-	for i := int32(0); i < 7; i++ {
-		h := int32(10 + ((slot+int(i)*3)%5)*8)
-		x := l + 12 + i*8
-		br := createBrush(color(151, 96, 43))
-		rc := RECT{x, b - 34 - h, x + 3, b - 34}
-		procFillRect.Call(uintptr(hdc), uintptr(unsafe.Pointer(&rc)), uintptr(br))
-		procDeleteObject.Call(uintptr(br))
-	}
-	shade := RECT{l + 1, b - 31, r - 1, b - 1}
-	br := createBrush(color(15, 17, 21))
-	procFillRect.Call(uintptr(hdc), uintptr(unsafe.Pointer(&shade)), uintptr(br))
-	procDeleteObject.Call(uintptr(br))
-	selectFont(hdc, app.hFontBold)
-	text(hdc, label, l+12, b-35, r-10, b-3, rgb(247, 248, 250), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitTab, Index: -1, Value: "genre:" + value})
-}
-
 func drawRegionCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStation, slot int) {
 	key := stationKey(s)
 	app.mu.RLock()
@@ -2508,43 +2391,6 @@ func drawStationScrollBar(hdc syscall.Handle, cr RECT, top, bottom int32, count,
 	}
 	thumbY := int(top) + scroll*(trackH-thumbH)/maxScroll
 	drawRounded(hdc, trackL, int32(thumbY), trackR, int32(thumbY+thumbH), 4, color(118, 83, 64), color(118, 83, 64))
-}
-
-func drawPopularCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStation, theme int) {
-	border := color(50, 58, 70)
-	if hovered(hitPlay, idx, stationKey(s)) || hovered(hitStationDetails, idx, stationKey(s)) {
-		border = color(133, 88, 40)
-	}
-	drawRounded(hdc, l, t, r, b, 12, color(18, 24, 33), border)
-	imageBottom := t + 91
-	drawStationArtwork(hdc, l+1, t+1, r-1, imageBottom, s, theme)
-	// Bottom information panel.
-	panel := RECT{l + 1, imageBottom - 1, r - 1, b - 1}
-	br := createBrush(color(21, 27, 37))
-	procFillRect.Call(uintptr(hdc), uintptr(unsafe.Pointer(&panel)), uintptr(br))
-	procDeleteObject.Call(uintptr(br))
-	selectFont(hdc, app.hFontBold)
-	text(hdc, trimName(s.Name), l+12, imageBottom+4, r-42, imageBottom+29, rgb(247, 248, 250), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	drawCountryFlag(hdc, l+12, imageBottom+34, l+32, imageBottom+47, stationFlagCode(s))
-	selectFont(hdc, app.hFontSmall)
-	meta := stationAreaLabel(s)
-	genre := firstPublicTag(s.Tags)
-	if genre != "" && meta != "" {
-		meta += " · " + genre
-	}
-	text(hdc, meta, l+38, imageBottom+28, r-42, imageBottom+53, rgb(171, 179, 189), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	bitrate := ""
-	if s.Bitrate > 0 {
-		bitrate = fmt.Sprintf("◉  %d kbps", s.Bitrate)
-	} else {
-		bitrate = "◉  uživo"
-	}
-	text(hdc, bitrate, l+12, b-25, r-48, b-6, rgb(130, 140, 151), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-	drawCircle(hdc, r-40, b-42, r-12, b-14, color(49, 56, 66), color(92, 69, 37))
-	text(hdc, "▶", r-38, b-41, r-14, b-14, rgb(248, 249, 250), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	key := stationKey(s)
-	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitStationDetails, Index: idx, Value: key})
-	app.hits = append(app.hits, HitRegion{R: RECT{r - 44, b - 46, r - 8, b - 10}, Kind: hitPlay, Index: idx, Value: key})
 }
 
 func firstPublicTag(tags string) string {
