@@ -197,7 +197,7 @@ def main() -> int:
     require(errors, station_presentation, "public static List<RadioStation> similarStations(", "Android StationPresentation")
     for needle in (
         '"Rezervni izvori"',
-        '"Filtriraj stanice"',
+        '"Zemlje i žanrovi"',
         '"Poništi filtre"',
         '"Provjeri prikazane stanice"',
         'else if ("Provjeri prikazane stanice".equals(chosen) && requireAdmin()) checkVisibleStreams();',
@@ -209,7 +209,7 @@ def main() -> int:
         '"Provjera nije uspjela · " + s.name',
         '"source-check-" + s.key()',
         'navItem("⋯", "Više", "more")',
-        'Button sort = chip("Filtriraj ⌄", false)',
+        'Button sort = chip("Zemlje · Žanrovi", false)',
         "new RippleDrawable(",
         'navItem("⌂", "Početna", "all")',
         'tab = "all"; country = "HR"; genre = "";',
@@ -219,6 +219,8 @@ def main() -> int:
         'navItem("♡", "Omiljene", "favorites")',
         'navItem("⋯", "Više", "more")',
         "buildQuickAreas()",
+        "buildInlineBrowsePanel()",
+        "populateInlineBrowsePanel()",
         'chip("◎ Dijaspora", false)',
         'chip("◉ Strano", false)',
         'chip("♫ Narodna", false)',
