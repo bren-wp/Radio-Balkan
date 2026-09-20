@@ -211,7 +211,7 @@ def main() -> int:
         "new RippleDrawable(",
         'navItem("⌂", "Početna", "all")',
         'tab = "all"; country = "HR"; genre = "";',
-        'dp(198)',
+        'dp(168)',
         'navItem("★", "Top", "top")',
         'navItem("◷", "Nedavno", "recent")',
         'navItem("♡", "Omiljene", "favorites")',
@@ -348,8 +348,14 @@ def main() -> int:
     windows = read("apps/windows/portable/main.go")
     require(errors, windows, 'st.CountryCode = "HR"', "Windows first-run country default")
     require(errors, windows, 'country == "HR"', "Windows home navigation")
-    require(errors, windows, 'homeColumns := 6', "Windows responsive home cards")
-    require(errors, windows, 'homeColumns = 8', "Windows responsive home cards")
+    require(errors, windows, 'func homeGridColumns(width int32) int', "Windows responsive home cards")
+    require(errors, windows, 'case width >= 1180:', "Windows responsive home cards")
+    require(errors, windows, 'return 5', "Windows responsive home cards")
+    require(errors, windows, 'case width >= 930:', "Windows responsive home cards")
+    require(errors, windows, 'return 4', "Windows responsive home cards")
+    require(errors, windows, 'return 3', "Windows responsive home cards")
+    require(errors, windows, 'popular := popularStations(columns * 3)', "Windows dense home catalog")
+    require(errors, windows, 'balkan := regionalDiscoveryStations(columns, excluded)', "Windows dense home catalog")
     for needle in (
         "case WM_GETMINMAXINFO:",
         "info.PtMinTrackSize.X = 1100",
@@ -374,7 +380,10 @@ def main() -> int:
         "func closeStationDetails()",
         "func stationPublicDescription(s RadioStation) string",
         "func stationPublicFacts(s RadioStation) string",
-        'RECT{mainR - 150, 528, mainR, 558}, Kind: hitGenreDropdown',
+        '"Popularno u Hrvatskoj"',
+        '"Hrvatska"',
+        '"Balkan"',
+        'RECT{mainR - 150, 477, mainR, 507}, Kind: hitCountryDropdown',
         'action("Kopiraj", 54, hitLink)',
         'setStatus("Poveznica za reprodukciju je kopirana")',
         'Prazno polje vraća automatski odabir.',
