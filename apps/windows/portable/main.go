@@ -1119,6 +1119,7 @@ func scheduleCIRuntimeSmokeClose() {
 	if !enabled {
 		return
 	}
+	safeGo("ci-runtime-audio-smoke", runCIAudioSmoke)
 	safeGo("ci-runtime-smoke-close", func() {
 		timer := time.NewTimer(18 * time.Second)
 		defer timer.Stop()
@@ -1142,6 +1143,79 @@ func scheduleCIRuntimeSmokeClose() {
 			}
 		}
 	})
+}
+
+func runCIAudioSmoke() {
+	if os.Getenv("RADIO_BALKAN_RUNTIME_TEST") != "1" {
+		return
+	}
+	token := strings.TrimSpace(os.Getenv("RADIO_BALKAN_RUNTIME_TOKEN"))
+	wav := makeCISmokeWAV()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		logError("runtime-test-audio", err)
+		return
+	}
+	defer ln.Close()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/tone.wav", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/wav")
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(wav)
+	})
+	server := &http.Server{Handler: mux}
+	serveDone := make(chan struct{})
+	go func() {
+		defer close(serveDone)
+		if serveErr := server.Serve(ln); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			logError("runtime-test-audio-server", serveErr)
+		}
+	}()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		_ = server.Shutdown(ctx)
+		cancel()
+		select {
+		case <-serveDone:
+		case <-time.After(time.Second):
+		}
+	}()
+
+	streamURL := "http://" + ln.Addr().String() + "/tone.wav"
+	encoded := base64.StdEncoding.EncodeToString([]byte(streamURL))
+	if err := audioSend(fmt.Sprintf("PLAY %s %.2f", encoded, 0.0)); err != nil {
+		logError("runtime-test-audio", err)
+		return
+	}
+	_ = audioSendExisting("STOP")
+	runtimeTestTrace("audio-smoke-ok token=" + token)
+}
+
+func makeCISmokeWAV() []byte {
+	const sampleRate = 8000
+	const seconds = 1
+	const channels = 1
+	const bitsPerSample = 16
+	dataSize := sampleRate * seconds * channels * (bitsPerSample / 8)
+	out := make([]byte, 44+dataSize)
+	copy(out[0:4], "RIFF")
+	binary.LittleEndian.PutUint32(out[4:8], uint32(36+dataSize))
+	copy(out[8:12], "WAVE")
+	copy(out[12:16], "fmt ")
+	binary.LittleEndian.PutUint32(out[16:20], 16)
+	binary.LittleEndian.PutUint16(out[20:22], 1)
+	binary.LittleEndian.PutUint16(out[22:24], channels)
+	binary.LittleEndian.PutUint32(out[24:28], sampleRate)
+	byteRate := sampleRate * channels * (bitsPerSample / 8)
+	binary.LittleEndian.PutUint32(out[28:32], byteRate)
+	blockAlign := channels * (bitsPerSample / 8)
+	binary.LittleEndian.PutUint16(out[32:34], blockAlign)
+	binary.LittleEndian.PutUint16(out[34:36], bitsPerSample)
+	copy(out[36:40], "data")
+	binary.LittleEndian.PutUint32(out[40:44], uint32(dataSize))
+	return out
 }
 
 func acquireSingleInstance() bool {
