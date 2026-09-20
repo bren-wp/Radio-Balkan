@@ -2076,16 +2076,21 @@ func genreDisplayName(g string) string {
 	}
 }
 
-func homeCatalogEnabled(clientHeight int32, tab, search, genre string) bool {
-	return clientHeight >= 700 && tab == "all" && strings.TrimSpace(search) == "" && strings.TrimSpace(genre) == ""
+func homeCatalogEnabled(clientHeight int32, tab, search, genre, country string) bool {
+	return clientHeight >= 640 &&
+		tab == "all" &&
+		strings.TrimSpace(search) == "" &&
+		strings.TrimSpace(genre) == "" &&
+		strings.EqualFold(strings.TrimSpace(country), "HR")
 }
 
 func shouldShowPopular() bool {
 	app.mu.RLock()
 	defer app.mu.RUnlock()
-	// The home catalog is dense enough to fit the minimum supported 720px
-	// window without colliding with the persistent player.
-	return homeCatalogEnabled(app.clientHeight, app.tab, app.search, app.genre)
+	// WM_GETMINMAXINFO constrains the outer window, while clientHeight excludes
+	// title-bar/frame chrome. Keep this threshold below the outer 720px minimum
+	// and keep the catalog content above the persistent player.
+	return homeCatalogEnabled(app.clientHeight, app.tab, app.search, app.genre, app.country)
 }
 
 func homeGridColumns(width int32) int {
@@ -2190,16 +2195,16 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 		app.mu.RUnlock()
 
 		// Compact catalog header: no oversized hero, no empty decorative space.
-		drawRounded(hdc, mainL, 92, mainR, 148, 14, color(17, 23, 31), color(63, 52, 43))
+		drawRounded(hdc, mainL, 92, mainR, 144, 14, color(17, 23, 31), color(63, 52, 43))
 		selectFont(hdc, app.hFontBold)
-		text(hdc, "Radio Balkan · Hrvatska", mainL+18, 99, mainR-180, 123, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+		text(hdc, "Radio Balkan · Hrvatska", mainL+18, 96, mainR-180, 119, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 		selectFont(hdc, app.hFontSmall)
-		text(hdc, "Odaberi karticu za detalje ili ▶ za reprodukciju", mainL+18, 121, mainR-180, 142, rgb(163, 172, 183), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-		text(hdc, fmt.Sprintf("%d hrvatskih stanica", croatiaCount), mainR-170, 99, mainR-18, 142, rgb(255, 177, 55), DT_RIGHT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+		text(hdc, "Odaberi karticu za detalje ili ▶ za reprodukciju", mainL+18, 118, mainR-180, 139, rgb(163, 172, 183), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+		text(hdc, fmt.Sprintf("%d hrvatskih stanica", croatiaCount), mainR-170, 96, mainR-18, 139, rgb(255, 177, 55), DT_RIGHT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 
 		gapX := int32(10)
 		gapY := int32(10)
-		cardH := int32(72)
+		cardH := int32(68)
 		cardW := (width - gapX*int32(columns-1)) / int32(columns)
 		drawRow := func(ids []int, y int32) {
 			for i, idx := range ids {
@@ -2219,39 +2224,39 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 		}
 
 		selectFont(hdc, app.hFontBold)
-		text(hdc, "Popularno u Hrvatskoj", mainL, 160, mainR, 188, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+		text(hdc, "Popularno u Hrvatskoj", mainL, 151, mainR, 175, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 		firstEnd := columns
 		if firstEnd > len(popular) {
 			firstEnd = len(popular)
 		}
-		drawRow(popular[:firstEnd], 190)
+		drawRow(popular[:firstEnd], 177)
 
 		selectFont(hdc, app.hFontBold)
-		text(hdc, "Hrvatska", mainL, 276, mainR-130, 304, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+		text(hdc, "Hrvatska", mainL, 255, mainR-130, 279, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 		selectFont(hdc, app.hFontSmall)
-		text(hdc, "Prikaži sve  →", mainR-130, 276, mainR, 304, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
-		app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 276, mainR, 306}, Kind: hitTab, Index: -1, Value: "all"})
+		text(hdc, "Prikaži sve  →", mainR-130, 255, mainR, 279, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
+		app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 253, mainR, 281}, Kind: hitTab, Index: -1, Value: "all"})
 		croatia := popular[firstEnd:]
 		secondEnd := columns
 		if secondEnd > len(croatia) {
 			secondEnd = len(croatia)
 		}
-		drawRow(croatia[:secondEnd], 307)
+		drawRow(croatia[:secondEnd], 281)
 		if len(croatia) > secondEnd {
 			thirdEnd := secondEnd + columns
 			if thirdEnd > len(croatia) {
 				thirdEnd = len(croatia)
 			}
-			drawRow(croatia[secondEnd:thirdEnd], 307+cardH+gapY)
+			drawRow(croatia[secondEnd:thirdEnd], 281+cardH+gapY)
 		}
 
 		if len(balkan) > 0 {
 			selectFont(hdc, app.hFontBold)
-			text(hdc, "Balkan", mainL, 477, mainR-130, 505, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+			text(hdc, "Balkan", mainL, 435, mainR-130, 459, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 			selectFont(hdc, app.hFontSmall)
-			text(hdc, "Zemlje  →", mainR-130, 477, mainR, 505, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
-			app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 477, mainR, 507}, Kind: hitCountryDropdown, Index: -1})
-			drawRow(balkan, 506)
+			text(hdc, "Zemlje  →", mainR-130, 435, mainR, 459, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
+			app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 433, mainR, 461}, Kind: hitCountryDropdown, Index: -1})
+			drawRow(balkan, 461)
 		}
 		return
 	}
