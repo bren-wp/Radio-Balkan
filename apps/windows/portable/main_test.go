@@ -80,6 +80,49 @@ func TestSafeHTTPURLAcceptsPublicHTTPStreams(t *testing.T) {
 	}
 }
 
+func TestNavigationTabsIncludeInAppCountryAndGenrePages(t *testing.T) {
+	for _, tab := range []string{"all", "popular", "countries", "genres", "favorites", "recent"} {
+		if !isValidTab(tab) {
+			t.Fatalf("tab %q must be valid", tab)
+		}
+	}
+	if isValidTab("dropdown") {
+		t.Fatal("legacy dropdown pseudo-tab must not become a persisted navigation state")
+	}
+}
+
+func TestRegionalCountryBrowseExcludesApplicationGroups(t *testing.T) {
+	items := regionalCountryDefs()
+	if len(items) != 8 {
+		t.Fatalf("regional country page contains %d entries; want 8", len(items))
+	}
+	for _, item := range items {
+		if !isRegionalCatalogCode(item.Code) {
+			t.Fatalf("non-regional code %q leaked into country page", item.Code)
+		}
+		if isSupplementalCatalogCode(item.Code) {
+			t.Fatalf("supplemental catalog code %q leaked into country page", item.Code)
+		}
+	}
+}
+
+func TestCompactDesktopWindowDefaultsAndRestoreCap(t *testing.T) {
+	fresh := validateState(PersistedState{}, false)
+	if fresh.WindowWidth != 1360 || fresh.WindowHeight != 820 {
+		t.Fatalf("fresh window = %dx%d; want 1360x820", fresh.WindowWidth, fresh.WindowHeight)
+	}
+
+	large := validateState(PersistedState{Volume: 80, CountryCode: "HR", Tab: "all", WindowWidth: 2200, WindowHeight: 1200}, true)
+	if large.WindowWidth != 1480 || large.WindowHeight != 900 {
+		t.Fatalf("large restored window = %dx%d; want compact 1480x900 cap", large.WindowWidth, large.WindowHeight)
+	}
+
+	normal := validateState(PersistedState{Volume: 80, CountryCode: "HR", Tab: "all", WindowWidth: 1440, WindowHeight: 860}, true)
+	if normal.WindowWidth != 1440 || normal.WindowHeight != 860 {
+		t.Fatalf("normal restored window changed to %dx%d", normal.WindowWidth, normal.WindowHeight)
+	}
+}
+
 func TestValidateStateDefaultsToCroatiaOnlyOnFirstLaunch(t *testing.T) {
 	fresh := validateState(PersistedState{}, false)
 	if fresh.CountryCode != "HR" {
@@ -371,6 +414,25 @@ func TestHomeCatalogEnabledAtMinimumWindowHeight(t *testing.T) {
 	for _, country := range []string{"", "BA", "RS", "DIA", "INT"} {
 		if homeCatalogEnabled(720, "all", "", "", country) {
 			t.Fatalf("Croatia home must not render for country %q", country)
+		}
+	}
+}
+
+func TestBrowseGridColumnsRemainResponsive(t *testing.T) {
+	tests := []struct {
+		width int32
+		want  int
+	}{
+		{620, 2},
+		{779, 2},
+		{780, 3},
+		{1079, 3},
+		{1080, 4},
+		{1500, 4},
+	}
+	for _, tc := range tests {
+		if got := browseGridColumns(tc.width); got != tc.want {
+			t.Fatalf("browseGridColumns(%d) = %d; want %d", tc.width, got, tc.want)
 		}
 	}
 }
