@@ -326,6 +326,7 @@ type App struct {
 	searchTimer                              *time.Timer
 	searchSeq                                uint64
 	scroll                                   int
+	clientWidth                              int32
 	clientHeight                             int32
 	current                                  int
 	currentKey                               string
@@ -1755,6 +1756,7 @@ func layoutControls(hwnd syscall.Handle) {
 	var r RECT
 	procGetClientRect.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&r)))
 	app.mu.Lock()
+	app.clientWidth = r.Right
 	app.clientHeight = r.Bottom
 	clampScrollLocked()
 	app.mu.Unlock()
@@ -2127,6 +2129,63 @@ func browseGridColumns(width int32) int {
 	}
 }
 
+func browsePageMaxScroll(clientHeight, contentWidth int32, tab string) int {
+	columns := browseGridColumns(contentWidth)
+	if columns < 1 {
+		columns = 1
+	}
+	itemCount := 0
+	cardHeight := int32(78)
+	switch tab {
+	case "countries":
+		itemCount = len(regionalCountryDefs())
+		cardHeight = 82
+	case "genres":
+		itemCount = len(browseGenres)
+	default:
+		return 0
+	}
+	rows := (itemCount + columns - 1) / columns
+	if rows <= 0 {
+		return 0
+	}
+	const gap int32 = 12
+	contentHeight := int32(rows)*cardHeight + int32(rows-1)*gap
+	visibleHeight := clientHeight - playerHeight - 16 - 164
+	if visibleHeight < 80 {
+		visibleHeight = 80
+	}
+	max := int(contentHeight - visibleHeight)
+	if max < 0 {
+		return 0
+	}
+	return max
+}
+
+func drawBrowseScrollBar(hdc syscall.Handle, cr RECT, maxScroll, scroll int) {
+	if maxScroll <= 0 {
+		return
+	}
+	top := int32(164)
+	bottom := cr.Bottom - playerHeight - 16
+	if bottom <= top {
+		return
+	}
+	trackL := cr.Right - 18
+	trackR := cr.Right - 12
+	drawRounded(hdc, trackL, top, trackR, bottom, 4, color(42, 34, 30), color(42, 34, 30))
+	trackH := int(bottom - top)
+	thumbH := trackH * trackH / (trackH + maxScroll)
+	if thumbH < 34 {
+		thumbH = 34
+	}
+	thumbY := int(top)
+	if maxScroll > 0 && trackH > thumbH {
+		thumbY += scroll * (trackH-thumbH) / maxScroll
+	}
+	drawRounded(hdc, trackL, int32(thumbY), trackR, int32(thumbY+thumbH), 4, color(118, 83, 64), color(118, 83, 64))
+}
+
 func regionalCountryDefs() []CountryDef {
 	items := make([]CountryDef, 0, len(regionalCatalogCodes))
 	for _, item := range balkanCountries {
@@ -2163,6 +2222,10 @@ func drawCountryBrowsePage(hdc syscall.Handle, cr RECT) {
 	columns := browseGridColumns(width)
 	items := regionalCountryDefs()
 	counts := countryCountsSnapshot()
+	app.mu.RLock()
+	scroll := app.scroll
+	app.mu.RUnlock()
+	bottom := cr.Bottom - playerHeight - 16
 
 	selectFont(hdc, app.hFontTitle)
 	text(hdc, "Zemlje", mainL, 92, mainR, 126, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
@@ -2175,9 +2238,12 @@ func drawCountryBrowsePage(hdc syscall.Handle, cr RECT) {
 	for i, item := range items {
 		row, col := i/columns, i%columns
 		l := mainL + int32(col)*(cardW+gap)
-		t := int32(164) + int32(row)*(cardH+gap)
+		t := int32(164-scroll) + int32(row)*(cardH+gap)
 		r := l + cardW
 		b := t + cardH
+		if b < 154 || t > bottom || b > bottom {
+			continue
+		}
 		fill, border := color(16, 23, 31), color(45, 56, 69)
 		if hovered(hitCountryChoice, -1, item.Code) {
 			fill, border = color(31, 31, 33), color(132, 87, 38)
@@ -2197,6 +2263,7 @@ func drawCountryBrowsePage(hdc syscall.Handle, cr RECT) {
 		text(hdc, "›", r-40, t, r-14, b, rgb(255, 174, 55), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 		app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitTab, Index: -1, Value: "country:" + item.Code})
 	}
+	drawBrowseScrollBar(hdc, cr, browsePageMaxScroll(cr.Bottom, width, "countries"), scroll)
 }
 
 func drawGenreBrowsePage(hdc syscall.Handle, cr RECT) {
@@ -2205,6 +2272,10 @@ func drawGenreBrowsePage(hdc syscall.Handle, cr RECT) {
 	width := mainR - mainL
 	columns := browseGridColumns(width)
 	counts := genreCountsSnapshot()
+	app.mu.RLock()
+	scroll := app.scroll
+	app.mu.RUnlock()
+	bottom := cr.Bottom - playerHeight - 16
 
 	selectFont(hdc, app.hFontTitle)
 	text(hdc, "Žanrovi", mainL, 92, mainR, 126, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
@@ -2217,9 +2288,12 @@ func drawGenreBrowsePage(hdc syscall.Handle, cr RECT) {
 	for i, item := range browseGenres {
 		row, col := i/columns, i%columns
 		l := mainL + int32(col)*(cardW+gap)
-		t := int32(164) + int32(row)*(cardH+gap)
+		t := int32(164-scroll) + int32(row)*(cardH+gap)
 		r := l + cardW
 		b := t + cardH
+		if b < 154 || t > bottom || b > bottom {
+			continue
+		}
 		fill, border := color(16, 23, 31), color(45, 56, 69)
 		if hovered(hitGenreChoice, -1, item.Value) {
 			fill, border = color(31, 31, 33), color(132, 87, 38)
@@ -2234,6 +2308,7 @@ func drawGenreBrowsePage(hdc syscall.Handle, cr RECT) {
 		text(hdc, "›", r-40, t, r-14, b, rgb(255, 174, 55), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 		app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitTab, Index: -1, Value: "genre:" + item.Value})
 	}
+	drawBrowseScrollBar(hdc, cr, browsePageMaxScroll(cr.Bottom, width, "genres"), scroll)
 }
 
 func discoveryStations(limit int, excluded map[int]struct{}, predicate func(RadioStation) bool) []int {
@@ -2290,7 +2365,7 @@ func shouldShowPopular() bool {
 	app.mu.RLock()
 	defer app.mu.RUnlock()
 	// WM_GETMINMAXINFO constrains the outer window, while clientHeight excludes
-	// title-bar/frame chrome. Keep this threshold below the outer 720px minimum
+	// title-bar/frame chrome. Keep this threshold below the outer 680px minimum
 	// and keep the catalog content above the persistent player.
 	return homeCatalogEnabled(app.clientHeight, app.tab, app.search, app.genre, app.country)
 }
@@ -2369,7 +2444,7 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 		excluded := make(map[int]struct{}, columns*8)
 		popular := popularStations(columns)
 		addExcluded(excluded, popular)
-		croatia := discoveryStations(columns*2, excluded, func(st RadioStation) bool {
+		croatia := discoveryStations(columns*3, excluded, func(st RadioStation) bool {
 			return strings.EqualFold(strings.TrimSpace(st.CountryCode), "HR")
 		})
 		addExcluded(excluded, croatia)
@@ -2900,6 +2975,14 @@ func drawMiniAction(hdc syscall.Handle, l, t, r, b int32, label string) {
 	text(hdc, label, l, t, r, b, rgb(151, 139, 132), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 }
 
+func playerTransportCenter(width int32) int32 {
+	center := width / 2
+	if width < 1180 && center < 554 {
+		center = 554
+	}
+	return center
+}
+
 func drawPlayer(hdc syscall.Handle, cr RECT) {
 	t := cr.Bottom - playerHeight
 	if t < 0 {
@@ -2984,8 +3067,10 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 		app.hits = append(app.hits, HitRegion{R: RECT{388, t + 10, 432, t + 48}, Kind: hitFavorite, Index: currentIdx, Value: stationKey(current)})
 	}
 
-	// Center transport controls.
-	cx := cr.Right / 2
+	// Center transport controls without overlapping the favorite action on
+	// compact windows.
+	cx := playerTransportCenter(cr.Right)
+	compactPlayer := cr.Right < 1180
 	canStop := canStopPlayback(currentIdx, stopped)
 	selectFont(hdc, app.hFontBold)
 	prevColor := rgb(193, 199, 207)
@@ -3028,9 +3113,12 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	fillRectColor(hdc, lineL, t+80, cx+20, t+83, color(255, 174, 52))
 	drawCircle(hdc, cx+15, t+76, cx+25, t+86, color(255, 174, 52), color(255, 174, 52))
 
-	// Right-side equalizer and volume group.
-	eqL := cr.Right - 390
-	drawEqualizerBars(hdc, eqL, t+25, eqL+128, t+66, playing)
+	// Right-side equalizer and volume group. Decorative bars collapse first
+	// on compact widths so transport controls retain independent hit areas.
+	if !compactPlayer {
+		eqL := cr.Right - 390
+		drawEqualizerBars(hdc, eqL, t+25, eqL+128, t+66, playing)
+	}
 	drawSpeakerIcon(hdc, cr.Right-235, t+35, rgb(186, 193, 202))
 	if canAdjustVolume(vol, -5) {
 		drawIconButton(hdc, cr.Right-200, t+27, cr.Right-168, t+59, "−", false)
@@ -5890,7 +5978,14 @@ func clampScrollLocked() {
 		return
 	}
 	if app.tab == "countries" || app.tab == "genres" {
-		app.scroll = 0
+		contentWidth := app.clientWidth - sidebarWidth - mainPad*2
+		max := browsePageMaxScroll(app.clientHeight, contentWidth, app.tab)
+		if app.scroll > max {
+			app.scroll = max
+		}
+		if app.scroll < 0 {
+			app.scroll = 0
+		}
 		return
 	}
 	gridTop := 132
