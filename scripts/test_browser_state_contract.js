@@ -87,11 +87,13 @@ const ids = [
   'browsePage', 'browseTitle', 'browseHint', 'stationPage', 'stationBack', 'stationPageTitle', 'stationPageMeta',
   'stationBreadcrumbArea', 'stationPageDescription', 'stationPageFacts', 'stationPageLogo',
   'stationPagePlay', 'stationPageFavorite', 'stationSimilarList',
-  'quickAll', 'quickTop', 'quickRecent', 'quickCountries', 'quickGenres', 'quickDiaspora', 'quickForeign', 'quickFolk', 'quickPop'
+  'quickAll', 'quickTop', 'quickRecent', 'quickCountries', 'quickGenres', 'quickDiaspora', 'quickForeign', 'quickFolk', 'quickPop',
+  'discoveryPanel', 'discoveryPanelTitle', 'discoveryPanelHint', 'discoveryPanelClose', 'discoveryOptions'
 ];
 const elements = Object.fromEntries(ids.map(id => [id, new Element(id)]));
 elements.stationPage.hidden = true;
 elements.browsePage.hidden = false;
+elements.discoveryPanel.hidden = true;
 
 const stationA = {
   stationuuid: 'station-a',
@@ -366,9 +368,15 @@ async function main() {
   assert.equal(elements.quickTop.attributes['aria-pressed'], 'true', 'Top must be a distinct navigation state');
   assert.match(elements.status.textContent, /od 50 prikazano/, 'Top view must cap the visible ranking at 50 stations');
   elements.quickCountries.dispatch('click');
-  assert.equal(elements.country.focused, true, 'Zemlje navigation must focus the country selector rather than duplicating another view');
+  assert.equal(elements.discoveryPanel.hidden, false, 'Zemlje navigation must open an in-popup browse page');
+  assert.equal(elements.discoveryPanelTitle.textContent, 'Zemlje', 'country browse page must have a dedicated title');
+  assert.equal(elements.quickCountries.attributes['aria-expanded'], 'true', 'country browse control must expose expanded state');
+  assert.equal(elements.discoveryOptions.children.length, 2, 'country browse page must list regional countries but exclude DIA/INT application groups');
   elements.quickGenres.dispatch('click');
-  assert.equal(elements.genre.focused, true, 'Žanrovi navigation must focus the genre selector rather than duplicating another view');
+  assert.equal(elements.discoveryPanel.hidden, false, 'Žanrovi navigation must stay inside the popup');
+  assert.equal(elements.discoveryPanelTitle.textContent, 'Žanrovi', 'genre browse page must have a dedicated title');
+  assert.equal(elements.quickGenres.attributes['aria-expanded'], 'true', 'genre browse control must expose expanded state');
+  assert.equal(elements.discoveryOptions.children.length, 10, 'genre browse page must expose the curated categories');
   elements.quickDiaspora.dispatch('click');
   assert.equal(elements.country.value, 'DIA', 'Dijaspora must select the DIA catalog group');
   assert.equal(elements.quickDiaspora.attributes['aria-pressed'], 'true');
