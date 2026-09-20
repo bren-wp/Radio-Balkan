@@ -154,17 +154,17 @@ func TestRegionalCountryBrowseExcludesApplicationGroups(t *testing.T) {
 
 func TestCompactDesktopWindowDefaultsAndRestoreCap(t *testing.T) {
 	fresh := validateState(PersistedState{}, false)
-	if fresh.WindowWidth != 1360 || fresh.WindowHeight != 820 {
-		t.Fatalf("fresh window = %dx%d; want 1360x820", fresh.WindowWidth, fresh.WindowHeight)
+	if fresh.WindowWidth != 1240 || fresh.WindowHeight != 760 {
+		t.Fatalf("fresh window = %dx%d; want 1240x760", fresh.WindowWidth, fresh.WindowHeight)
 	}
 
 	large := validateState(PersistedState{Volume: 80, CountryCode: "HR", Tab: "all", WindowWidth: 2200, WindowHeight: 1200}, true)
-	if large.WindowWidth != 1480 || large.WindowHeight != 900 {
-		t.Fatalf("large restored window = %dx%d; want compact 1480x900 cap", large.WindowWidth, large.WindowHeight)
+	if large.WindowWidth != 1420 || large.WindowHeight != 860 {
+		t.Fatalf("large restored window = %dx%d; want compact 1420x860 cap", large.WindowWidth, large.WindowHeight)
 	}
 
-	normal := validateState(PersistedState{Volume: 80, CountryCode: "HR", Tab: "all", WindowWidth: 1440, WindowHeight: 860}, true)
-	if normal.WindowWidth != 1440 || normal.WindowHeight != 860 {
+	normal := validateState(PersistedState{Volume: 80, CountryCode: "HR", Tab: "all", WindowWidth: 1360, WindowHeight: 820}, true)
+	if normal.WindowWidth != 1360 || normal.WindowHeight != 820 {
 		t.Fatalf("normal restored window changed to %dx%d", normal.WindowWidth, normal.WindowHeight)
 	}
 }
@@ -483,17 +483,19 @@ func TestBrowseGridColumnsRemainResponsive(t *testing.T) {
 	}
 }
 
-func TestHomeGridColumnsStayWithinDenseThreeToFiveColumnContract(t *testing.T) {
+func TestHomeGridColumnsStayWithinDenseThreeToSixColumnContract(t *testing.T) {
 	tests := []struct {
 		width int32
 		want  int
 	}{
 		{760, 3},
-		{929, 3},
-		{930, 4},
-		{1179, 4},
-		{1180, 5},
-		{1500, 5},
+		{839, 3},
+		{840, 4},
+		{1119, 4},
+		{1120, 5},
+		{1379, 5},
+		{1380, 6},
+		{1700, 6},
 	}
 	for _, tc := range tests {
 		if got := homeGridColumns(tc.width); got != tc.want {
