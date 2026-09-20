@@ -1031,6 +1031,9 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             case "electronic": return "Elektronička";
             case "jazz": return "Jazz";
             case "classical": return "Klasična";
+            case "news": return "Vijesti & Talk";
+            case "hits": return "Hits / Top 40";
+            case "oldies": return "Oldies";
             default: return "Sve stanice";
         }
     }
@@ -1053,7 +1056,11 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             case "pop": return containsAny(t, "pop", "rock", "indie", "alternative");
             case "folk": return containsAny(t, "folk", "narodna", "narodno", "turbo folk", "sevdah", "sevdalinka", "etno", "krajiska");
             case "electronic": return containsAny(t, "electronic", "dance", "house", "techno", "edm", "trance", "club");
-            case "classical": return containsAny(t, "classical", "klasicna");
+            case "jazz": return containsAny(t, "jazz", "blues", "soul");
+            case "classical": return containsAny(t, "classical", "klasicna", "opera", "symphony");
+            case "news": return containsAny(t, "news", "talk", "informativni", "vijesti", "speech", "spoken");
+            case "hits": return containsAny(t, "hits", "top 40", "top40", "charts", "chart");
+            case "oldies": return containsAny(t, "oldies", "retro", "evergreen");
             default: return t.contains(RadioStation.fold(g));
         }
     }
