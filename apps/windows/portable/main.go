@@ -4867,6 +4867,38 @@ func regionalFetchCodes() []string {
 	return codes
 }
 
+func preserveSupplementalStations(regional, previous []RadioStation) []RadioStation {
+	regionalOnly := make([]RadioStation, 0, len(regional))
+	for _, station := range regional {
+		if isRegionalCatalogCode(station.CountryCode) {
+			regionalOnly = append(regionalOnly, station)
+		}
+	}
+	regionalOnly = dedupeStations(regionalOnly)
+	if len(regionalOnly) > regionalCatalogLimit {
+		regionalOnly = append([]RadioStation(nil), regionalOnly[:regionalCatalogLimit]...)
+	}
+
+	diaspora := make([]RadioStation, 0, diasporaCatalogLimit)
+	foreign := make([]RadioStation, 0, foreignCatalogLimit)
+	for _, station := range previous {
+		switch {
+		case isDiasporaCatalogCode(station.CountryCode):
+			diaspora = append(diaspora, station)
+		case isForeignCatalogCode(station.CountryCode):
+			foreign = append(foreign, station)
+		}
+	}
+	diaspora = sortAndCapSupplemental(diaspora, diasporaCatalogLimit)
+	foreign = sortAndCapSupplemental(foreign, foreignCatalogLimit)
+
+	combined := make([]RadioStation, 0, len(regionalOnly)+len(diaspora)+len(foreign))
+	combined = append(combined, regionalOnly...)
+	combined = append(combined, diaspora...)
+	combined = append(combined, foreign...)
+	return trimStationCatalog(dedupeStations(combined), regionalCatalogLimit+supplementalCatalogLimit)
+}
+
 func fetchBalkanStations() ([]RadioStation, error) {
 	// Production catalog is restricted to the supported regional Balkan countries.
 	// Application-level groups such as DIA/INT must never be sent as ISO country
@@ -4939,7 +4971,12 @@ func fetchBalkanStations() ([]RadioStation, error) {
 	// A transient mirror response must never erase a healthy regional cache.
 	if len(all) < 600 {
 		if cached := loadCache(); len(cached) > 0 {
-			all = dedupeStations(append(all, cached...))
+			for _, station := range cached {
+				if isRegionalCatalogCode(station.CountryCode) {
+					all = append(all, station)
+				}
+			}
+			all = dedupeStations(all)
 		}
 	}
 	sort.SliceStable(all, func(i, j int) bool {
@@ -4952,7 +4989,14 @@ func fetchBalkanStations() ([]RadioStation, error) {
 		}
 		return pi < pj
 	})
-	return trimStationCatalog(filterSupportedStations(all), 7000), nil
+	regional := trimStationCatalog(filterSupportedStations(all), regionalCatalogLimit)
+	app.mu.RLock()
+	previous := append([]RadioStation(nil), app.stations...)
+	app.mu.RUnlock()
+	if len(previous) == 0 {
+		previous = loadCache()
+	}
+	return preserveSupplementalStations(regional, previous), nil
 }
 
 func filterSupportedStations(in []RadioStation) []RadioStation {
@@ -6618,7 +6662,7 @@ func saveState() {
 }
 
 func saveCache(list []RadioStation) {
-	list = trimStationCatalog(dedupeStations(filterSupportedStations(list)), 7000)
+	list = trimStationCatalog(dedupeStations(filterSupportedStations(list)), regionalCatalogLimit+supplementalCatalogLimit)
 	app.cacheFileMu.Lock()
 	defer app.cacheFileMu.Unlock()
 	if err := os.MkdirAll(stateDir(), 0755); err != nil {
@@ -6695,7 +6739,7 @@ func loadCache() []RadioStation {
 		if i == 1 {
 			logError("load-cache", errors.New("primarni katalog nije bio dostupan; učitan backup"))
 		}
-		return trimStationCatalog(dedupeStations(filterSupportedStations(c.Stations)), 7000)
+		return trimStationCatalog(dedupeStations(filterSupportedStations(c.Stations)), regionalCatalogLimit+supplementalCatalogLimit)
 	}
 	return nil
 }
