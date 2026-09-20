@@ -91,6 +91,31 @@ func TestNavigationTabsIncludeInAppCountryAndGenrePages(t *testing.T) {
 	}
 }
 
+func TestRegionalFetchCodesExcludeApplicationGroups(t *testing.T) {
+	codes := regionalFetchCodes()
+	if len(codes) != 8 {
+		t.Fatalf("regional fetch has %d country codes; want 8", len(codes))
+	}
+	seen := map[string]bool{}
+	for _, code := range codes {
+		if !isRegionalCatalogCode(code) {
+			t.Fatalf("fetch contains non-regional code %q", code)
+		}
+		if isSupplementalCatalogCode(code) {
+			t.Fatalf("fetch must never send application group %q as an ISO country code", code)
+		}
+		if seen[code] {
+			t.Fatalf("duplicate regional fetch code %q", code)
+		}
+		seen[code] = true
+	}
+	for _, want := range []string{"HR", "BA", "RS", "SI", "MK", "AL", "ME", "BG"} {
+		if !seen[want] {
+			t.Fatalf("regional fetch is missing %q", want)
+		}
+	}
+}
+
 func TestRegionalCountryBrowseExcludesApplicationGroups(t *testing.T) {
 	items := regionalCountryDefs()
 	if len(items) != 8 {
