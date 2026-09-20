@@ -2324,36 +2324,6 @@ func popularStations(limit int) []int {
 	return best
 }
 
-) []int {
-	if limit <= 0 {
-		return nil
-	}
-	app.mu.RLock()
-	defer app.mu.RUnlock()
-	items := make([]int, 0, limit*2)
-	for idx, st := range app.stations {
-		if _, skip := excluded[idx]; skip {
-			continue
-		}
-		code := strings.ToUpper(strings.TrimSpace(st.CountryCode))
-		if code == "HR" || !isRegionalCatalogCode(code) {
-			continue
-		}
-		items = append(items, idx)
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		left, right := app.stations[items[i]], app.stations[items[j]]
-		if left.Votes != right.Votes {
-			return left.Votes > right.Votes
-		}
-		return strings.ToLower(left.Name) < strings.ToLower(right.Name)
-	})
-	if len(items) > limit {
-		items = items[:limit]
-	}
-	return append([]int(nil), items...)
-}
-
 func drawStations(hdc syscall.Handle, cr RECT) {
 	app.mu.RLock()
 	detailOpen := strings.TrimSpace(app.detailKey) != ""
