@@ -850,7 +850,7 @@ func safeDialContext(ctx context.Context, network, address string) (net.Conn, er
 
 func isValidTab(tab string) bool {
 	switch tab {
-	case "all", "popular", "favorites", "recent", "replaced", "broken":
+	case "all", "popular", "countries", "genres", "favorites", "recent", "replaced", "broken":
 		return true
 	default:
 		return false
@@ -886,9 +886,17 @@ func validateState(st PersistedState, loaded bool) PersistedState {
 		st.Tab = "all"
 	}
 	if st.WindowWidth < 1100 || st.WindowWidth > 2600 {
-		st.WindowWidth = 1540
+		st.WindowWidth = 1360
 	}
 	if st.WindowHeight < 720 || st.WindowHeight > 1600 {
+		st.WindowHeight = 820
+	}
+	// Keep restored desktop windows compact. Older builds could persist a
+	// maximized/full-screen rectangle and reopen much larger than necessary.
+	if st.WindowWidth > 1600 {
+		st.WindowWidth = 1480
+	}
+	if st.WindowHeight > 960 {
 		st.WindowHeight = 900
 	}
 	if len(st.Recent) > 40 {
@@ -1528,10 +1536,10 @@ func createMainWindow() error {
 	windowW, windowH := app.state.WindowWidth, app.state.WindowHeight
 	app.stateMu.RUnlock()
 	if windowW < 1100 {
-		windowW = 1400
+		windowW = 1360
 	}
 	if windowH < 720 {
-		windowH = 840
+		windowH = 820
 	}
 	hwnd, _, e := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16(className))), uintptr(unsafe.Pointer(u16(appName))), WS_OVERLAPPEDWINDOW|WS_VISIBLE, 50, 28, uintptr(windowW), uintptr(windowH), 0, 0, hInst, 0)
 	if hwnd == 0 {
@@ -1844,9 +1852,9 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 	y += 44
 	drawSidebarItem(hdc, y, "★", "Top", tab == "popular", hitTab, "popular")
 	y += 44
-	drawSidebarItem(hdc, y, "◉", "Zemlje", isRegionalCatalogCode(country) && country != "HR", hitCountryDropdown, "")
+	drawSidebarItem(hdc, y, "◉", "Zemlje", tab == "countries", hitTab, "countries")
 	y += 44
-	drawSidebarItem(hdc, y, "♫", "Žanrovi", genre != "", hitGenreDropdown, "")
+	drawSidebarItem(hdc, y, "♫", "Žanrovi", tab == "genres", hitTab, "genres")
 	y += 44
 	drawSidebarItem(hdc, y, "◎", "Dijaspora", country == diasporaCatalogCode, hitCountryChoice, diasporaCatalogCode)
 	y += 44
@@ -2076,6 +2084,193 @@ func genreDisplayName(g string) string {
 	}
 }
 
+type browseGenreDef struct {
+	Value string
+	Label string
+}
+
+var browseGenres = []browseGenreDef{
+	{"", "Svi žanrovi"},
+	{"domaca", "Domaća / regionalna"},
+	{"pop", "Pop & Rock"},
+	{"folk", "Narodna / Folk"},
+	{"electronic", "Elektronička"},
+	{"jazz", "Jazz"},
+	{"classical", "Klasična"},
+	{"news", "Vijesti & Talk"},
+	{"hits", "Hits / Top 40"},
+	{"oldies", "Oldies"},
+}
+
+func browseGridColumns(width int32) int {
+	switch {
+	case width >= 1080:
+		return 4
+	case width >= 780:
+		return 3
+	default:
+		return 2
+	}
+}
+
+func regionalCountryDefs() []CountryDef {
+	items := make([]CountryDef, 0, len(regionalCatalogCodes)+1)
+	items = append(items, CountryDef{Code: "", Name: "Sve balkanske postaje"})
+	for _, item := range balkanCountries {
+		if item.Code != "" && isRegionalCatalogCode(item.Code) {
+			items = append(items, item)
+		}
+	}
+	return items
+}
+
+func genreCountsSnapshot() map[string]int {
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	counts := make(map[string]int, len(browseGenres))
+	counts[""] = len(app.stations)
+	for _, station := range app.stations {
+		tags := station.TagsIndex
+		if tags == "" {
+			tags = foldText(station.Tags)
+		}
+		for _, item := range browseGenres {
+			if item.Value != "" && matchesGenre(tags, item.Value) {
+				counts[item.Value]++
+			}
+		}
+	}
+	return counts
+}
+
+func drawCountryBrowsePage(hdc syscall.Handle, cr RECT) {
+	mainL := sidebarWidth + mainPad
+	mainR := cr.Right - mainPad
+	width := mainR - mainL
+	columns := browseGridColumns(width)
+	items := regionalCountryDefs()
+	counts := countryCountsSnapshot()
+
+	selectFont(hdc, app.hFontTitle)
+	text(hdc, "Zemlje", mainL, 92, mainR, 126, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+	selectFont(hdc, app.hFontSmall)
+	text(hdc, "Odaberi zemlju i pregledaj cijeli dostupni katalog radio stanica.", mainL, 122, mainR, 151, rgb(151, 160, 172), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+
+	gap := int32(12)
+	cardH := int32(82)
+	cardW := (width - gap*int32(columns-1)) / int32(columns)
+	for i, item := range items {
+		row, col := i/columns, i%columns
+		l := mainL + int32(col)*(cardW+gap)
+		t := int32(164) + int32(row)*(cardH+gap)
+		r := l + cardW
+		b := t + cardH
+		fill, border := color(16, 23, 31), color(45, 56, 69)
+		if hovered(hitCountryChoice, -1, item.Code) {
+			fill, border = color(31, 31, 33), color(132, 87, 38)
+		}
+		drawRounded(hdc, l, t, r, b, 13, fill, border)
+		if item.Code == "" {
+			selectFont(hdc, app.hFontTitle)
+			text(hdc, "◎", l+16, t, l+54, b, rgb(255, 174, 55), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+		} else {
+			drawCountryFlag(hdc, l+16, t+28, l+48, t+48, item.Code)
+		}
+		selectFont(hdc, app.hFontBold)
+		text(hdc, item.Name, l+62, t+13, r-54, t+43, rgb(241, 244, 247), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+		count := counts[strings.ToUpper(item.Code)]
+		if item.Code == "" {
+			count = 0
+			for code, n := range counts {
+				if isRegionalCatalogCode(code) {
+					count += n
+				}
+			}
+		}
+		selectFont(hdc, app.hFontSmall)
+		text(hdc, fmt.Sprintf("%d stanica", count), l+62, t+41, r-54, t+68, rgb(145, 155, 168), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+		text(hdc, "›", r-40, t, r-14, b, rgb(255, 174, 55), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+		app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitCountryChoice, Index: -1, Value: item.Code})
+	}
+}
+
+func drawGenreBrowsePage(hdc syscall.Handle, cr RECT) {
+	mainL := sidebarWidth + mainPad
+	mainR := cr.Right - mainPad
+	width := mainR - mainL
+	columns := browseGridColumns(width)
+	counts := genreCountsSnapshot()
+
+	selectFont(hdc, app.hFontTitle)
+	text(hdc, "Žanrovi", mainL, 92, mainR, 126, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+	selectFont(hdc, app.hFontSmall)
+	text(hdc, "Pregledaj stanice po glazbi i programu bez dodatnih skočnih izbornika.", mainL, 122, mainR, 151, rgb(151, 160, 172), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+
+	gap := int32(12)
+	cardH := int32(78)
+	cardW := (width - gap*int32(columns-1)) / int32(columns)
+	for i, item := range browseGenres {
+		row, col := i/columns, i%columns
+		l := mainL + int32(col)*(cardW+gap)
+		t := int32(164) + int32(row)*(cardH+gap)
+		r := l + cardW
+		b := t + cardH
+		fill, border := color(16, 23, 31), color(45, 56, 69)
+		if hovered(hitGenreChoice, -1, item.Value) {
+			fill, border = color(31, 31, 33), color(132, 87, 38)
+		}
+		drawRounded(hdc, l, t, r, b, 13, fill, border)
+		selectFont(hdc, app.hFontTitle)
+		text(hdc, "♫", l+14, t, l+54, b, rgb(255, 174, 55), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+		selectFont(hdc, app.hFontBold)
+		text(hdc, item.Label, l+62, t+10, r-52, t+40, rgb(241, 244, 247), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+		selectFont(hdc, app.hFontSmall)
+		text(hdc, fmt.Sprintf("%d stanica", counts[item.Value]), l+62, t+38, r-52, t+65, rgb(145, 155, 168), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+		text(hdc, "›", r-40, t, r-14, b, rgb(255, 174, 55), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+		app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitGenreChoice, Index: -1, Value: item.Value})
+	}
+}
+
+func discoveryStations(limit int, excluded map[int]struct{}, predicate func(RadioStation) bool) []int {
+	if limit <= 0 {
+		return nil
+	}
+	app.mu.RLock()
+	items := make([]int, 0, limit*3)
+	for idx, station := range app.stations {
+		if _, skip := excluded[idx]; skip {
+			continue
+		}
+		if predicate != nil && !predicate(station) {
+			continue
+		}
+		items = append(items, idx)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		left, right := app.stations[items[i]], app.stations[items[j]]
+		if left.Votes != right.Votes {
+			return left.Votes > right.Votes
+		}
+		return strings.ToLower(left.Name) < strings.ToLower(right.Name)
+	})
+	app.mu.RUnlock()
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return items
+}
+
+func addExcluded(excluded map[int]struct{}, ids []int) {
+	for _, idx := range ids {
+		excluded[idx] = struct{}{}
+	}
+}
+
+func homeCatalogContentHeight() int {
+	// 52 px intro + 5 section headers + seven compact card rows.
+	return 690
+}
+
 func homeCatalogEnabled(clientHeight int32, tab, search, genre, country string) bool {
 	return clientHeight >= 640 &&
 		tab == "all" &&
@@ -2169,9 +2364,18 @@ func regionalDiscoveryStations(limit int, excluded map[int]struct{}) []int {
 func drawStations(hdc syscall.Handle, cr RECT) {
 	app.mu.RLock()
 	detailOpen := strings.TrimSpace(app.detailKey) != ""
+	tab := app.tab
 	app.mu.RUnlock()
 	if detailOpen {
 		drawStationDetailPage(hdc, cr)
+		return
+	}
+	if tab == "countries" {
+		drawCountryBrowsePage(hdc, cr)
+		return
+	}
+	if tab == "genres" {
+		drawGenreBrowsePage(hdc, cr)
 		return
 	}
 
@@ -2183,33 +2387,57 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 	if showHome {
 		width := mainR - mainL
 		columns := homeGridColumns(width)
-		popular := popularStations(columns * 3)
-		excluded := make(map[int]struct{}, len(popular))
-		for _, idx := range popular {
-			excluded[idx] = struct{}{}
-		}
-		balkan := regionalDiscoveryStations(columns, excluded)
+		excluded := make(map[int]struct{}, columns*8)
+		popular := popularStations(columns)
+		addExcluded(excluded, popular)
+		croatia := discoveryStations(columns*2, excluded, func(st RadioStation) bool {
+			return strings.EqualFold(strings.TrimSpace(st.CountryCode), "HR")
+		})
+		addExcluded(excluded, croatia)
+		balkan := discoveryStations(columns*2, excluded, func(st RadioStation) bool {
+			code := strings.ToUpper(strings.TrimSpace(st.CountryCode))
+			return code != "HR" && isRegionalCatalogCode(code)
+		})
+		addExcluded(excluded, balkan)
+		folk := discoveryStations(columns, excluded, func(st RadioStation) bool {
+			return isRegionalCatalogCode(st.CountryCode) && matchesGenre(st.TagsIndex, "folk")
+		})
+		addExcluded(excluded, folk)
+		popRock := discoveryStations(columns, excluded, func(st RadioStation) bool {
+			return isRegionalCatalogCode(st.CountryCode) && matchesGenre(st.TagsIndex, "pop")
+		})
 
 		app.mu.RLock()
 		croatiaCount := len(app.filtered)
+		scroll := app.scroll
 		app.mu.RUnlock()
 
-		// Compact catalog header: no oversized hero, no empty decorative space.
-		drawRounded(hdc, mainL, 92, mainR, 144, 14, color(17, 23, 31), color(63, 52, 43))
-		selectFont(hdc, app.hFontBold)
-		text(hdc, "Radio Balkan · Hrvatska", mainL+18, 96, mainR-180, 119, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-		selectFont(hdc, app.hFontSmall)
-		text(hdc, "Odaberi karticu za detalje ili ▶ za reprodukciju", mainL+18, 118, mainR-180, 139, rgb(163, 172, 183), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-		text(hdc, fmt.Sprintf("%d hrvatskih stanica", croatiaCount), mainR-170, 96, mainR-18, 139, rgb(255, 177, 55), DT_RIGHT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+		contentTop := int32(92 - scroll)
+		if contentTop+52 >= 92 && contentTop <= bottom {
+			drawRounded(hdc, mainL, contentTop, mainR, contentTop+52, 14, color(17, 23, 31), color(63, 52, 43))
+			selectFont(hdc, app.hFontBold)
+			text(hdc, "Radio Balkan · Hrvatska", mainL+18, contentTop+4, mainR-180, contentTop+27, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+			selectFont(hdc, app.hFontSmall)
+			text(hdc, "Više stanica odmah · klik otvara detalje · ▶ pokreće radio", mainL+18, contentTop+26, mainR-180, contentTop+47, rgb(163, 172, 183), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+			text(hdc, fmt.Sprintf("%d hrvatskih stanica", croatiaCount), mainR-170, contentTop+4, mainR-18, contentTop+47, rgb(255, 177, 55), DT_RIGHT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+		}
 
 		gapX := int32(10)
 		gapY := int32(10)
 		cardH := int32(68)
 		cardW := (width - gapX*int32(columns-1)) / int32(columns)
-		drawRow := func(ids []int, y int32) {
-			for i, idx := range ids {
-				if i >= columns {
+		drawRows := func(ids []int, startY int32, maxRows int) int32 {
+			if maxRows <= 0 {
+				return startY
+			}
+			for pos, idx := range ids {
+				row, col := pos/columns, pos%columns
+				if row >= maxRows {
 					break
+				}
+				y := startY + int32(row)*(cardH+gapY)
+				if y+cardH < 92 || y > bottom {
+					continue
 				}
 				app.mu.RLock()
 				if idx < 0 || idx >= len(app.stations) {
@@ -2218,46 +2446,38 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 				}
 				st := app.stations[idx]
 				app.mu.RUnlock()
-				l := mainL + int32(i)*(cardW+gapX)
-				drawRegionCard(hdc, l, y, l+cardW, y+cardH, idx, st, i)
+				l := mainL + int32(col)*(cardW+gapX)
+				drawRegionCard(hdc, l, y, l+cardW, y+cardH, idx, st, pos)
 			}
-		}
-
-		selectFont(hdc, app.hFontBold)
-		text(hdc, "Popularno u Hrvatskoj", mainL, 151, mainR, 175, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-		firstEnd := columns
-		if firstEnd > len(popular) {
-			firstEnd = len(popular)
-		}
-		drawRow(popular[:firstEnd], 177)
-
-		selectFont(hdc, app.hFontBold)
-		text(hdc, "Hrvatska", mainL, 255, mainR-130, 279, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-		selectFont(hdc, app.hFontSmall)
-		text(hdc, "Prikaži sve  →", mainR-130, 255, mainR, 279, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
-		app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 253, mainR, 281}, Kind: hitTab, Index: -1, Value: "all"})
-		croatia := popular[firstEnd:]
-		secondEnd := columns
-		if secondEnd > len(croatia) {
-			secondEnd = len(croatia)
-		}
-		drawRow(croatia[:secondEnd], 281)
-		if len(croatia) > secondEnd {
-			thirdEnd := secondEnd + columns
-			if thirdEnd > len(croatia) {
-				thirdEnd = len(croatia)
+			rows := (len(ids) + columns - 1) / columns
+			if rows > maxRows {
+				rows = maxRows
 			}
-			drawRow(croatia[secondEnd:thirdEnd], 281+cardH+gapY)
+			return startY + int32(rows)*(cardH+gapY)
+		}
+		drawSection := func(title, action string, actionKind HitKind, actionValue string, ids []int, y int32, rows int) int32 {
+			if len(ids) == 0 {
+				return y
+			}
+			if y+24 >= 92 && y <= bottom {
+				selectFont(hdc, app.hFontBold)
+				text(hdc, title, mainL, y, mainR-150, y+24, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+				if action != "" {
+					selectFont(hdc, app.hFontSmall)
+					text(hdc, action+"  →", mainR-150, y, mainR, y+24, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
+					app.hits = append(app.hits, HitRegion{R: RECT{mainR - 160, y - 2, mainR, y + 26}, Kind: actionKind, Index: -1, Value: actionValue})
+				}
+			}
+			next := drawRows(ids, y+26, rows)
+			return next + 10
 		}
 
-		if len(balkan) > 0 {
-			selectFont(hdc, app.hFontBold)
-			text(hdc, "Balkan", mainL, 435, mainR-130, 459, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-			selectFont(hdc, app.hFontSmall)
-			text(hdc, "Zemlje  →", mainR-130, 435, mainR, 459, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
-			app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 433, mainR, 461}, Kind: hitCountryDropdown, Index: -1})
-			drawRow(balkan, 461)
-		}
+		y := contentTop + 59
+		y = drawSection("Popularno u Hrvatskoj", "Top", hitTab, "popular", popular, y, 1)
+		y = drawSection("Hrvatska", "Sve hrvatske", hitTab, "all", croatia, y, 2)
+		y = drawSection("Balkan", "Zemlje", hitTab, "countries", balkan, y, 2)
+		y = drawSection("Narodna / Folk", "Žanr", hitTab, "genre:folk", folk, y, 1)
+		_ = drawSection("Pop & Rock", "Žanr", hitTab, "genre:pop", popRock, y, 1)
 		return
 	}
 	// Library/search/filter pages use the efficient virtualized two-column grid.
@@ -4645,9 +4865,9 @@ func healthCheckWithLimit(limit int, queueRescan bool) {
 }
 
 func fetchBalkanStations() ([]RadioStation, error) {
-	// Production catalog is restricted to the seven supported countries.
-	// Every batch is validated against the seven supported countries before it can
-	// enter memory or the persistent cache.
+	// Production catalog is restricted to the supported regional Balkan countries.
+	// Application-level groups such as DIA/INT must never be sent as ISO country
+	// filters to Radio Browser.
 	type result struct {
 		list []RadioStation
 		err  error
@@ -4655,7 +4875,7 @@ func fetchBalkanStations() ([]RadioStation, error) {
 	}
 	codes := make([]string, 0, len(balkanCountries)-1)
 	for _, c := range balkanCountries {
-		if c.Code != "" {
+		if isRegionalCatalogCode(c.Code) {
 			codes = append(codes, c.Code)
 		}
 	}
@@ -4772,8 +4992,8 @@ func fetchCountryStations(code string) ([]RadioStation, error) {
 	// guard protects against a malformed mirror returning an endless paginated set.
 	const maxPerCountry = 1800
 	code = strings.ToUpper(strings.TrimSpace(code))
-	if code == "" || !isBalkanCode(code) {
-		return nil, errors.New("nepodržana država")
+	if code == "" || !isRegionalCatalogCode(code) {
+		return nil, errors.New("nepodržana regionalna država")
 	}
 	var last error
 	for _, base := range apiBases() {
@@ -5428,6 +5648,12 @@ func matchesGenre(tags, genre string) bool {
 		return strings.Contains(tags, "folk") || strings.Contains(tags, "narod") || strings.Contains(tags, "sevd") || strings.Contains(tags, "turbo") || strings.Contains(tags, "etno") || strings.Contains(tags, "krajisk")
 	case "electronic":
 		return strings.Contains(tags, "electronic") || strings.Contains(tags, "dance") || strings.Contains(tags, "house") || strings.Contains(tags, "techno") || strings.Contains(tags, "edm") || strings.Contains(tags, "trance") || strings.Contains(tags, "club")
+	case "news":
+		return strings.Contains(tags, "news") || strings.Contains(tags, "talk") || strings.Contains(tags, "vijesti")
+	case "hits":
+		return strings.Contains(tags, "hits") || strings.Contains(tags, "top 40") || strings.Contains(tags, "top40")
+	case "oldies":
+		return strings.Contains(tags, "oldies") || strings.Contains(tags, "retro") || strings.Contains(tags, "evergreen")
 	default:
 		return g != "" && strings.Contains(tags, g)
 	}
@@ -5582,11 +5808,28 @@ func rebuildGenres() {
 
 func clampScroll() { app.mu.Lock(); defer app.mu.Unlock(); clampScrollLocked() }
 func clampScrollLocked() {
-	showPopular := app.tab == "all" && strings.TrimSpace(app.search) == "" && strings.TrimSpace(app.genre) == ""
-	gridTop := 128
-	if showPopular {
-		gridTop = 438
+	if homeCatalogEnabled(app.clientHeight, app.tab, app.search, app.genre, app.country) {
+		viewport := int(app.clientHeight) - int(playerHeight) - 16 - 92
+		if viewport < 100 {
+			viewport = 100
+		}
+		max := homeCatalogContentHeight() - viewport
+		if max < 0 {
+			max = 0
+		}
+		if app.scroll > max {
+			app.scroll = max
+		}
+		if app.scroll < 0 {
+			app.scroll = 0
+		}
+		return
 	}
+	if app.tab == "countries" || app.tab == "genres" {
+		app.scroll = 0
+		return
+	}
+	gridTop := 132
 	viewport := int(app.clientHeight) - int(playerHeight) - 18 - gridTop
 	if viewport < 100 {
 		viewport = 100
