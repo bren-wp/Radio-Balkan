@@ -2581,7 +2581,15 @@ func stationPublicDescription(s RadioStation) string {
 }
 
 func stationPublicFacts(s RadioStation) string {
-	facts := make([]string, 0, 4)
+	facts := make([]string, 0, 6)
+	if language := strings.TrimSpace(s.Language); language != "" {
+		facts = append(facts, "Jezik: "+language)
+	}
+	if strings.EqualFold(strings.TrimSpace(s.Health), "ok") || s.LastCheckOK == 1 {
+		facts = append(facts, "Dostupnost: potvrđena")
+	} else {
+		facts = append(facts, "Dostupnost: provjera pri reprodukciji")
+	}
 	if state := strings.TrimSpace(s.State); state != "" && !strings.EqualFold(state, strings.TrimSpace(s.Country)) {
 		facts = append(facts, state)
 	}
@@ -2708,9 +2716,19 @@ func drawStationDetailPage(hdc syscall.Handle, cr RECT) {
 	text(hdc, meta, copyL, heroTop+91, mainR-220, heroTop+121, rgb(183, 192, 203), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 
 	playL := mainR - 198
+	app.mu.RLock()
+	detailCurrent := app.currentKey == key
+	detailPlaying := detailCurrent && app.playing
+	app.mu.RUnlock()
+	playLabel := "▶  Slušaj uživo"
+	if detailPlaying {
+		playLabel = "Ⅱ  Pauziraj"
+	} else if detailCurrent {
+		playLabel = "▶  Nastavi"
+	}
 	drawRounded(hdc, playL, heroTop+58, mainR-20, heroTop+106, 13, color(255, 177, 55), color(255, 204, 116))
 	selectFont(hdc, app.hFontBold)
-	text(hdc, "▶  Slušaj uživo", playL+8, heroTop+58, mainR-28, heroTop+106, rgb(29, 20, 11), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	text(hdc, playLabel, playL+8, heroTop+58, mainR-28, heroTop+106, rgb(29, 20, 11), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	app.hits = append(app.hits, HitRegion{R: RECT{playL, heroTop + 58, mainR - 20, heroTop + 106}, Kind: hitPlay, Index: idx, Value: key})
 
 	favLabel := "♡  Dodaj u omiljene"
