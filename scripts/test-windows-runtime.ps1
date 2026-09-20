@@ -60,7 +60,10 @@ function Get-CrashDetails {
 }
 
 $previousRuntimeTest = $env:RADIO_BALKAN_RUNTIME_TEST
+$previousRuntimeToken = $env:RADIO_BALKAN_RUNTIME_TOKEN
+$runtimeToken = [Guid]::NewGuid().ToString('N')
 $env:RADIO_BALKAN_RUNTIME_TEST = '1'
+$env:RADIO_BALKAN_RUNTIME_TOKEN = $runtimeToken
 $p = Start-Process -FilePath $resolvedExe -ArgumentList '--ci-runtime-smoke' -PassThru
 try {
   $window = [IntPtr]::Zero
@@ -103,10 +106,20 @@ try {
     $details = Get-CrashDetails
     throw ("Radio Balkan returned non-zero exit code {0} after its CI self-close.`n{1}" -f $p.ExitCode, $details)
   }
-  Write-Host ("Radio Balkan runtime smoke OK: main window stayed alive for {0} seconds and completed its own WM_CLOSE shutdown path." -f $SoakSeconds)
+  $lines = @()
+  if (Test-Path -LiteralPath $logPath) {
+    $lines = @(Get-Content -LiteralPath $logPath -ErrorAction SilentlyContinue)
+  }
+  $audioMarker = "[runtime-test] audio-smoke-ok token=$runtimeToken"
+  if (-not ($lines | Where-Object { $_ -like "*$audioMarker*" } | Select-Object -First 1)) {
+    $details = Get-CrashDetails
+    throw ("Radio Balkan audio engine did not confirm HTTP media playback during runtime smoke.`n{0}" -f $details)
+  }
+  Write-Host ("Radio Balkan runtime smoke OK: UI stayed alive for {0} seconds, HTTP audio opened successfully, and WM_CLOSE shutdown completed." -f $SoakSeconds)
 } finally {
   if ($p -and -not $p.HasExited) {
     Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
   }
   $env:RADIO_BALKAN_RUNTIME_TEST = $previousRuntimeTest
+  $env:RADIO_BALKAN_RUNTIME_TOKEN = $previousRuntimeToken
 }
