@@ -2258,8 +2258,10 @@ func addExcluded(excluded map[int]struct{}, ids []int) {
 }
 
 func homeCatalogContentHeight() int {
-	// 52 px intro + 5 section headers + seven compact card rows.
-	return 690
+	// Compact intro plus five discovery sections with seven card rows.
+	// Keep this in sync with drawStations so the final Pop & Rock row remains
+	// reachable even at the minimum supported client height.
+	return 790
 }
 
 func homeCatalogEnabled(clientHeight int32, tab, search, genre, country string) bool {
@@ -2404,7 +2406,7 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 		app.mu.RUnlock()
 
 		contentTop := int32(92 - scroll)
-		if contentTop+52 >= 92 && contentTop <= bottom {
+		if contentTop >= 92 && contentTop+52 <= bottom {
 			drawRounded(hdc, mainL, contentTop, mainR, contentTop+52, 14, color(17, 23, 31), color(63, 52, 43))
 			selectFont(hdc, app.hFontBold)
 			text(hdc, "Radio Balkan · Hrvatska", mainL+18, contentTop+4, mainR-180, contentTop+27, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
@@ -2427,7 +2429,7 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 					break
 				}
 				y := startY + int32(row)*(cardH+gapY)
-				if y+cardH < 92 || y > bottom {
+				if y < 92 || y+cardH > bottom {
 					continue
 				}
 				app.mu.RLock()
@@ -2450,7 +2452,7 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 			if len(ids) == 0 {
 				return y
 			}
-			if y+24 >= 92 && y <= bottom {
+			if y >= 92 && y+24 <= bottom {
 				selectFont(hdc, app.hFontBold)
 				text(hdc, title, mainL, y, mainR-150, y+24, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 				if action != "" {
