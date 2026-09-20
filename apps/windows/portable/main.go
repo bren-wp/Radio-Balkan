@@ -4857,6 +4857,16 @@ func healthCheckWithLimit(limit int, queueRescan bool) {
 	}
 }
 
+func regionalFetchCodes() []string {
+	codes := make([]string, 0, len(regionalCatalogCodes))
+	for _, country := range balkanCountries {
+		if isRegionalCatalogCode(country.Code) {
+			codes = append(codes, strings.ToUpper(strings.TrimSpace(country.Code)))
+		}
+	}
+	return codes
+}
+
 func fetchBalkanStations() ([]RadioStation, error) {
 	// Production catalog is restricted to the supported regional Balkan countries.
 	// Application-level groups such as DIA/INT must never be sent as ISO country
@@ -4866,12 +4876,7 @@ func fetchBalkanStations() ([]RadioStation, error) {
 		err  error
 		code string
 	}
-	codes := make([]string, 0, len(balkanCountries)-1)
-	for _, c := range balkanCountries {
-		if isRegionalCatalogCode(c.Code) {
-			codes = append(codes, c.Code)
-		}
-	}
+	codes := regionalFetchCodes()
 	out := make(chan result, len(codes))
 	sem := make(chan struct{}, 3)
 	for _, code := range codes {
