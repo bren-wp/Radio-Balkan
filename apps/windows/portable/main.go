@@ -2448,7 +2448,7 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 	selectFont(hdc, app.hFontBold)
 	title := "Sve stanice"
 	app.mu.RLock()
-	tab := app.tab
+	tab = app.tab
 	genre := app.genre
 	loading := app.loading
 	filteredCount := len(app.filtered)
