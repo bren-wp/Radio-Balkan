@@ -367,6 +367,7 @@ def main() -> int:
     require(errors, windows, 'return 4', "Windows responsive home cards")
     require(errors, windows, 'return 3', "Windows responsive home cards")
     require(errors, windows, 'popular := popularStations(columns)', "Windows dense home catalog")
+    require(errors, windows, 'croatia := discoveryStations(columns*3, excluded', "Windows dense home catalog")
     require(errors, windows, 'balkan := discoveryStations(columns*2, excluded', "Windows dense home catalog")
     for needle in (
         "case WM_GETMINMAXINFO:",
@@ -402,6 +403,10 @@ def main() -> int:
         "func drawCountryBrowsePage(hdc syscall.Handle, cr RECT)",
         "func drawGenreBrowsePage(hdc syscall.Handle, cr RECT)",
         "func browseGridColumns(width int32) int",
+        "func browsePageMaxScroll(clientHeight, contentWidth int32, tab string) int",
+        "func drawBrowseScrollBar(hdc syscall.Handle, cr RECT, maxScroll, scroll int)",
+        "func playerTransportCenter(width int32) int32",
+        "compactPlayer := cr.Right < 1180",
         "st.WindowWidth = 1240",
         "st.WindowHeight = 760",
         'Kind: hitTab, Index: -1, Value: "countries"',
@@ -448,6 +453,7 @@ def main() -> int:
 
     # User-facing production surfaces must not accidentally expose common development placeholders.
     forbid(errors, windows, "func firstTag(tags string) string", "Windows dead-code cleanup")
+    forbid(errors, windows, "Slušanje koristi sigurni Radio Balkan player s ograničenim timeoutom", "Windows public copy")
     require(errors, windows, "firstPublicTag(s.Tags)", "Windows shared public-tag helper")
 
     user_surfaces = "\n".join((popup_html, popup_js, android, adapter, windows))
