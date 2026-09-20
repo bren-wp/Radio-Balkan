@@ -383,7 +383,7 @@ def main() -> int:
         '"Popularno u Hrvatskoj"',
         '"Hrvatska"',
         '"Balkan"',
-        'RECT{mainR - 150, 477, mainR, 507}, Kind: hitCountryDropdown',
+        'RECT{mainR - 150, 433, mainR, 461}, Kind: hitCountryDropdown',
         'action("Kopiraj", 54, hitLink)',
         'setStatus("Poveznica za reprodukciju je kopirana")',
         'Prazno polje vraća automatski odabir.',
