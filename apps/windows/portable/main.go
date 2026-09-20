@@ -326,6 +326,7 @@ type App struct {
 	searchTimer                              *time.Timer
 	searchSeq                                uint64
 	scroll                                   int
+	clientWidth                              int32
 	clientHeight                             int32
 	current                                  int
 	currentKey                               string
@@ -885,19 +886,19 @@ func validateState(st PersistedState, loaded bool) PersistedState {
 	if !isValidTab(st.Tab) {
 		st.Tab = "all"
 	}
-	if st.WindowWidth < 1100 || st.WindowWidth > 2600 {
-		st.WindowWidth = 1360
+	if st.WindowWidth < 1024 || st.WindowWidth > 2600 {
+		st.WindowWidth = 1240
 	}
-	if st.WindowHeight < 720 || st.WindowHeight > 1600 {
-		st.WindowHeight = 820
+	if st.WindowHeight < 680 || st.WindowHeight > 1600 {
+		st.WindowHeight = 760
 	}
 	// Keep restored desktop windows compact. Older builds could persist a
 	// maximized/full-screen rectangle and reopen much larger than necessary.
-	if st.WindowWidth > 1600 {
-		st.WindowWidth = 1480
+	if st.WindowWidth > 1500 {
+		st.WindowWidth = 1420
 	}
-	if st.WindowHeight > 960 {
-		st.WindowHeight = 900
+	if st.WindowHeight > 900 {
+		st.WindowHeight = 860
 	}
 	if len(st.Recent) > 40 {
 		st.Recent = append([]string(nil), st.Recent[:40]...)
@@ -956,7 +957,7 @@ func captureWindowSize() {
 		return
 	}
 	w, h := int(r.Right-r.Left), int(r.Bottom-r.Top)
-	if w < 1100 || w > 2600 || h < 720 || h > 1600 {
+	if w < 1024 || w > 2600 || h < 680 || h > 1600 {
 		return
 	}
 	app.stateMu.Lock()
@@ -1535,11 +1536,11 @@ func createMainWindow() error {
 	app.stateMu.RLock()
 	windowW, windowH := app.state.WindowWidth, app.state.WindowHeight
 	app.stateMu.RUnlock()
-	if windowW < 1100 {
-		windowW = 1360
+	if windowW < 1024 {
+		windowW = 1240
 	}
-	if windowH < 720 {
-		windowH = 820
+	if windowH < 680 {
+		windowH = 760
 	}
 	hwnd, _, e := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16(className))), uintptr(unsafe.Pointer(u16(appName))), WS_OVERLAPPEDWINDOW|WS_VISIBLE, 50, 28, uintptr(windowW), uintptr(windowH), 0, 0, hInst, 0)
 	if hwnd == 0 {
@@ -1584,8 +1585,8 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 		if lParam != 0 {
 			var info MINMAXINFO
 			procCopyMemory.Call(uintptr(unsafe.Pointer(&info)), lParam, unsafe.Sizeof(info))
-			info.PtMinTrackSize.X = 1100
-			info.PtMinTrackSize.Y = 720
+			info.PtMinTrackSize.X = 1024
+			info.PtMinTrackSize.Y = 680
 			procCopyMemory.Call(lParam, uintptr(unsafe.Pointer(&info)), unsafe.Sizeof(info))
 		}
 		return 0
@@ -1755,6 +1756,7 @@ func layoutControls(hwnd syscall.Handle) {
 	var r RECT
 	procGetClientRect.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&r)))
 	app.mu.Lock()
+	app.clientWidth = r.Right
 	app.clientHeight = r.Bottom
 	clampScrollLocked()
 	app.mu.Unlock()
@@ -1916,21 +1918,24 @@ func drawHeader(hdc syscall.Handle, cr RECT) {
 	text(hdc, "⌕", searchL+14, 20, searchL+38, 72, rgb(143, 153, 166), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 
 	app.mu.RLock()
-	countryCode, genre := app.country, app.genre
-	countryOpen, genreOpen := app.countryMenuOpen, app.genreMenuOpen
+	countryCode, genre, tab := app.country, app.genre, app.tab
 	app.mu.RUnlock()
 	countryLabel := countryNameByCode(countryCode)
 	if countryCode == "" || countryLabel == "" {
-		countryLabel = "Sve podržane zemlje"
+		countryLabel = "Sve zemlje"
 	}
-	genreLabel := genreDisplayName(genre)
-	if genreLabel == "" {
-		genreLabel = "Svi žanrovi"
+	countryButton := "Zemlje"
+	if countryCode != "" && tab != "countries" {
+		countryButton = "Zemlje · " + countryLabel
 	}
-	drawCountrySelectBox(hdc, countryL, 20, countryR, 72, countryCode, countryLabel, countryOpen)
-	drawSelectBox(hdc, genreL, 20, genreR, 72, genreLabel, genreOpen)
-	app.hits = append(app.hits, HitRegion{R: RECT{countryL, 20, countryR, 72}, Kind: hitCountryDropdown})
-	app.hits = append(app.hits, HitRegion{R: RECT{genreL, 20, genreR, 72}, Kind: hitGenreDropdown})
+	genreButton := "Žanrovi"
+	if label := genreDisplayName(genre); label != "" && tab != "genres" {
+		genreButton = "Žanrovi · " + label
+	}
+	drawBrowseButton(hdc, countryL, 20, countryR, 72, countryButton, tab == "countries")
+	drawBrowseButton(hdc, genreL, 20, genreR, 72, genreButton, tab == "genres")
+	app.hits = append(app.hits, HitRegion{R: RECT{countryL, 20, countryR, 72}, Kind: hitTab, Index: -1, Value: "countries"})
+	app.hits = append(app.hits, HitRegion{R: RECT{genreL, 20, genreR, 72}, Kind: hitTab, Index: -1, Value: "genres"})
 	if adminModeEnabled() {
 		app.mu.RLock()
 		healthRunning := app.healthRunning
@@ -1944,6 +1949,17 @@ func drawHeader(hdc syscall.Handle, cr RECT) {
 	}
 	drawIconButton(hdc, refreshL, 20, refreshR, 72, "↻", false)
 	app.hits = append(app.hits, HitRegion{R: RECT{refreshL, 20, refreshR, 72}, Kind: hitRefresh, Index: -1})
+}
+
+func drawBrowseButton(hdc syscall.Handle, l, t, r, b int32, label string, selected bool) {
+	fill, border := color(17, 25, 35), color(43, 53, 66)
+	tc := rgb(225, 229, 234)
+	if selected {
+		fill, border, tc = color(58, 39, 23), color(132, 87, 38), rgb(255, 190, 92)
+	}
+	drawRounded(hdc, l, t, r, b, 13, fill, border)
+	selectFont(hdc, app.hFontSmall)
+	text(hdc, label, l+14, t, r-14, b, tc, DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 }
 
 func drawIconButton(hdc syscall.Handle, l, t, r, b int32, label string, accent bool) {
@@ -2113,6 +2129,63 @@ func browseGridColumns(width int32) int {
 	}
 }
 
+func browsePageMaxScroll(clientHeight, contentWidth int32, tab string) int {
+	columns := browseGridColumns(contentWidth)
+	if columns < 1 {
+		columns = 1
+	}
+	itemCount := 0
+	cardHeight := int32(78)
+	switch tab {
+	case "countries":
+		itemCount = len(regionalCountryDefs())
+		cardHeight = 82
+	case "genres":
+		itemCount = len(browseGenres)
+	default:
+		return 0
+	}
+	rows := (itemCount + columns - 1) / columns
+	if rows <= 0 {
+		return 0
+	}
+	const gap int32 = 12
+	contentHeight := int32(rows)*cardHeight + int32(rows-1)*gap
+	visibleHeight := clientHeight - playerHeight - 16 - 164
+	if visibleHeight < 80 {
+		visibleHeight = 80
+	}
+	max := int(contentHeight - visibleHeight)
+	if max < 0 {
+		return 0
+	}
+	return max
+}
+
+func drawBrowseScrollBar(hdc syscall.Handle, cr RECT, maxScroll, scroll int) {
+	if maxScroll <= 0 {
+		return
+	}
+	top := int32(164)
+	bottom := cr.Bottom - playerHeight - 16
+	if bottom <= top {
+		return
+	}
+	trackL := cr.Right - 18
+	trackR := cr.Right - 12
+	drawRounded(hdc, trackL, top, trackR, bottom, 4, color(42, 34, 30), color(42, 34, 30))
+	trackH := int(bottom - top)
+	thumbH := trackH * trackH / (trackH + maxScroll)
+	if thumbH < 34 {
+		thumbH = 34
+	}
+	thumbY := int(top)
+	if maxScroll > 0 && trackH > thumbH {
+		thumbY += scroll * (trackH - thumbH) / maxScroll
+	}
+	drawRounded(hdc, trackL, int32(thumbY), trackR, int32(thumbY+thumbH), 4, color(118, 83, 64), color(118, 83, 64))
+}
+
 func regionalCountryDefs() []CountryDef {
 	items := make([]CountryDef, 0, len(regionalCatalogCodes))
 	for _, item := range balkanCountries {
@@ -2149,6 +2222,10 @@ func drawCountryBrowsePage(hdc syscall.Handle, cr RECT) {
 	columns := browseGridColumns(width)
 	items := regionalCountryDefs()
 	counts := countryCountsSnapshot()
+	app.mu.RLock()
+	scroll := app.scroll
+	app.mu.RUnlock()
+	bottom := cr.Bottom - playerHeight - 16
 
 	selectFont(hdc, app.hFontTitle)
 	text(hdc, "Zemlje", mainL, 92, mainR, 126, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
@@ -2161,9 +2238,12 @@ func drawCountryBrowsePage(hdc syscall.Handle, cr RECT) {
 	for i, item := range items {
 		row, col := i/columns, i%columns
 		l := mainL + int32(col)*(cardW+gap)
-		t := int32(164) + int32(row)*(cardH+gap)
+		t := int32(164-scroll) + int32(row)*(cardH+gap)
 		r := l + cardW
 		b := t + cardH
+		if b < 154 || t > bottom || b > bottom {
+			continue
+		}
 		fill, border := color(16, 23, 31), color(45, 56, 69)
 		if hovered(hitCountryChoice, -1, item.Code) {
 			fill, border = color(31, 31, 33), color(132, 87, 38)
@@ -2183,6 +2263,7 @@ func drawCountryBrowsePage(hdc syscall.Handle, cr RECT) {
 		text(hdc, "›", r-40, t, r-14, b, rgb(255, 174, 55), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 		app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitTab, Index: -1, Value: "country:" + item.Code})
 	}
+	drawBrowseScrollBar(hdc, cr, browsePageMaxScroll(cr.Bottom, width, "countries"), scroll)
 }
 
 func drawGenreBrowsePage(hdc syscall.Handle, cr RECT) {
@@ -2191,6 +2272,10 @@ func drawGenreBrowsePage(hdc syscall.Handle, cr RECT) {
 	width := mainR - mainL
 	columns := browseGridColumns(width)
 	counts := genreCountsSnapshot()
+	app.mu.RLock()
+	scroll := app.scroll
+	app.mu.RUnlock()
+	bottom := cr.Bottom - playerHeight - 16
 
 	selectFont(hdc, app.hFontTitle)
 	text(hdc, "Žanrovi", mainL, 92, mainR, 126, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
@@ -2203,9 +2288,12 @@ func drawGenreBrowsePage(hdc syscall.Handle, cr RECT) {
 	for i, item := range browseGenres {
 		row, col := i/columns, i%columns
 		l := mainL + int32(col)*(cardW+gap)
-		t := int32(164) + int32(row)*(cardH+gap)
+		t := int32(164-scroll) + int32(row)*(cardH+gap)
 		r := l + cardW
 		b := t + cardH
+		if b < 154 || t > bottom || b > bottom {
+			continue
+		}
 		fill, border := color(16, 23, 31), color(45, 56, 69)
 		if hovered(hitGenreChoice, -1, item.Value) {
 			fill, border = color(31, 31, 33), color(132, 87, 38)
@@ -2220,6 +2308,7 @@ func drawGenreBrowsePage(hdc syscall.Handle, cr RECT) {
 		text(hdc, "›", r-40, t, r-14, b, rgb(255, 174, 55), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 		app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitTab, Index: -1, Value: "genre:" + item.Value})
 	}
+	drawBrowseScrollBar(hdc, cr, browsePageMaxScroll(cr.Bottom, width, "genres"), scroll)
 }
 
 func discoveryStations(limit int, excluded map[int]struct{}, predicate func(RadioStation) bool) []int {
@@ -2258,14 +2347,14 @@ func addExcluded(excluded map[int]struct{}, ids []int) {
 }
 
 func homeCatalogContentHeight() int {
-	// Compact intro plus five discovery sections with seven card rows.
-	// Keep this in sync with drawStations so the final Pop & Rock row remains
-	// reachable even at the minimum supported client height.
-	return 790
+	// Compact intro plus country-led discovery sections with ten dense card rows.
+	// Keep this in sync with drawStations so the final rows remain reachable
+	// even at the minimum supported client height.
+	return 980
 }
 
 func homeCatalogEnabled(clientHeight int32, tab, search, genre, country string) bool {
-	return clientHeight >= 640 &&
+	return clientHeight >= 600 &&
 		tab == "all" &&
 		strings.TrimSpace(search) == "" &&
 		strings.TrimSpace(genre) == "" &&
@@ -2276,16 +2365,18 @@ func shouldShowPopular() bool {
 	app.mu.RLock()
 	defer app.mu.RUnlock()
 	// WM_GETMINMAXINFO constrains the outer window, while clientHeight excludes
-	// title-bar/frame chrome. Keep this threshold below the outer 720px minimum
+	// title-bar/frame chrome. Keep this threshold below the outer 680px minimum
 	// and keep the catalog content above the persistent player.
 	return homeCatalogEnabled(app.clientHeight, app.tab, app.search, app.genre, app.country)
 }
 
 func homeGridColumns(width int32) int {
 	switch {
-	case width >= 1180:
+	case width >= 1380:
+		return 6
+	case width >= 1120:
 		return 5
-	case width >= 930:
+	case width >= 840:
 		return 4
 	default:
 		return 3
@@ -2353,13 +2444,21 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 		excluded := make(map[int]struct{}, columns*8)
 		popular := popularStations(columns)
 		addExcluded(excluded, popular)
-		croatia := discoveryStations(columns*2, excluded, func(st RadioStation) bool {
+		croatia := discoveryStations(columns*3, excluded, func(st RadioStation) bool {
 			return strings.EqualFold(strings.TrimSpace(st.CountryCode), "HR")
 		})
 		addExcluded(excluded, croatia)
+		bosnia := discoveryStations(columns, excluded, func(st RadioStation) bool {
+			return strings.EqualFold(strings.TrimSpace(st.CountryCode), "BA")
+		})
+		addExcluded(excluded, bosnia)
+		serbia := discoveryStations(columns, excluded, func(st RadioStation) bool {
+			return strings.EqualFold(strings.TrimSpace(st.CountryCode), "RS")
+		})
+		addExcluded(excluded, serbia)
 		balkan := discoveryStations(columns*2, excluded, func(st RadioStation) bool {
 			code := strings.ToUpper(strings.TrimSpace(st.CountryCode))
-			return code != "HR" && isRegionalCatalogCode(code)
+			return code != "HR" && code != "BA" && code != "RS" && isRegionalCatalogCode(code)
 		})
 		addExcluded(excluded, balkan)
 		folk := discoveryStations(columns, excluded, func(st RadioStation) bool {
@@ -2376,18 +2475,18 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 		app.mu.RUnlock()
 
 		contentTop := int32(92 - scroll)
-		if contentTop >= 92 && contentTop+52 <= bottom {
-			drawRounded(hdc, mainL, contentTop, mainR, contentTop+52, 14, color(17, 23, 31), color(63, 52, 43))
+		if contentTop >= 92 && contentTop+46 <= bottom {
+			drawRounded(hdc, mainL, contentTop, mainR, contentTop+46, 14, color(17, 23, 31), color(63, 52, 43))
 			selectFont(hdc, app.hFontBold)
-			text(hdc, "Radio Balkan · Hrvatska", mainL+18, contentTop+4, mainR-180, contentTop+27, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+			text(hdc, "Radio Balkan · Hrvatska", mainL+18, contentTop+2, mainR-180, contentTop+23, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 			selectFont(hdc, app.hFontSmall)
-			text(hdc, "Više stanica odmah · klik otvara detalje · ▶ pokreće radio", mainL+18, contentTop+26, mainR-180, contentTop+47, rgb(163, 172, 183), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-			text(hdc, fmt.Sprintf("%d hrvatskih stanica", croatiaCount), mainR-170, contentTop+4, mainR-18, contentTop+47, rgb(255, 177, 55), DT_RIGHT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+			text(hdc, "Najslušanije i regionalne postaje na jednom mjestu.", mainL+18, contentTop+22, mainR-180, contentTop+43, rgb(163, 172, 183), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+			text(hdc, fmt.Sprintf("%d hrvatskih stanica", croatiaCount), mainR-170, contentTop+2, mainR-18, contentTop+43, rgb(255, 177, 55), DT_RIGHT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 		}
 
-		gapX := int32(10)
-		gapY := int32(10)
-		cardH := int32(68)
+		gapX := int32(8)
+		gapY := int32(8)
+		cardH := int32(60)
 		cardW := (width - gapX*int32(columns-1)) / int32(columns)
 		drawRows := func(ids []int, startY int32, maxRows int) int32 {
 			if maxRows <= 0 {
@@ -2435,12 +2534,14 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 			return next + 10
 		}
 
-		y := contentTop + 59
+		y := contentTop + 52
 		y = drawSection("Popularno u Hrvatskoj", "Top", hitTab, "popular", popular, y, 1)
-		y = drawSection("Hrvatska", "Sve hrvatske", hitTab, "all", croatia, y, 2)
-		y = drawSection("Balkan", "Zemlje", hitTab, "countries", balkan, y, 2)
-		y = drawSection("Narodna / Folk", "Žanr", hitTab, "genre:folk", folk, y, 1)
-		_ = drawSection("Pop & Rock", "Žanr", hitTab, "genre:pop", popRock, y, 1)
+		y = drawSection("Hrvatska", "Sve hrvatske", hitTab, "all", croatia, y, 3)
+		y = drawSection("Bosna i Hercegovina", "Sve zemlje", hitTab, "country:BA", bosnia, y, 1)
+		y = drawSection("Srbija", "Sve zemlje", hitTab, "country:RS", serbia, y, 1)
+		y = drawSection("Ostatak Balkana", "Zemlje", hitTab, "countries", balkan, y, 2)
+		y = drawSection("Narodna / Folk", "Žanrovi", hitTab, "genre:folk", folk, y, 1)
+		_ = drawSection("Pop & Rock", "Žanrovi", hitTab, "genre:pop", popRock, y, 1)
 		return
 	}
 	// Library/search/filter pages use the efficient virtualized two-column grid.
@@ -2610,7 +2711,7 @@ func stationPublicDescription(s RadioStation) string {
 	if language := strings.TrimSpace(s.Language); language != "" {
 		description += "Jezik programa: " + language + ". "
 	}
-	description += "Slušanje koristi sigurni Radio Balkan player s ograničenim timeoutom te fallback i recovery postupkom kada je dostupan."
+	description += "Ako se veza sa stanicom privremeno prekine, Radio Balkan automatski pokušava ponovno uspostaviti reprodukciju."
 	return description
 }
 
@@ -2874,6 +2975,14 @@ func drawMiniAction(hdc syscall.Handle, l, t, r, b int32, label string) {
 	text(hdc, label, l, t, r, b, rgb(151, 139, 132), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 }
 
+func playerTransportCenter(width int32) int32 {
+	center := width / 2
+	if width < 1180 && center < 554 {
+		center = 554
+	}
+	return center
+}
+
 func drawPlayer(hdc syscall.Handle, cr RECT) {
 	t := cr.Bottom - playerHeight
 	if t < 0 {
@@ -2958,8 +3067,10 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 		app.hits = append(app.hits, HitRegion{R: RECT{388, t + 10, 432, t + 48}, Kind: hitFavorite, Index: currentIdx, Value: stationKey(current)})
 	}
 
-	// Center transport controls.
-	cx := cr.Right / 2
+	// Center transport controls without overlapping the favorite action on
+	// compact windows.
+	cx := playerTransportCenter(cr.Right)
+	compactPlayer := cr.Right < 1180
 	canStop := canStopPlayback(currentIdx, stopped)
 	selectFont(hdc, app.hFontBold)
 	prevColor := rgb(193, 199, 207)
@@ -3002,9 +3113,12 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	fillRectColor(hdc, lineL, t+80, cx+20, t+83, color(255, 174, 52))
 	drawCircle(hdc, cx+15, t+76, cx+25, t+86, color(255, 174, 52), color(255, 174, 52))
 
-	// Right-side equalizer and volume group.
-	eqL := cr.Right - 390
-	drawEqualizerBars(hdc, eqL, t+25, eqL+128, t+66, playing)
+	// Right-side equalizer and volume group. Decorative bars collapse first
+	// on compact widths so transport controls retain independent hit areas.
+	if !compactPlayer {
+		eqL := cr.Right - 390
+		drawEqualizerBars(hdc, eqL, t+25, eqL+128, t+66, playing)
+	}
 	drawSpeakerIcon(hdc, cr.Right-235, t+35, rgb(186, 193, 202))
 	if canAdjustVolume(vol, -5) {
 		drawIconButton(hdc, cr.Right-200, t+27, cr.Right-168, t+59, "−", false)
@@ -5864,7 +5978,14 @@ func clampScrollLocked() {
 		return
 	}
 	if app.tab == "countries" || app.tab == "genres" {
-		app.scroll = 0
+		contentWidth := app.clientWidth - sidebarWidth - mainPad*2
+		max := browsePageMaxScroll(app.clientHeight, contentWidth, app.tab)
+		if app.scroll > max {
+			app.scroll = max
+		}
+		if app.scroll < 0 {
+			app.scroll = 0
+		}
 		return
 	}
 	gridTop := 132

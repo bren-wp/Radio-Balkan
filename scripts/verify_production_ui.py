@@ -197,7 +197,10 @@ def main() -> int:
     require(errors, station_presentation, "public static List<RadioStation> similarStations(", "Android StationPresentation")
     for needle in (
         '"Rezervni izvori"',
-        '"Zemlje i žanrovi"',
+        'itemList.add("Zemlje")',
+        'itemList.add("Žanrovi")',
+        'showBrowsePage("countries")',
+        'showBrowsePage("genres")',
         '"Poništi filtre"',
         '"Provjeri prikazane stanice"',
         'else if ("Provjeri prikazane stanice".equals(chosen) && requireAdmin()) checkVisibleStreams();',
@@ -209,11 +212,14 @@ def main() -> int:
         '"Provjera nije uspjela · " + s.name',
         '"source-check-" + s.key()',
         'navItem("⋯", "Više", "more")',
-        'Button sort = chip("Zemlje · Žanrovi", false)',
+        'Button countriesButton = chip("Zemlje", false)',
+        'Button genresButton = chip("Žanrovi", false)',
+        'showBrowsePage("countries")',
+        'showBrowsePage("genres")',
         "new RippleDrawable(",
         'navItem("⌂", "Početna", "all")',
         'tab = "all"; country = "HR"; genre = "";',
-        'dp(168)',
+        'dp(148)',
         'navItem("★", "Top", "top")',
         'navItem("◷", "Nedavno", "recent")',
         'navItem("♡", "Omiljene", "favorites")',
@@ -353,17 +359,20 @@ def main() -> int:
     require(errors, windows, 'st.CountryCode = "HR"', "Windows first-run country default")
     require(errors, windows, 'country == "HR"', "Windows home navigation")
     require(errors, windows, 'func homeGridColumns(width int32) int', "Windows responsive home cards")
-    require(errors, windows, 'case width >= 1180:', "Windows responsive home cards")
+    require(errors, windows, 'case width >= 1380:', "Windows responsive home cards")
+    require(errors, windows, 'return 6', "Windows responsive home cards")
+    require(errors, windows, 'case width >= 1120:', "Windows responsive home cards")
     require(errors, windows, 'return 5', "Windows responsive home cards")
-    require(errors, windows, 'case width >= 930:', "Windows responsive home cards")
+    require(errors, windows, 'case width >= 840:', "Windows responsive home cards")
     require(errors, windows, 'return 4', "Windows responsive home cards")
     require(errors, windows, 'return 3', "Windows responsive home cards")
     require(errors, windows, 'popular := popularStations(columns)', "Windows dense home catalog")
+    require(errors, windows, 'croatia := discoveryStations(columns*3, excluded', "Windows dense home catalog")
     require(errors, windows, 'balkan := discoveryStations(columns*2, excluded', "Windows dense home catalog")
     for needle in (
         "case WM_GETMINMAXINFO:",
-        "info.PtMinTrackSize.X = 1100",
-        "info.PtMinTrackSize.Y = 720",
+        "info.PtMinTrackSize.X = 1024",
+        "info.PtMinTrackSize.Y = 680",
         'drawSidebarLabel(hdc, "BIBLIOTEKA", y)',
         '"Top", tab == "popular"',
         '"Zemlje", tab == "countries"',
@@ -386,14 +395,23 @@ def main() -> int:
         "func stationPublicFacts(s RadioStation) string",
         '"Popularno u Hrvatskoj"',
         '"Hrvatska"',
-        '"Balkan"',
+        '"Bosna i Hercegovina"',
+        '"Srbija"',
+        '"Ostatak Balkana"',
         '"Narodna / Folk"',
         '"Pop & Rock"',
         "func drawCountryBrowsePage(hdc syscall.Handle, cr RECT)",
         "func drawGenreBrowsePage(hdc syscall.Handle, cr RECT)",
         "func browseGridColumns(width int32) int",
-        "st.WindowWidth = 1360",
-        "st.WindowHeight = 820",
+        "func browsePageMaxScroll(clientHeight, contentWidth int32, tab string) int",
+        "func drawBrowseScrollBar(hdc syscall.Handle, cr RECT, maxScroll, scroll int)",
+        "func playerTransportCenter(width int32) int32",
+        "compactPlayer := cr.Right < 1180",
+        "st.WindowWidth = 1240",
+        "st.WindowHeight = 760",
+        'Kind: hitTab, Index: -1, Value: "countries"',
+        'Kind: hitTab, Index: -1, Value: "genres"',
+        "func drawBrowseButton(hdc syscall.Handle",
         'hitTab, "countries"',
         'action("Kopiraj", 54, hitLink)',
         'setStatus("Poveznica za reprodukciju je kopirana")',
@@ -435,6 +453,7 @@ def main() -> int:
 
     # User-facing production surfaces must not accidentally expose common development placeholders.
     forbid(errors, windows, "func firstTag(tags string) string", "Windows dead-code cleanup")
+    forbid(errors, windows, "Slušanje koristi sigurni Radio Balkan player s ograničenim timeoutom", "Windows public copy")
     require(errors, windows, "firstPublicTag(s.Tags)", "Windows shared public-tag helper")
 
     user_surfaces = "\n".join((popup_html, popup_js, android, adapter, windows))
