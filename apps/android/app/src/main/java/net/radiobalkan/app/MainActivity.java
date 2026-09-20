@@ -83,6 +83,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private TextView heroName, heroMeta, stationsTitle, statusText, playerName, playerMeta;
     private ImageView playerArtwork;
     private View searchBox, playerStationInfo;
+    private LinearLayout browsePanel;
     private EqualizerView playerEqualizer;
     private Button heroPlay, playerPrev, playerPlay, playerStop, playerNext;
     private ListView list;
@@ -176,17 +177,20 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         header.setOrientation(LinearLayout.VERTICAL);
         header.addView(buildHero(), marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(168), 0, 3, 0, 8));
         header.addView(buildQuickAreas(), marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48), 0, 0, 0, 8));
+        browsePanel = buildInlineBrowsePanel();
+        browsePanel.setVisibility(View.GONE);
+        header.addView(browsePanel, marginParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 0, 0, 8));
 
         LinearLayout stationsHeader = new LinearLayout(this);
         stationsHeader.setGravity(Gravity.CENTER_VERTICAL);
         stationsTitle = label("Sve stanice", 25, Color.WHITE, true);
         stationsHeader.addView(stationsTitle, new LinearLayout.LayoutParams(0, dp(46), 1f));
-        Button sort = chip("Filtriraj ⌄", false);
+        Button sort = chip("Zemlje · Žanrovi", false);
         sort.setTextSize(14);
         sort.setBackground(interactiveRounded(0x00000000, 0x00000000, 12, 0x24FFFFFF));
         sort.setTextColor(0xFFB9BDC6);
         sort.setOnClickListener(v -> showBrowseDialog());
-        stationsHeader.addView(sort, new LinearLayout.LayoutParams(dp(126), dp(46)));
+        stationsHeader.addView(sort, new LinearLayout.LayoutParams(dp(154), dp(46)));
         header.addView(stationsHeader);
 
         adapter = new StationAdapter(this, this, images);
@@ -631,7 +635,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private void showAppMenu() {
         List<String> itemList = new ArrayList<>();
         itemList.add("Pretraži");
-        itemList.add("Filtriraj stanice");
+        itemList.add("Zemlje i žanrovi");
         itemList.add("Poništi filtre");
         itemList.add("Osvježi popis");
         if (adminMode) {
@@ -647,7 +651,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         new AlertDialog.Builder(this).setTitle(adminMode ? "Radio Balkan · Admin" : "Radio Balkan").setItems(items, (d, which) -> {
             String chosen = items[which];
             if ("Pretraži".equals(chosen)) setSearchVisible(true);
-            else if ("Filtriraj stanice".equals(chosen)) showBrowseDialog();
+            else if ("Zemlje i žanrovi".equals(chosen)) showBrowseDialog();
             else if ("Poništi filtre".equals(chosen)) resetBrowseFilters();
             else if ("Osvježi popis".equals(chosen)) refreshCatalog();
             else if ("Provjeri prikazane stanice".equals(chosen) && requireAdmin()) checkVisibleStreams();
@@ -781,68 +785,96 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         dialog.show();
     }
 
-    private void showBrowseDialog() {
+    private LinearLayout buildInlineBrowsePanel() {
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(8), dp(4), dp(8), dp(4));
+        panel.setPadding(dp(12), dp(10), dp(12), dp(10));
+        panel.setBackground(rounded(0xFF101821, 0xFF4A382A, 18));
+        panel.setContentDescription("Pregled zemalja i žanrova");
+        return panel;
+    }
 
-        TextView cTitle = label("Država", 14, Color.WHITE, true);
-        panel.addView(cTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
+    private void populateInlineBrowsePanel() {
+        if (browsePanel == null) return;
+        browsePanel.removeAllViews();
+
+        LinearLayout heading = new LinearLayout(this);
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title = label("Zemlje", 15, Color.WHITE, true);
+        heading.addView(title, new LinearLayout.LayoutParams(0, dp(34), 1f));
+        Button reset = chip("Poništi", false);
+        reset.setContentDescription("Poništi filtre zemalja i žanrova");
+        reset.setOnClickListener(v -> {
+            resetBrowseFilters();
+            populateInlineBrowsePanel();
+        });
+        heading.addView(reset, new LinearLayout.LayoutParams(dp(92), dp(34)));
+        browsePanel.addView(heading, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
+
         LinearLayout countries = chipRow();
-        List<Button> countryButtons = new ArrayList<>();
         Map<String,Integer> counts = countryCounts();
-        int total = 0;
-        for (int v : counts.values()) total += v;
-        for (String[] c : RadioRepository.COUNTRIES) {
-            String code = c[0], name = c[1];
-            int count = code.isEmpty() ? total : counts.getOrDefault(code, 0);
-            Button b = chip(count > 0 ? name + " · " + count : name, code.equalsIgnoreCase(country));
-            b.setTag(code);
-            if (code.isEmpty() || RadioRepository.DIASPORA_CODE.equals(code) || RadioRepository.FOREIGN_CODE.equals(code)) clearFlag(b);
-            else applyFlag(b, code);
-            countryButtons.add(b);
-            b.setOnClickListener(v -> {
+        for (String[] entry : RadioRepository.COUNTRIES) {
+            String code = entry[0], name = entry[1];
+            if (code.isEmpty() || RadioRepository.DIASPORA_CODE.equals(code) || RadioRepository.FOREIGN_CODE.equals(code)) continue;
+            int count = counts.getOrDefault(code, 0);
+            Button button = chip(count > 0 ? name + " · " + count : name, code.equalsIgnoreCase(country) && genre.isEmpty());
+            button.setTag(code);
+            applyFlag(button, code);
+            button.setOnClickListener(v -> {
                 tab = "all";
                 country = code;
+                genre = "";
                 state.setTab(tab);
                 state.setCountry(code);
-                selectBottomNav((country.isEmpty() && genre.isEmpty()) ? "all" : "filter");
-                for (Button item : countryButtons) styleChip(item, String.valueOf(item.getTag()).equalsIgnoreCase(country));
+                state.setGenre("");
+                selectBottomNav("filter");
+                populateInlineBrowsePanel();
                 applyFilterAsync();
             });
-            countries.addView(b, chipParams());
+            countries.addView(button, chipParams());
         }
-        panel.addView(horizontal(countries), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+        browsePanel.addView(horizontal(countries), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)));
 
-        TextView gTitle = label("Žanr", 14, Color.WHITE, true);
-        panel.addView(gTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
+        TextView genreTitle = label("Žanrovi", 15, Color.WHITE, true);
+        genreTitle.setPadding(0, dp(6), 0, 0);
+        browsePanel.addView(genreTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
+
         LinearLayout genres = chipRow();
-        List<Button> genreButtons = new ArrayList<>();
-        String[][] gs = {{"Svi",""},{"Domaća","domaca"},{"Pop & Rock","pop"},{"Narodna","folk"},{"Elektronička","electronic"},{"Jazz","jazz"},{"Klasična","classical"}};
-        for (String[] g : gs) {
-            String label = g[0], value = g[1];
-            Button b = chip(label, value.equalsIgnoreCase(genre));
-            b.setTag(value);
-            genreButtons.add(b);
-            b.setOnClickListener(v -> {
+        String[][] items = {
+                {"Svi žanrovi",""}, {"Domaća / regionalna","domaca"}, {"Pop & Rock","pop"},
+                {"Narodna / Folk","folk"}, {"Elektronička","electronic"}, {"Jazz","jazz"},
+                {"Klasična","classical"}, {"Vijesti & Talk","news"}, {"Hits / Top 40","hits"}, {"Oldies","oldies"}
+        };
+        for (String[] item : items) {
+            String label = item[0], value = item[1];
+            Button button = chip(label, value.equalsIgnoreCase(genre));
+            button.setTag(value);
+            button.setOnClickListener(v -> {
                 tab = "all";
+                country = "";
                 genre = value;
                 state.setTab(tab);
+                state.setCountry("");
                 state.setGenre(value);
-                selectBottomNav((country.isEmpty() && genre.isEmpty()) ? "all" : "filter");
-                for (Button item : genreButtons) styleChip(item, String.valueOf(item.getTag()).equalsIgnoreCase(genre));
+                selectBottomNav(value.isEmpty() ? "all" : "filter");
+                populateInlineBrowsePanel();
                 applyFilterAsync();
             });
-            genres.addView(b, chipParams());
+            genres.addView(button, chipParams());
         }
-        panel.addView(horizontal(genres), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+        browsePanel.addView(horizontal(genres), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)));
+    }
 
-        new AlertDialog.Builder(this)
-                .setTitle("Pregledaj stanice")
-                .setView(panel)
-                .setNeutralButton("Poništi filtre", (d, which) -> resetBrowseFilters())
-                .setPositiveButton("Gotovo", null)
-                .show();
+    private void showBrowseDialog() {
+        if (browsePanel == null) return;
+        boolean opening = browsePanel.getVisibility() != View.VISIBLE;
+        if (opening) {
+            populateInlineBrowsePanel();
+            browsePanel.setVisibility(View.VISIBLE);
+            if (list != null) list.smoothScrollToPosition(0);
+        } else {
+            browsePanel.setVisibility(View.GONE);
+        }
     }
 
     private void resetBrowseFilters() {
@@ -893,6 +925,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             s.refreshIndexes();
         }
         synchronized (dataLock) { allStations = new ArrayList<>(stations); }
+        if (browsePanel != null && browsePanel.getVisibility() == View.VISIBLE) populateInlineBrowsePanel();
         statusText.setText(status);
         applyFilterAsync();
         scheduleAutomaticHealthScan();
@@ -997,6 +1030,9 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             case "electronic": return "Elektronička";
             case "jazz": return "Jazz";
             case "classical": return "Klasična";
+            case "news": return "Vijesti & Talk";
+            case "hits": return "Hits / Top 40";
+            case "oldies": return "Oldies";
             default: return "Sve stanice";
         }
     }
@@ -1019,7 +1055,11 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             case "pop": return containsAny(t, "pop", "rock", "indie", "alternative");
             case "folk": return containsAny(t, "folk", "narodna", "narodno", "turbo folk", "sevdah", "sevdalinka", "etno", "krajiska");
             case "electronic": return containsAny(t, "electronic", "dance", "house", "techno", "edm", "trance", "club");
-            case "classical": return containsAny(t, "classical", "klasicna");
+            case "jazz": return containsAny(t, "jazz", "blues", "soul");
+            case "classical": return containsAny(t, "classical", "klasicna", "opera", "symphony");
+            case "news": return containsAny(t, "news", "talk", "informativni", "vijesti", "speech", "spoken");
+            case "hits": return containsAny(t, "hits", "top 40", "top40", "charts", "chart");
+            case "oldies": return containsAny(t, "oldies", "retro", "evergreen");
             default: return t.contains(RadioStation.fold(g));
         }
     }

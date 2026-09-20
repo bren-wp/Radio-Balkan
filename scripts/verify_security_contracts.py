@@ -478,8 +478,8 @@ def main() -> None:
         "station-page play must use the existing RB_PLAY path",
         "public station page must not expose stream URLs",
         "Top must be a distinct navigation state",
-        "Zemlje navigation must focus the country selector rather than duplicating another view",
-        "Žanrovi navigation must focus the genre selector rather than duplicating another view",
+        "Zemlje navigation must open an in-popup browse page",
+        "Žanrovi navigation must stay inside the popup",
     )
     require(
         "scripts/test_chromium_player_contract.js",

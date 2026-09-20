@@ -80,6 +80,95 @@ func TestSafeHTTPURLAcceptsPublicHTTPStreams(t *testing.T) {
 	}
 }
 
+func TestNavigationTabsIncludeInAppCountryAndGenrePages(t *testing.T) {
+	for _, tab := range []string{"all", "popular", "countries", "genres", "favorites", "recent"} {
+		if !isValidTab(tab) {
+			t.Fatalf("tab %q must be valid", tab)
+		}
+	}
+	if isValidTab("dropdown") {
+		t.Fatal("legacy dropdown pseudo-tab must not become a persisted navigation state")
+	}
+}
+
+func TestRegionalRefreshPreservesSupplementalCatalogGroups(t *testing.T) {
+	regional := []RadioStation{
+		{StationUUID: "hr", Name: "HR", CountryCode: "HR", URL: "https://example.com/hr"},
+		{StationUUID: "rs", Name: "RS", CountryCode: "RS", URL: "https://example.com/rs"},
+	}
+	previous := []RadioStation{
+		{StationUUID: "dia", Name: "Diaspora", CountryCode: diasporaCatalogCode, SourceCountryCode: "DE", URL: "https://example.com/dia", Votes: 10},
+		{StationUUID: "int", Name: "Foreign", CountryCode: foreignCatalogCode, SourceCountryCode: "US", URL: "https://example.com/int", Votes: 9},
+	}
+	got := preserveSupplementalStations(regional, previous)
+	seen := map[string]bool{}
+	for _, station := range got {
+		seen[station.CountryCode] = true
+	}
+	for _, code := range []string{"HR", "RS", diasporaCatalogCode, foreignCatalogCode} {
+		if !seen[code] {
+			t.Fatalf("refreshed catalog lost %q group: %#v", code, got)
+		}
+	}
+}
+
+func TestRegionalFetchCodesExcludeApplicationGroups(t *testing.T) {
+	codes := regionalFetchCodes()
+	if len(codes) != 8 {
+		t.Fatalf("regional fetch has %d country codes; want 8", len(codes))
+	}
+	seen := map[string]bool{}
+	for _, code := range codes {
+		if !isRegionalCatalogCode(code) {
+			t.Fatalf("fetch contains non-regional code %q", code)
+		}
+		if isSupplementalCatalogCode(code) {
+			t.Fatalf("fetch must never send application group %q as an ISO country code", code)
+		}
+		if seen[code] {
+			t.Fatalf("duplicate regional fetch code %q", code)
+		}
+		seen[code] = true
+	}
+	for _, want := range []string{"HR", "BA", "RS", "SI", "MK", "AL", "ME", "BG"} {
+		if !seen[want] {
+			t.Fatalf("regional fetch is missing %q", want)
+		}
+	}
+}
+
+func TestRegionalCountryBrowseExcludesApplicationGroups(t *testing.T) {
+	items := regionalCountryDefs()
+	if len(items) != 8 {
+		t.Fatalf("regional country page contains %d entries; want 8", len(items))
+	}
+	for _, item := range items {
+		if !isRegionalCatalogCode(item.Code) {
+			t.Fatalf("non-regional code %q leaked into country page", item.Code)
+		}
+		if isSupplementalCatalogCode(item.Code) {
+			t.Fatalf("supplemental catalog code %q leaked into country page", item.Code)
+		}
+	}
+}
+
+func TestCompactDesktopWindowDefaultsAndRestoreCap(t *testing.T) {
+	fresh := validateState(PersistedState{}, false)
+	if fresh.WindowWidth != 1360 || fresh.WindowHeight != 820 {
+		t.Fatalf("fresh window = %dx%d; want 1360x820", fresh.WindowWidth, fresh.WindowHeight)
+	}
+
+	large := validateState(PersistedState{Volume: 80, CountryCode: "HR", Tab: "all", WindowWidth: 2200, WindowHeight: 1200}, true)
+	if large.WindowWidth != 1480 || large.WindowHeight != 900 {
+		t.Fatalf("large restored window = %dx%d; want compact 1480x900 cap", large.WindowWidth, large.WindowHeight)
+	}
+
+	normal := validateState(PersistedState{Volume: 80, CountryCode: "HR", Tab: "all", WindowWidth: 1440, WindowHeight: 860}, true)
+	if normal.WindowWidth != 1440 || normal.WindowHeight != 860 {
+		t.Fatalf("normal restored window changed to %dx%d", normal.WindowWidth, normal.WindowHeight)
+	}
+}
+
 func TestValidateStateDefaultsToCroatiaOnlyOnFirstLaunch(t *testing.T) {
 	fresh := validateState(PersistedState{}, false)
 	if fresh.CountryCode != "HR" {
@@ -371,6 +460,25 @@ func TestHomeCatalogEnabledAtMinimumWindowHeight(t *testing.T) {
 	for _, country := range []string{"", "BA", "RS", "DIA", "INT"} {
 		if homeCatalogEnabled(720, "all", "", "", country) {
 			t.Fatalf("Croatia home must not render for country %q", country)
+		}
+	}
+}
+
+func TestBrowseGridColumnsRemainResponsive(t *testing.T) {
+	tests := []struct {
+		width int32
+		want  int
+	}{
+		{620, 2},
+		{779, 2},
+		{780, 3},
+		{1079, 3},
+		{1080, 4},
+		{1500, 4},
+	}
+	for _, tc := range tests {
+		if got := browseGridColumns(tc.width); got != tc.want {
+			t.Fatalf("browseGridColumns(%d) = %d; want %d", tc.width, got, tc.want)
 		}
 	}
 }

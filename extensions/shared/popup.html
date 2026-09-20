@@ -36,9 +36,19 @@
 
     <nav class="quickAreas" aria-label="Glavno pregledavanje">
       <button id="quickTop" class="quickAreaButton primaryBrowseButton" type="button">🔥 Top</button>
-      <button id="quickGenres" class="quickAreaButton primaryBrowseButton" type="button">♫ Žanrovi</button>
-      <button id="quickCountries" class="quickAreaButton primaryBrowseButton" type="button">🌍 Zemlje</button>
+      <button id="quickGenres" class="quickAreaButton primaryBrowseButton" type="button" aria-expanded="false" aria-controls="discoveryPanel">♫ Žanrovi</button>
+      <button id="quickCountries" class="quickAreaButton primaryBrowseButton" type="button" aria-expanded="false" aria-controls="discoveryPanel">🌍 Zemlje</button>
     </nav>
+    <section id="discoveryPanel" class="discoveryPanel" aria-labelledby="discoveryPanelTitle" hidden>
+      <div class="discoveryPanelHeader">
+        <div>
+          <h2 id="discoveryPanelTitle">Pregledaj</h2>
+          <span id="discoveryPanelHint">Odaberi kategoriju</span>
+        </div>
+        <button id="discoveryPanelClose" class="discoveryPanelClose" type="button" aria-label="Zatvori pregled">×</button>
+      </div>
+      <div id="discoveryOptions" class="discoveryOptions"></div>
+    </section>
     <nav class="discoveryRail" aria-label="Brzi odabir">
       <button id="quickAll" class="discoveryChip" type="button">🇭🇷 Hrvatska</button>
       <button id="quickRecent" class="discoveryChip" type="button">◷ Nedavno</button>

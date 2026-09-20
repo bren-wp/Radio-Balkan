@@ -320,7 +320,82 @@
     }
   }
 
+  function closeDiscoveryPanel(restoreFocus = false) {
+    const panel = $('discoveryPanel');
+    if (!panel || panel.hidden) return;
+    const mode = panel.dataset.mode || '';
+    panel.hidden = true;
+    panel.dataset.mode = '';
+    $('quickCountries')?.setAttribute('aria-expanded', 'false');
+    $('quickGenres')?.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) {
+      if (mode === 'genres') $('quickGenres')?.focus();
+      else $('quickCountries')?.focus();
+    }
+  }
+
+  function openDiscoveryPanel(mode) {
+    const panel = $('discoveryPanel');
+    const options = $('discoveryOptions');
+    if (!panel || !options) return;
+    const isCountries = mode === 'countries';
+    panel.dataset.mode = isCountries ? 'countries' : 'genres';
+    $('discoveryPanelTitle').textContent = isCountries ? 'Zemlje' : 'Žanrovi';
+    $('discoveryPanelHint').textContent = isCountries
+      ? 'Odaberi balkansku zemlju'
+      : 'Odaberi glazbu ili vrstu programa';
+    $('quickCountries')?.setAttribute('aria-expanded', String(isCountries));
+    $('quickGenres')?.setAttribute('aria-expanded', String(!isCountries));
+    options.replaceChildren();
+
+    if (isCountries) {
+      const counts = new Map();
+      for (const station of all) {
+        const code = String(station.countrycode || '').toUpperCase();
+        counts.set(code, (counts.get(code) || 0) + 1);
+      }
+      for (const [code, name] of RB.COUNTRIES) {
+        if (code === RB.DIASPORA_CODE || code === RB.FOREIGN_CODE) continue;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'discoveryOption';
+        button.setAttribute('aria-pressed', String(country.value === code && !genre?.value));
+        const label = document.createElement('strong');
+        label.textContent = name;
+        const count = document.createElement('span');
+        count.textContent = String(counts.get(code) || 0);
+        button.append(label, count);
+        button.addEventListener('click', () => {
+          closeDiscoveryPanel(false);
+          selectArea(code);
+        });
+        options.append(button);
+      }
+    } else {
+      const entries = [['', 'Svi žanrovi'], ...GENRE_LABELS.entries()];
+      for (const [value, labelText] of entries) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'discoveryOption';
+        button.setAttribute('aria-pressed', String((genre?.value || '') === value));
+        const label = document.createElement('strong');
+        label.textContent = labelText;
+        const count = document.createElement('span');
+        count.textContent = String(all.filter(station => matchesGenre(station, value)).length);
+        button.append(label, count);
+        button.addEventListener('click', () => {
+          closeDiscoveryPanel(false);
+          selectGenre(value);
+        });
+        options.append(button);
+      }
+    }
+    panel.hidden = false;
+    options.children?.[0]?.focus?.();
+  }
+
   function selectGenre(value) {
+    closeDiscoveryPanel(false);
     viewMode = 'all';
     favoritesOnly = false;
     updateFavoritesFilterButton();
@@ -333,6 +408,7 @@
   }
 
   function selectArea(code) {
+    closeDiscoveryPanel(false);
     viewMode = 'all';
     favoritesOnly = false;
     updateFavoritesFilterButton();
@@ -345,6 +421,7 @@
   }
 
   function selectTop() {
+    closeDiscoveryPanel(false);
     viewMode = 'top';
     favoritesOnly = false;
     search.value = '';
@@ -357,6 +434,7 @@
   }
 
   function selectRecent() {
+    closeDiscoveryPanel(false);
     viewMode = 'recent';
     favoritesOnly = false;
     search.value = '';
@@ -914,8 +992,14 @@
   $('quickAll').addEventListener('click', () => selectArea('HR'));
   $('quickTop').addEventListener('click', selectTop);
   $('quickRecent').addEventListener('click', selectRecent);
-  $('quickCountries').addEventListener('click', () => country.focus());
-  $('quickGenres').addEventListener('click', () => genre?.focus());
+  $('quickCountries').addEventListener('click', () => openDiscoveryPanel('countries'));
+  $('quickGenres').addEventListener('click', () => openDiscoveryPanel('genres'));
+  $('discoveryPanelClose').addEventListener('click', () => closeDiscoveryPanel(true));
+  $('discoveryPanel').addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    closeDiscoveryPanel(true);
+  });
   $('quickDiaspora').addEventListener('click', () => selectArea(RB.DIASPORA_CODE));
   $('quickForeign').addEventListener('click', () => selectArea(RB.FOREIGN_CODE));
   $('quickFolk').addEventListener('click', () => selectGenre('folk'));

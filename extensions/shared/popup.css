@@ -43,6 +43,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .quickAreas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; padding: 0 12px 7px; }
 .quickAreaButton { height: 39px; border: 1px solid #33404f; border-radius: 12px; background: linear-gradient(180deg, #121a24, #0e151d); color: #d8dee6; cursor: pointer; font-size: 11.5px; font-weight: 800; }
 .quickAreaButton:hover, .quickAreaButton[aria-pressed="true"] { border-color: #a06a31; background: #211a15; color: #ffbd58; }
+.discoveryPanel { margin: 0 12px 8px; padding: 9px; border: 1px solid #4b3828; border-radius: 14px; background: linear-gradient(180deg, #111922, #0d141c); box-shadow: 0 12px 26px #0005; }
+.discoveryPanelHeader { min-height: 36px; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+.discoveryPanelHeader > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.discoveryPanelHeader h2 { margin: 0; font-size: 13px; }
+.discoveryPanelHeader span { color: #8793a1; font-size: 9.5px; }
+.discoveryPanelClose { width: 34px; height: 34px; border: 1px solid #303c49; border-radius: 10px; background: #101720; color: #aeb8c5; cursor: pointer; font-size: 20px; line-height: 1; }
+.discoveryPanelClose:hover { border-color: #8c5b2c; color: #ffc15b; }
+.discoveryOptions { max-height: 184px; overflow: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding-right: 2px; scrollbar-width: thin; scrollbar-color: #513b2a transparent; }
+.discoveryOption { min-width: 0; min-height: 43px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid #2c3744; border-radius: 10px; background: #101720; color: #dce2e9; text-align: left; cursor: pointer; }
+.discoveryOption:hover, .discoveryOption[aria-pressed="true"] { border-color: #8c5d2d; background: #211a15; color: #ffc15b; }
+.discoveryOption strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
+.discoveryOption span { color: #83909e; font-size: 9.5px; font-weight: 700; }
 .discoveryRail { display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; padding: 0 12px 8px; }
 .discoveryRail::-webkit-scrollbar { display: none; }
 .discoveryChip { flex: 0 0 auto; min-width: 82px; height: 31px; padding: 0 10px; border: 1px solid #2d3947; border-radius: 999px; background: #0f161f; color: #aeb8c5; cursor: pointer; font-size: 10.5px; font-weight: 700; white-space: nowrap; }
@@ -167,6 +179,8 @@ button:disabled { cursor: default; opacity: .46; box-shadow: none; }
   .brandCopy span { font-size: 9.5px; }
   .quickAreas { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
   .quickAreaButton { padding: 0 4px; font-size: 10px; }
+  .discoveryPanel { margin-inline: 10px; }
+  .discoveryOptions { grid-template-columns: 1fr; max-height: 178px; }
   .discoveryRail { gap: 5px; padding-inline: 10px; }
   .discoveryChip { min-width: 76px; padding: 0 8px; font-size: 9.5px; }
   .stationPageActions { grid-template-columns: 1fr; }
