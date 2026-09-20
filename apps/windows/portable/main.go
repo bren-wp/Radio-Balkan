@@ -2077,13 +2077,27 @@ func genreDisplayName(g string) string {
 	}
 }
 
+func homeCatalogEnabled(clientHeight int32, tab, search, genre string) bool {
+	return clientHeight >= 700 && tab == "all" && strings.TrimSpace(search) == "" && strings.TrimSpace(genre) == ""
+}
+
 func shouldShowPopular() bool {
 	app.mu.RLock()
 	defer app.mu.RUnlock()
-	// The rich home composition is intentionally only used when it fits without
-	// colliding with the persistent player. Smaller windows fall back to the
-	// virtualized station library instead of clipping controls.
-	return app.clientHeight >= 840 && app.tab == "all" && strings.TrimSpace(app.search) == "" && strings.TrimSpace(app.genre) == ""
+	// The home catalog is dense enough to fit the minimum supported 720px
+	// window without colliding with the persistent player.
+	return homeCatalogEnabled(app.clientHeight, app.tab, app.search, app.genre)
+}
+
+func homeGridColumns(width int32) int {
+	switch {
+	case width >= 1180:
+		return 5
+	case width >= 930:
+		return 4
+	default:
+		return 3
+	}
 }
 
 func popularStations(limit int) []int {
@@ -2118,6 +2132,36 @@ func popularStations(limit int) []int {
 	return best
 }
 
+func regionalDiscoveryStations(limit int, excluded map[int]struct{}) []int {
+	if limit <= 0 {
+		return nil
+	}
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	items := make([]int, 0, limit*2)
+	for idx, st := range app.stations {
+		if _, skip := excluded[idx]; skip {
+			continue
+		}
+		code := strings.ToUpper(strings.TrimSpace(st.CountryCode))
+		if code == "HR" || !isRegionalCatalogCode(code) {
+			continue
+		}
+		items = append(items, idx)
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		left, right := app.stations[items[i]], app.stations[items[j]]
+		if left.Votes != right.Votes {
+			return left.Votes > right.Votes
+		}
+		return strings.ToLower(left.Name) < strings.ToLower(right.Name)
+	})
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return append([]int(nil), items...)
+}
+
 func drawStations(hdc syscall.Handle, cr RECT) {
 	app.mu.RLock()
 	detailOpen := strings.TrimSpace(app.detailKey) != ""
@@ -2133,97 +2177,85 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 	showHome := shouldShowPopular()
 
 	if showHome {
-		homeColumns := 6
-		if mainR-mainL >= 1120 {
-			homeColumns = 8
+		width := mainR - mainL
+		columns := homeGridColumns(width)
+		popular := popularStations(columns * 3)
+		excluded := make(map[int]struct{}, len(popular))
+		for _, idx := range popular {
+			excluded[idx] = struct{}{}
 		}
-		ids := popularStations(1 + homeColumns*2)
-		if len(ids) > 0 {
-			app.mu.RLock()
-			featuredIdx := ids[0]
-			var featured RadioStation
-			if featuredIdx >= 0 && featuredIdx < len(app.stations) {
-				featured = app.stations[featuredIdx]
-			}
-			totalStations := len(app.stations)
-			app.mu.RUnlock()
-			drawHomeHero(hdc, mainL, 82, mainR, 300, featuredIdx, featured, totalStations)
-		}
+		balkan := regionalDiscoveryStations(columns, excluded)
 
-		// Popular stations adapt between six and eight cards on wider windows.
+		app.mu.RLock()
+		croatiaCount := len(app.filtered)
+		app.mu.RUnlock()
+
+		// Compact catalog header: no oversized hero, no empty decorative space.
+		drawRounded(hdc, mainL, 92, mainR, 148, 14, color(17, 23, 31), color(63, 52, 43))
 		selectFont(hdc, app.hFontBold)
-		text(hdc, "Popularne stanice", mainL, 315, mainR-120, 345, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+		text(hdc, "Radio Balkan · Hrvatska", mainL+18, 99, mainR-180, 123, rgb(248, 249, 251), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 		selectFont(hdc, app.hFontSmall)
-		text(hdc, "Prikaži sve  →", mainR-130, 315, mainR, 345, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
-		app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 315, mainR, 345}, Kind: hitTab, Index: -1, Value: "popular"})
-		cards := ids
-		if len(cards) > 1 {
-			cards = cards[1:]
-		}
-		if len(cards) > homeColumns {
-			cards = cards[:homeColumns]
-		}
-		gap := int32(12)
-		cardW := (mainR - mainL - gap*int32(homeColumns-1)) / int32(homeColumns)
-		for i, idx := range cards {
-			l := mainL + int32(i)*(cardW+gap)
-			app.mu.RLock()
-			if idx < 0 || idx >= len(app.stations) {
+		text(hdc, "Odaberi karticu za detalje ili ▶ za reprodukciju", mainL+18, 121, mainR-180, 142, rgb(163, 172, 183), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+		text(hdc, fmt.Sprintf("%d hrvatskih stanica", croatiaCount), mainR-170, 99, mainR-18, 142, rgb(255, 177, 55), DT_RIGHT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
+
+		gapX := int32(10)
+		gapY := int32(10)
+		cardH := int32(72)
+		cardW := (width - gapX*int32(columns-1)) / int32(columns)
+		drawRow := func(ids []int, y int32) {
+			for i, idx := range ids {
+				if i >= columns {
+					break
+				}
+				app.mu.RLock()
+				if idx < 0 || idx >= len(app.stations) {
+					app.mu.RUnlock()
+					continue
+				}
+				st := app.stations[idx]
 				app.mu.RUnlock()
-				continue
+				l := mainL + int32(i)*(cardW+gapX)
+				drawRegionCard(hdc, l, y, l+cardW, y+cardH, idx, st, i)
 			}
-			st := app.stations[idx]
-			app.mu.RUnlock()
-			drawPopularCard(hdc, l, 350, l+cardW, 510, idx, st, i)
 		}
 
-		// Genre artwork row.
 		selectFont(hdc, app.hFontBold)
-		text(hdc, "Žanrovi", mainL, 528, mainR-120, 556, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-		selectFont(hdc, app.hFontSmall)
-		text(hdc, "Prikaži sve  →", mainR-130, 528, mainR, 556, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
-		app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 528, mainR, 558}, Kind: hitGenreDropdown, Index: -1})
-		genres := []struct{ Label, Value string }{
-			{"Pop", "pop"}, {"Rock", "rock"}, {"Elektronička", "electronic"},
-			{"Jazz", "jazz"}, {"Klasična", "classical"}, {"Hip Hop", "hiphop"},
+		text(hdc, "Popularno u Hrvatskoj", mainL, 160, mainR, 188, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+		firstEnd := columns
+		if firstEnd > len(popular) {
+			firstEnd = len(popular)
 		}
-		genreW := (mainR - mainL - gap*5) / 6
-		for i, g := range genres {
-			l := mainL + int32(i)*(genreW+gap)
-			drawGenreTile(hdc, l, 562, l+genreW, 646, g.Label, g.Value, i)
+		drawRow(popular[:firstEnd], 190)
+
+		selectFont(hdc, app.hFontBold)
+		text(hdc, "Hrvatska", mainL, 276, mainR-130, 304, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+		selectFont(hdc, app.hFontSmall)
+		text(hdc, "Prikaži sve  →", mainR-130, 276, mainR, 304, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
+		app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 276, mainR, 306}, Kind: hitTab, Index: -1, Value: "all"})
+		croatia := popular[firstEnd:]
+		secondEnd := columns
+		if secondEnd > len(croatia) {
+			secondEnd = len(croatia)
+		}
+		drawRow(croatia[:secondEnd], 307)
+		if len(croatia) > secondEnd {
+			thirdEnd := secondEnd + columns
+			if thirdEnd > len(croatia) {
+				thirdEnd = len(croatia)
+			}
+			drawRow(croatia[secondEnd:thirdEnd], 307+cardH+gapY)
 		}
 
-		// Compact regional row at the bottom of the home view.
-		selectFont(hdc, app.hFontBold)
-		text(hdc, "Stanice iz regije", mainL, 660, mainR-120, 688, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
-		selectFont(hdc, app.hFontSmall)
-		text(hdc, "Prikaži sve  →", mainR-130, 660, mainR, 688, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
-		app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 660, mainR, 690}, Kind: hitTab, Index: -1, Value: "all"})
-		region := ids
-		regionStart := 1 + len(cards)
-		if len(region) > regionStart {
-			region = region[regionStart:]
-		} else {
-			region = nil
-		}
-		if len(region) > homeColumns {
-			region = region[:homeColumns]
-		}
-		regW := (mainR - mainL - gap*int32(homeColumns-1)) / int32(homeColumns)
-		for i, idx := range region {
-			app.mu.RLock()
-			if idx < 0 || idx >= len(app.stations) {
-				app.mu.RUnlock()
-				continue
-			}
-			st := app.stations[idx]
-			app.mu.RUnlock()
-			l := mainL + int32(i)*(regW+gap)
-			drawRegionCard(hdc, l, 695, l+regW, 760, idx, st, i)
+		if len(balkan) > 0 {
+			selectFont(hdc, app.hFontBold)
+			text(hdc, "Balkan", mainL, 477, mainR-130, 505, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+			selectFont(hdc, app.hFontSmall)
+			text(hdc, "Zemlje  →", mainR-130, 477, mainR, 505, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
+			app.hits = append(app.hits, HitRegion{R: RECT{mainR - 150, 477, mainR, 507}, Kind: hitCountryDropdown, Index: -1})
+			drawRow(balkan, 506)
 		}
 		return
 	}
-
 	// Library/search/filter pages use the efficient virtualized two-column grid.
 	gridTop := int32(132)
 	selectFont(hdc, app.hFontBold)
@@ -2421,11 +2453,19 @@ func drawGenreTile(hdc syscall.Handle, l, t, r, b int32, label, value string, sl
 
 func drawRegionCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStation, slot int) {
 	key := stationKey(s)
+	app.mu.RLock()
+	selected := app.currentKey != "" && app.currentKey == key
+	selectedPlaying := selected && app.playing
+	app.mu.RUnlock()
 	border := color(49, 57, 68)
-	if hovered(hitPlay, idx, key) || hovered(hitStationDetails, idx, key) {
+	fill := color(20, 25, 33)
+	if selected {
+		border = color(175, 112, 45)
+		fill = color(28, 27, 29)
+	} else if hovered(hitPlay, idx, key) || hovered(hitStationDetails, idx, key) {
 		border = color(133, 88, 40)
 	}
-	drawRounded(hdc, l, t, r, b, 10, color(20, 25, 33), border)
+	drawRounded(hdc, l, t, r, b, 10, fill, border)
 	artR := l + 58
 	drawStationArtwork(hdc, l+6, t+7, artR-5, b-7, s, slot)
 	selectFont(hdc, app.hFontBold)
@@ -2435,7 +2475,11 @@ func drawRegionCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStatio
 	meta := stationAreaLabel(s)
 	text(hdc, meta, artR+31, t+31, r-40, t+54, rgb(160, 168, 178), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 	drawCircle(hdc, r-34, t+18, r-10, t+42, color(45, 49, 57), color(105, 74, 40))
-	text(hdc, "▶", r-32, t+18, r-12, t+42, rgb(246, 248, 250), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+	playLabel := "▶"
+	if selectedPlaying {
+		playLabel = "Ⅱ"
+	}
+	text(hdc, playLabel, r-32, t+18, r-12, t+42, rgb(246, 248, 250), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitStationDetails, Index: idx, Value: key})
 	app.hits = append(app.hits, HitRegion{R: RECT{r - 38, t + 14, r - 6, t + 46}, Kind: hitPlay, Index: idx, Value: key})
 }
