@@ -2114,10 +2114,9 @@ func browseGridColumns(width int32) int {
 }
 
 func regionalCountryDefs() []CountryDef {
-	items := make([]CountryDef, 0, len(regionalCatalogCodes)+1)
-	items = append(items, CountryDef{Code: "", Name: "Sve balkanske postaje"})
+	items := make([]CountryDef, 0, len(regionalCatalogCodes))
 	for _, item := range balkanCountries {
-		if item.Code != "" && isRegionalCatalogCode(item.Code) {
+		if isRegionalCatalogCode(item.Code) {
 			items = append(items, item)
 		}
 	}
@@ -2179,14 +2178,6 @@ func drawCountryBrowsePage(hdc syscall.Handle, cr RECT) {
 		selectFont(hdc, app.hFontBold)
 		text(hdc, item.Name, l+62, t+13, r-54, t+43, rgb(241, 244, 247), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 		count := counts[strings.ToUpper(item.Code)]
-		if item.Code == "" {
-			count = 0
-			for code, n := range counts {
-				if isRegionalCatalogCode(code) {
-					count += n
-				}
-			}
-		}
 		selectFont(hdc, app.hFontSmall)
 		text(hdc, fmt.Sprintf("%d stanica", count), l+62, t+41, r-54, t+68, rgb(145, 155, 168), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 		text(hdc, "›", r-40, t, r-14, b, rgb(255, 174, 55), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
