@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.32" src="assets/badges/version.svg">
+  <img alt="version 0.0.33" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -15,16 +15,21 @@
 
 Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrvatske i regije bez korisničkog računa, bez telemetry sustava i bez teškog web runtimea u Windows aplikaciji. Projekt objedinjuje nativni Windows klijent, nativni Android klijent i produkcijske ekstenzije za Chrome, Edge, Opera i Firefox.
 
-## Što donosi v0.0.32
+## Što donosi v0.0.33
 
-- **Hrvatska je zadana početna zemlja** — prvi start Windows, Android i browser klijenata sada otvara hrvatske postaje; postojeći spremljeni izbor korisnika nakon nadogradnje ostaje netaknut.
-- **Više stanica odmah na početnoj** — browser prikazuje do 72 kartice prije paginacije, Android ima kompaktniji hero kako bi više sadržaja bilo vidljivo bez skrolanja, a Windows na širokim ekranima prikazuje do 8 popularnih + 8 dodatnih home kartica.
-- **Početna i filteri imaju jasniju semantiku** — povratak na Početnu vraća Hrvatsku, dok su Sve zemlje, ostale balkanske zemlje, Dijaspora, Strano, Top, Nedavno, Omiljene i žanrovi i dalje dostupni kao zasebni prikazi.
-- **Bez neželjene implicitne reprodukcije** — browser više ne označava prvu stanicu kao aktivnu prije stvarnog player statea; zasebna station stranica i eksplicitni ▶ ostaju jedini jasni putevi prema detaljima i reprodukciji.
-- **Konzistentniji nazivi područja** — browser koristi jedan kanonski `RB.COUNTRIES` mapping za naslov i status aktivne zemlje umjesto oslanjanja na DOM indeks.
-- **Responsivna Windows početna** — broj home kartica prilagođava se dostupnoj širini bez razbijanja postojećeg playera, sidebar navigacije ili station-detail prikaza.
-- **Regression zaštita za novi default** — testovi potvrđuju da je HR samo first-run default, da eksplicitni “Sve zemlje” ili druga spremljena zemlja ostaju sačuvani te da 72-card pagination i fokus rade ispravno.
-- **Produkcijski gate potvrđen** — feature exact-head CI, post-merge main CI i Product screenshots prošli su versions/security/UI, browser, Android i Windows suite, uključujući stvarni Windows startup soak.
+- **Gusta Windows početna bez velikog hero bloka** — početna odmah prikazuje pravi radio katalog u 3–5 stupaca, ovisno o širini prozora.
+- **Jasne, neduplicirane sekcije** — Popularno u Hrvatskoj, Hrvatska i Balkan koriste različite skupove stanica; iste kartice se ne ponavljaju samo radi popunjavanja početne.
+- **Hrvatska ostaje first-run početna, ne prisilni filter** — HR home prikazuje se samo kada je stvarno aktivna Hrvatska; ručno odabrane druge zemlje, Sve postaje, Dijaspora i Strano ostaju vlastiti prikazi i spremljeno stanje se ne resetira.
+- **Bolji minimalni Windows layout** — home je dodatno vertikalno zbijen i client-height prag uzima u obzir title bar/frame, pa minimalni podržani prozor ne pada na pogrešan prikaz niti se sudara s playerom.
+- **Poliran station-detail** — Play/Pause/Resume oznaka prati stvarno stanje playera, a javne činjenice uključuju jezik, codec, bitrate i sigurnu dostupnost bez stream URL-a, resolved sourcea ili maintenance podataka.
+- **Manje mrtvog koda** — uklonjen je stari Windows hero/wave/genre/popular renderer nakon prelaska na novi katalog.
+- **Android prikazuje više stanica iznad folda** — hero i zaglavlje su kompaktniji uz zadržan nativni Java/Android lifecycle i postojeći dedicated `StationDetailsActivity`.
+- **Browser popup je gušći bez DOM regresije** — smanjeni su hero i station row elementi, dok limit od 72 kartice prije `Prikaži još`, lazy render i postojeći playback/state contract ostaju aktivni.
+- **Review edge-caseovi su zaključani testovima** — regression testovi pokrivaju 3/4/5-column breakpointove, HR-only home semantiku i client-height minimum.
+- **Stvarni UI artefakti su obnovljeni** — Product screenshots workflow izgradio je aplikaciju i ponovno snimio Windows i produkcijski browser prikaz.
+- **Bez novih privacy/sigurnosnih kompromisa** — nema analyticsa, telemetryja, oglasa, remote codea, novog backenda ni proširenih browser dozvola; private-network blokade i local-only admin ostaju aktivni.
+
+Dostupnost pojedine third-party radio stanice i dalje ovisi o infrastrukturi same postaje. Radio Balkan koristi bounded timeout, fallback i recovery putanje, ali ne tvrdi da je svaki vanjski stream stalno online.
 
 ## Zašto Radio Balkan
 
@@ -64,7 +69,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.32 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.32):
+Gotovi v0.0.33 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.33):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -104,7 +109,7 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.33
+python scripts/bump_version.py 0.0.34
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.
