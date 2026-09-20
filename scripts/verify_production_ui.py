@@ -197,7 +197,10 @@ def main() -> int:
     require(errors, station_presentation, "public static List<RadioStation> similarStations(", "Android StationPresentation")
     for needle in (
         '"Rezervni izvori"',
-        '"Zemlje i žanrovi"',
+        'itemList.add("Zemlje")',
+        'itemList.add("Žanrovi")',
+        'showBrowsePage("countries")',
+        'showBrowsePage("genres")',
         '"Poništi filtre"',
         '"Provjeri prikazane stanice"',
         'else if ("Provjeri prikazane stanice".equals(chosen) && requireAdmin()) checkVisibleStreams();',
