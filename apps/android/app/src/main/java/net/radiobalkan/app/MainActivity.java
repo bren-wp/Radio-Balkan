@@ -925,6 +925,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             s.refreshIndexes();
         }
         synchronized (dataLock) { allStations = new ArrayList<>(stations); }
+        if (browsePanel != null && browsePanel.getVisibility() == View.VISIBLE) populateInlineBrowsePanel();
         statusText.setText(status);
         applyFilterAsync();
         scheduleAutomaticHealthScan();
