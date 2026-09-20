@@ -2181,7 +2181,7 @@ func drawBrowseScrollBar(hdc syscall.Handle, cr RECT, maxScroll, scroll int) {
 	}
 	thumbY := int(top)
 	if maxScroll > 0 && trackH > thumbH {
-		thumbY += scroll * (trackH-thumbH) / maxScroll
+		thumbY += scroll * (trackH - thumbH) / maxScroll
 	}
 	drawRounded(hdc, trackL, int32(thumbY), trackR, int32(thumbY+thumbH), 4, color(118, 83, 64), color(118, 83, 64))
 }
