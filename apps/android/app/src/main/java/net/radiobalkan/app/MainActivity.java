@@ -812,7 +812,6 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         browsePanel.addView(heading, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
 
         LinearLayout countries = chipRow();
-        List<Button> countryButtons = new ArrayList<>();
         Map<String,Integer> counts = countryCounts();
         for (String[] entry : RadioRepository.COUNTRIES) {
             String code = entry[0], name = entry[1];
@@ -821,7 +820,6 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             Button button = chip(count > 0 ? name + " · " + count : name, code.equalsIgnoreCase(country) && genre.isEmpty());
             button.setTag(code);
             applyFlag(button, code);
-            countryButtons.add(button);
             button.setOnClickListener(v -> {
                 tab = "all";
                 country = code;
