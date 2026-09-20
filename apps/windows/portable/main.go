@@ -2324,7 +2324,7 @@ func popularStations(limit int) []int {
 	return best
 }
 
-func regionalDiscoveryStations(limit int, excluded map[int]struct{}) []int {
+) []int {
 	if limit <= 0 {
 		return nil
 	}
