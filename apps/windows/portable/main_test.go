@@ -442,10 +442,10 @@ func putLE32(dst []byte, v uint32) {
 
 
 func TestHomeCatalogEnabledAtMinimumWindowHeight(t *testing.T) {
-	if !homeCatalogEnabled(640, "all", "", "", "HR") {
+	if !homeCatalogEnabled(600, "all", "", "", "HR") {
 		t.Fatal("dense home must remain enabled within the client area of the minimum outer window")
 	}
-	if homeCatalogEnabled(639, "all", "", "", "HR") {
+	if homeCatalogEnabled(599, "all", "", "", "HR") {
 		t.Fatal("dense home must fall back below its safe client height")
 	}
 	if homeCatalogEnabled(720, "popular", "", "", "HR") {
