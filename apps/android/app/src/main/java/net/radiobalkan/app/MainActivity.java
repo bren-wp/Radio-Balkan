@@ -645,7 +645,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private void showAppMenu() {
         List<String> itemList = new ArrayList<>();
         itemList.add("Pretraži");
-        itemList.add("Zemlje i žanrovi");
+        itemList.add("Zemlje");
+        itemList.add("Žanrovi");
         itemList.add("Poništi filtre");
         itemList.add("Osvježi popis");
         if (adminMode) {
@@ -661,7 +662,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         new AlertDialog.Builder(this).setTitle(adminMode ? "Radio Balkan · Admin" : "Radio Balkan").setItems(items, (d, which) -> {
             String chosen = items[which];
             if ("Pretraži".equals(chosen)) setSearchVisible(true);
-            else if ("Zemlje i žanrovi".equals(chosen)) showBrowseDialog();
+            else if ("Zemlje".equals(chosen)) showBrowsePage("countries");
+            else if ("Žanrovi".equals(chosen)) showBrowsePage("genres");
             else if ("Poništi filtre".equals(chosen)) resetBrowseFilters();
             else if ("Osvježi popis".equals(chosen)) refreshCatalog();
             else if ("Provjeri prikazane stanice".equals(chosen) && requireAdmin()) checkVisibleStreams();
