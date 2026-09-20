@@ -391,7 +391,7 @@
       }
     }
     panel.hidden = false;
-    options.querySelector('button')?.focus();
+    options.children?.[0]?.focus?.();
   }
 
   function selectGenre(value) {
