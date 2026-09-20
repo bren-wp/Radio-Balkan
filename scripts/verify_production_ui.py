@@ -353,17 +353,19 @@ def main() -> int:
     require(errors, windows, 'st.CountryCode = "HR"', "Windows first-run country default")
     require(errors, windows, 'country == "HR"', "Windows home navigation")
     require(errors, windows, 'func homeGridColumns(width int32) int', "Windows responsive home cards")
-    require(errors, windows, 'case width >= 1180:', "Windows responsive home cards")
+    require(errors, windows, 'case width >= 1380:', "Windows responsive home cards")
+    require(errors, windows, 'return 6', "Windows responsive home cards")
+    require(errors, windows, 'case width >= 1120:', "Windows responsive home cards")
     require(errors, windows, 'return 5', "Windows responsive home cards")
-    require(errors, windows, 'case width >= 930:', "Windows responsive home cards")
+    require(errors, windows, 'case width >= 840:', "Windows responsive home cards")
     require(errors, windows, 'return 4', "Windows responsive home cards")
     require(errors, windows, 'return 3', "Windows responsive home cards")
     require(errors, windows, 'popular := popularStations(columns)', "Windows dense home catalog")
     require(errors, windows, 'balkan := discoveryStations(columns*2, excluded', "Windows dense home catalog")
     for needle in (
         "case WM_GETMINMAXINFO:",
-        "info.PtMinTrackSize.X = 1100",
-        "info.PtMinTrackSize.Y = 720",
+        "info.PtMinTrackSize.X = 1024",
+        "info.PtMinTrackSize.Y = 680",
         'drawSidebarLabel(hdc, "BIBLIOTEKA", y)',
         '"Top", tab == "popular"',
         '"Zemlje", tab == "countries"',
@@ -392,8 +394,11 @@ def main() -> int:
         "func drawCountryBrowsePage(hdc syscall.Handle, cr RECT)",
         "func drawGenreBrowsePage(hdc syscall.Handle, cr RECT)",
         "func browseGridColumns(width int32) int",
-        "st.WindowWidth = 1360",
-        "st.WindowHeight = 820",
+        "st.WindowWidth = 1240",
+        "st.WindowHeight = 760",
+        'Kind: hitTab, Index: -1, Value: "countries"',
+        'Kind: hitTab, Index: -1, Value: "genres"',
+        "func drawBrowseButton(hdc syscall.Handle",
         'hitTab, "countries"',
         'action("Kopiraj", 54, hitLink)',
         'setStatus("Poveznica za reprodukciju je kopirana")',
