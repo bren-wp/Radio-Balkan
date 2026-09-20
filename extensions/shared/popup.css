@@ -31,7 +31,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .iconButton, .playerIcon { width: 44px; height: 44px; border: 0; border-radius: 12px; color: #d5dbe3; background: transparent; cursor: pointer; font-size: 22px; }
 .iconButton:hover:not(:disabled), .playerIcon:hover:not(:disabled) { background: #ffffff0d; }
 .iconButton[aria-busy="true"] { color: var(--accent); animation: rb-spin .8s linear infinite; }
-.hero { margin: 9px 12px 8px; min-height: 98px; padding: 13px 15px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; border: 1px solid #4b3a2f; border-radius: 18px; background: linear-gradient(135deg, #29180f, #141a22 56%, #0e141b); box-shadow: 0 14px 32px #0005; }
+.hero { margin: 7px 12px 7px; min-height: 84px; padding: 10px 13px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; border: 1px solid #4b3a2f; border-radius: 18px; background: linear-gradient(135deg, #29180f, #141a22 56%, #0e141b); box-shadow: 0 14px 32px #0005; }
 .heroCopy { min-width: 0; }
 .liveBadge { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: .08em; }
 .liveBadge i { width: 7px; height: 7px; border-radius: 50%; background: #ff654b; box-shadow: 0 0 0 4px #ff654b1e; }
@@ -67,12 +67,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .subtleButton { color: #9ca7b4; }
 [hidden] { display: none !important; }
 .stations { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 1px 10px 120px; scrollbar-width: thin; scrollbar-color: #513b2a transparent; }
-.station { min-height: 72px; contain: layout paint style; content-visibility: auto; contain-intrinsic-size: 72px; display: grid; grid-template-columns: 56px minmax(0, 1fr) 44px; align-items: center; gap: 10px; margin: 5px 0; padding: 7px 8px 7px 7px; border: 1px solid #27323f; border-radius: 15px; background: #101720; cursor: pointer; transition: border-color .12s ease, background .12s ease; }
+.station { min-height: 68px; contain: layout paint style; content-visibility: auto; contain-intrinsic-size: 68px; display: grid; grid-template-columns: 52px minmax(0, 1fr) 42px; align-items: center; gap: 9px; margin: 4px 0; padding: 7px 8px 7px 7px; border: 1px solid #27323f; border-radius: 15px; background: #101720; cursor: pointer; transition: border-color .12s ease, background .12s ease; }
 .station:hover { border-color: #6e4b2c; background: #151c25; }
 .station:focus-visible { border-color: #d08a31; background: #151c25; }
 .station.active { border-color: #a56d33; background: #181b21; box-shadow: inset 3px 0 0 #ffad38; }
 .station.active:focus-visible { box-shadow: inset 3px 0 0 #ffad38, 0 0 0 2px #ffad3840; }
-.logoBox { width: 56px; height: 56px; display: grid; place-items: center; overflow: hidden; border-radius: 11px; background: #1b232d; }
+.logoBox { width: 52px; height: 52px; display: grid; place-items: center; overflow: hidden; border-radius: 11px; background: #1b232d; }
 .logoBox img { width: 100%; height: 100%; object-fit: cover; }
 .fallback { font-size: 16px; font-weight: 800; color: #f1a441; }
 .stationText { min-width: 0; }
@@ -80,7 +80,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .station:focus-
 .stationText span, .stationText em { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stationText span { margin-top: 4px; color: #aab3bf; font-size: 11px; }
 .stationText em { margin-top: 3px; color: #8d98a6; font-size: 10px; font-style: normal; }
-.stationPlay { width: 42px; height: 42px; border: 1px solid #74502e; border-radius: 50%; background: #29262a; color: #fff; cursor: pointer; }
+.stationPlay { width: 40px; height: 40px; border: 1px solid #74502e; border-radius: 50%; background: #29262a; color: #fff; cursor: pointer; }
 .stationPlay:hover { border-color: #d28a36; background: #352a20; }
 .moreStations { width: 100%; height: 42px; margin: 7px 0 13px; border: 1px solid #694522; border-radius: 12px; background: #171a20; color: #ffb24a; font-weight: 700; cursor: pointer; }
 .moreStations:hover { background: #201b18; border-color: #a36b31; }
