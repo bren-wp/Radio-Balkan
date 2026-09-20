@@ -6168,7 +6168,167 @@ func startAudioEngineLocked() error {
 	if app.audioCmd != nil && app.audioCmd.Process != nil {
 		return nil
 	}
-	script := `$ErrorActionPreference='Stop'; Add-Type -AssemblyName PresentationCore; $p=New-Object System.Windows.Media.MediaPlayer; [Console]::Out.WriteLine('READY'); [Console]::Out.Flush(); while(($line=[Console]::In.ReadLine()) -ne $null){ try { $sp=$line.Split(' ',3); switch($sp[0]){ 'PLAY' { $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[1])); $v=[double]::Parse($sp[2],[Globalization.CultureInfo]::InvariantCulture); $p.Stop(); $p.Close(); $p.Open([Uri]$u); $p.Volume=$v; $p.Play() } 'PAUSE' { $p.Pause() } 'RESUME' { $p.Play() } 'STOP' { $p.Stop(); $p.Close() } 'VOLUME' { $p.Volume=[double]::Parse($sp[1],[Globalization.CultureInfo]::InvariantCulture) } default { throw 'unknown command' } }; [Console]::Out.WriteLine('OK'); [Console]::Out.Flush() } catch { [Console]::Out.WriteLine('ERR'); [Console]::Out.Flush() } }`
+	script := `$ErrorActionPreference='Stop'
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName WindowsBase
+$source=@'
+using System;
+using System.Threading;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Threading;
+
+public sealed class RadioBalkanMediaHost : IDisposable
+{
+    private Thread thread;
+    private Dispatcher dispatcher;
+    private MediaPlayer player;
+    private readonly ManualResetEventSlim ready = new ManualResetEventSlim(false);
+    private bool disposed;
+
+    public RadioBalkanMediaHost()
+    {
+        thread = new Thread(ThreadMain);
+        thread.IsBackground = true;
+        thread.Name = "RadioBalkanMedia";
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        if (!ready.Wait(8000))
+            throw new TimeoutException("media dispatcher startup timeout");
+    }
+
+    private void ThreadMain()
+    {
+        player = new MediaPlayer();
+        dispatcher = Dispatcher.CurrentDispatcher;
+        ready.Set();
+        Dispatcher.Run();
+    }
+
+    public bool Play(string uri, double volume, int timeoutMs, out string error)
+    {
+        error = "";
+        if (disposed || dispatcher == null)
+        {
+            error = "media host unavailable";
+            return false;
+        }
+
+        var done = new ManualResetEventSlim(false);
+        var opened = false;
+        var failure = "";
+        EventHandler onOpened = null;
+        EventHandler<ExceptionEventArgs> onFailed = null;
+
+        dispatcher.BeginInvoke(new Action(() =>
+        {
+            onOpened = (sender, args) =>
+            {
+                opened = true;
+                done.Set();
+            };
+            onFailed = (sender, args) =>
+            {
+                failure = args != null && args.ErrorException != null ? args.ErrorException.Message : "media failed";
+                done.Set();
+            };
+            player.MediaOpened += onOpened;
+            player.MediaFailed += onFailed;
+            try
+            {
+                player.Stop();
+                player.Close();
+                player.Volume = Math.Max(0.0, Math.Min(1.0, volume));
+                player.Open(new Uri(uri, UriKind.Absolute));
+                player.Play();
+            }
+            catch (Exception ex)
+            {
+                failure = ex.Message;
+                done.Set();
+            }
+        }), DispatcherPriority.Send);
+
+        if (!done.Wait(timeoutMs))
+            failure = "media open timeout";
+
+        try
+        {
+            dispatcher.Invoke(new Action(() =>
+            {
+                if (onOpened != null) player.MediaOpened -= onOpened;
+                if (onFailed != null) player.MediaFailed -= onFailed;
+            }), DispatcherPriority.Send);
+        }
+        catch (Exception ex)
+        {
+            if (String.IsNullOrEmpty(failure)) failure = ex.Message;
+        }
+
+        error = failure;
+        done.Dispose();
+        return opened && String.IsNullOrEmpty(failure);
+    }
+
+    public void Pause() { Invoke(() => player.Pause()); }
+    public void Resume() { Invoke(() => player.Play()); }
+    public void Stop() { Invoke(() => { player.Stop(); player.Close(); }); }
+    public void SetVolume(double value) { Invoke(() => player.Volume = Math.Max(0.0, Math.Min(1.0, value))); }
+
+    private void Invoke(Action action)
+    {
+        if (disposed || dispatcher == null) return;
+        dispatcher.Invoke(action, DispatcherPriority.Send);
+    }
+
+    public void Dispose()
+    {
+        if (disposed) return;
+        disposed = true;
+        if (dispatcher != null)
+        {
+            try { dispatcher.Invoke(new Action(() => { player.Stop(); player.Close(); }), DispatcherPriority.Send); } catch { }
+            try { dispatcher.BeginInvokeShutdown(DispatcherPriority.Send); } catch { }
+        }
+        if (thread != null && thread.IsAlive) thread.Join(2000);
+        ready.Dispose();
+    }
+}
+'@
+Add-Type -TypeDefinition $source -ReferencedAssemblies PresentationCore.dll,WindowsBase.dll
+$p=[RadioBalkanMediaHost]::new()
+[Console]::Out.WriteLine('READY')
+[Console]::Out.Flush()
+while(($line=[Console]::In.ReadLine()) -ne $null){
+  try {
+    $sp=$line.Split(' ',3)
+    switch($sp[0]){
+      'PLAY' {
+        $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[1]))
+        $v=[double]::Parse($sp[2],[Globalization.CultureInfo]::InvariantCulture)
+        $err=''
+        if(-not $p.Play($u,$v,12000,[ref]$err)){ throw $err }
+      }
+      'PAUSE' { $p.Pause() }
+      'RESUME' { $p.Resume() }
+      'STOP' { $p.Stop() }
+      'VOLUME' {
+        $v=[double]::Parse($sp[1],[Globalization.CultureInfo]::InvariantCulture)
+        $p.SetVolume($v)
+      }
+      default { throw 'unknown command' }
+    }
+    [Console]::Out.WriteLine('OK')
+    [Console]::Out.Flush()
+  } catch {
+    $m=$_.Exception.Message
+    if([String]::IsNullOrWhiteSpace($m)){ $m='audio command failed' }
+    $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m))
+    [Console]::Out.WriteLine('ERR '+$encoded)
+    [Console]::Out.Flush()
+  }
+}
+try { $p.Dispose() } catch {}`
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-STA", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	in, err := cmd.StdinPipe()
@@ -6207,7 +6367,7 @@ func startAudioEngineLocked() error {
 			}
 			return errors.New("audio engine se nije ispravno inicijalizirao")
 		}
-	case <-time.After(15 * time.Second):
+	case <-time.After(20 * time.Second):
 		_ = in.Close()
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
@@ -6282,6 +6442,7 @@ func startAudioEngineLocked() error {
 	}(cmd)
 	return nil
 }
+
 func resetAudioEngineLocked() {
 	in := app.audioIn
 	cmd := app.audioCmd
@@ -6298,9 +6459,9 @@ func resetAudioEngineLocked() {
 
 func audioCommandTimeout(line string) time.Duration {
 	if strings.HasPrefix(line, "PLAY ") {
-		return 5 * time.Second
+		return 15 * time.Second
 	}
-	return 2 * time.Second
+	return 3 * time.Second
 }
 
 func waitAudioAckLocked(timeout time.Duration) error {
@@ -6317,6 +6478,11 @@ func waitAudioAckLocked(timeout time.Duration) error {
 			return errors.New("audio engine je prekinut")
 		}
 		if reply != "OK" {
+			if strings.HasPrefix(reply, "ERR ") {
+				if decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(strings.TrimPrefix(reply, "ERR "))); err == nil && len(decoded) > 0 {
+					return fmt.Errorf("audio engine: %s", strings.TrimSpace(string(decoded)))
+				}
+			}
 			return errors.New("audio engine nije prihvatio naredbu")
 		}
 		return nil
