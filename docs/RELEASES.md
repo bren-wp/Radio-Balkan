@@ -1,5 +1,24 @@
 # Izdavanja
 
+## 0.0.33
+
+Izdanje 0.0.33 fokusira se na gustu i stabilnu početnu stranicu, jasniju informacijsku arhitekturu i dodatni cross-platform UI polish. Hrvatska ostaje first-run default, ali nije prisilni trajni filter. Nisu dodani analytics, telemetry, oglasi, javni korisnički računi, novi backend, remote code niti šire browser dozvole.
+
+- Windows početna uklanja veliki dekorativni hero i odmah prikazuje katalog u **3–5 stupaca** ovisno o širini
+- sekcije **Popularno u Hrvatskoj**, **Hrvatska** i **Balkan** imaju različitu semantiku i ne pune početnu dupliciranim karticama
+- Croatia-specific home aktivira se samo za `HR`; Bosna i Hercegovina, Srbija, ostale zemlje, Sve postaje, Dijaspora i Strano ostaju zasebni prikazi
+- minimalni Windows prozor uzima u obzir non-client chrome; kompaktni home ostaje iznad stalnog playera bez preklapanja
+- station-detail Play tipka prikazuje stvarni Play/Pause/Resume status, a javne činjenice dodaju jezik i dostupnost bez izlaganja internih URL-ova ili health/debug podataka
+- uklonjeni su mrtvi stari Windows hero, wave, genre-tile i popular-card render helperi
+- Android hero smanjen je na **168dp**, uz kompaktnije zaglavlje i zadržan dedicated non-exported `StationDetailsActivity`
+- browser hero i station kartice su kompaktniji; **72-card** pagination/lazy contract ostaje nepromijenjen
+- production UI verifier je ažuriran za novi 3/4/5-column contract i HR-only home semantiku
+- review je otkrio i ispravio dva edge-casea: pogrešan Croatia home za druge zemlje te client-height prag koji nije računao Windows title bar/frame
+- feature exact-head CI prošao je versions/security/UI, browser, Android i Windows test/vet/build, uključujući stvarni Windows startup runtime soak i clean-worktree
+- post-merge `main` CI je ponovno prošao, a Product screenshots workflow izgradio je stvarne aplikacijske buildove i obnovio Windows/browser screenshotove
+
+Dostupnost pojedine third-party radio stanice ovisi o infrastrukturi same postaje. Aplikacija koristi sigurnu selekciju javnih HTTP(S) izvora, bounded timeout/fallback/recovery i ne smije srušiti ili zaključati player samo zato što je vanjski stream trenutačno nedostupan.
+
 ## 0.0.32
 
 Izdanje 0.0.32 fokusira se na bolju početnu stranicu i jasniji first-run discovery, uz Hrvatsku kao zadanu zemlju i više odmah vidljivih stanica. Postojeći spremljeni izbor korisnika se ne prepisuje nakon nadogradnje. Nisu dodani analytics, telemetry, oglasi, javni korisnički računi, novi backend niti šire browser dozvole.
