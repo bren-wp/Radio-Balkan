@@ -353,6 +353,7 @@ type App struct {
 	scroll                                   int
 	clientWidth                              int32
 	clientHeight                             int32
+	ciPaintSeq                               uint64
 	current                                  int
 	currentKey                               string
 	playing                                  bool
@@ -1301,6 +1302,18 @@ func runCIInputSmoke() {
 		packed := uintptr(uint32(uint16(x)) | uint32(uint16(y))<<16)
 		procPostMessage.Call(uintptr(app.hwnd), WM_LBUTTONDOWN, 0, packed)
 	}
+	forcePaint := func(timeout time.Duration) bool {
+		app.mu.RLock()
+		before := app.ciPaintSeq
+		app.mu.RUnlock()
+		procPostMessage.Call(uintptr(app.hwnd), WM_APP+5, 0, 0)
+		return waitFor(timeout, func() bool {
+			app.mu.RLock()
+			done := app.ciPaintSeq > before
+			app.mu.RUnlock()
+			return done
+		})
+	}
 
 	if !waitFor(4*time.Second, func() bool {
 		app.mu.RLock()
@@ -1380,10 +1393,13 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-after-supplemental")
 		return
 	}
-	// Put a real full-catalog paint ahead of the next click in the Win32 queue.
-	// A repaint that monopolizes the UI thread will therefore fail this test.
-	invalidate()
-	procPostMessage.Call(uintptr(app.hwnd), WM_PAINT, 0, 0)
+	// Force the 6000-station home to complete an actual WM_PAINT on the UI
+	// thread. The acknowledgement is incremented only after UpdateWindow returns,
+	// so this cannot pass before the expensive repaint has really completed.
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=post-load-render")
+		return
+	}
 	postClick(100, 153)
 	if !waitFor(700*time.Millisecond, func() bool {
 		app.mu.RLock()
@@ -1391,7 +1407,7 @@ func runCIInputSmoke() {
 		app.mu.RUnlock()
 		return ok
 	}) {
-		runtimeTestTrace("input-smoke-fail token=" + token + " step=post-load-render")
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=post-load-click")
 		return
 	}
 	postClick(100, 109)
@@ -1415,8 +1431,10 @@ func runCIInputSmoke() {
 	columns := homeGridColumns(mainR - mainL)
 	cardW := (mainR - mainL - 8*int32(columns-1)) / int32(columns)
 	firstPlayX := mainL + cardW - 22
-	invalidate()
-	procPostMessage.Call(uintptr(app.hwnd), WM_PAINT, 0, 0)
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-card-paint")
+		return
+	}
 	postClick(firstPlayX, 200)
 	if !waitFor(700*time.Millisecond, func() bool {
 		app.mu.RLock()
@@ -2114,6 +2132,15 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 		return 0
 	case WM_APP + 4:
 		showNextAlert()
+		return 0
+	case WM_APP + 5:
+		if os.Getenv("RADIO_BALKAN_RUNTIME_TEST") == "1" {
+			procInvalidateRect.Call(uintptr(hwnd), 0, 1)
+			procUpdateWindow.Call(uintptr(hwnd))
+			app.mu.Lock()
+			app.ciPaintSeq++
+			app.mu.Unlock()
+		}
 		return 0
 	case WM_CLOSE:
 		runtimeTestTrace("wm-close-enter")
