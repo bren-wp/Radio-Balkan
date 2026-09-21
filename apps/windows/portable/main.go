@@ -1119,7 +1119,8 @@ func main() {
 		messageBox(0, "Greška", err.Error(), MB_ICONERROR)
 		return
 	}
-	safeGo("audio-warmup", warmAudioEngine)
+	// Initialize audio lazily on the first playback command. A backend startup
+	// failure must never delay or block navigation, search, or any UI button.
 	safeGo("load-stations", loadStations)
 	scheduleCIRuntimeSmokeClose()
 	var msg MSG
@@ -3690,48 +3691,80 @@ func toggleCurrentPlayback() {
 		return
 	}
 	if action == playbackTogglePause {
-		if err := audioPause(); err != nil {
-			logError("audio-pause", err)
-		}
 		app.mu.Lock()
+		key := app.currentKey
 		app.playing = false
 		app.metadataSeq++
 		app.mu.Unlock()
 		setStatus("Pauzirano")
 		invalidate()
+		safeGo("audio-pause-control", func() {
+			if err := audioPause(); err != nil {
+				logError("audio-pause", err)
+				// If pause cannot be delivered to either backend, stop audio so
+				// the audible state can never disagree with the visible state.
+				audioStop()
+				app.mu.Lock()
+				if app.currentKey == key {
+					app.audioStopped = true
+					app.playing = false
+					app.metadataSeq++
+				}
+				app.mu.Unlock()
+				setStatus("Reprodukcija je zaustavljena")
+				postUI()
+			}
+		})
 		return
 	}
 	if action == playbackToggleReconnect {
 		playStationByKey(currentKey, current)
 		return
 	}
-	if err := audioResume(); err != nil {
-		logError("audio-resume", err)
-		playStationByKey(currentKey, current)
-		return
-	}
 	app.mu.Lock()
-	actual := findStationIndexLocked(currentKey, current)
-	if actual < 0 || actual >= len(app.stations) {
-		app.mu.Unlock()
-		return
-	}
-	current = actual
-	st := app.stations[current]
-	key := stationKey(st)
-	app.playing = true
-	app.audioStopped = false
-	app.nowPlayingStation = key
-	app.metadataSeq++
-	seq := app.metadataSeq
+	app.playSeq++
+	reqSeq := app.playSeq
 	app.mu.Unlock()
-	stream := effectiveURL(st)
-	setStatus("Uživo · " + st.Name)
-	safeGo("watchdog-resume-"+key, func() { playbackWatchdog(current, key) })
-	if stream != "" {
-		safeGo("metadata-resume-"+key, func() { metadataLoop(seq, current, key, stream) })
-	}
+	setStatus("Nastavljam reprodukciju…")
 	invalidate()
+	safeGo("audio-resume-control", func() {
+		if err := audioResume(); err != nil {
+			logError("audio-resume", err)
+			app.mu.RLock()
+			stillCurrent := app.playSeq == reqSeq && !app.audioStopped
+			app.mu.RUnlock()
+			if stillCurrent {
+				playStationByKey(currentKey, current)
+			}
+			return
+		}
+		app.mu.Lock()
+		if app.playSeq != reqSeq || app.audioStopped {
+			app.mu.Unlock()
+			return
+		}
+		actual := findStationIndexLocked(currentKey, current)
+		if actual < 0 || actual >= len(app.stations) {
+			app.mu.Unlock()
+			return
+		}
+		current = actual
+		st := app.stations[current]
+		key := stationKey(st)
+		app.playing = true
+		app.audioStopped = false
+		app.nowPlayingStation = key
+		app.metadataSeq++
+		seq := app.metadataSeq
+		app.mu.Unlock()
+		stream := effectiveURL(st)
+		setStatus("Uživo · " + st.Name)
+		postUI()
+		safeGo("watchdog-resume-"+key, func() { playbackWatchdog(current, key) })
+		if stream != "" {
+			safeGo("metadata-resume-"+key, func() { metadataLoop(seq, current, key, stream) })
+		}
+	})
 }
 
 func canStopPlayback(current int, stopped bool) bool {
@@ -3766,7 +3799,6 @@ func stopCurrentPlayback() {
 	if !canStop {
 		return
 	}
-	audioStop()
 	app.mu.Lock()
 	app.playing = false
 	app.audioStopped = true
@@ -3777,6 +3809,7 @@ func stopCurrentPlayback() {
 	app.mu.Unlock()
 	setStatus("Zaustavljeno")
 	invalidate()
+	safeGo("audio-stop-control", audioStop)
 }
 
 func playAdjacent(delta int) {
@@ -4101,7 +4134,6 @@ func playStation(idx int) {
 			if currentReq {
 				setStatus("Stanica trenutno nije dostupna: " + s.Name)
 				postUI()
-				queueAlert("Stanica nije dostupna", "Za ovu stanicu trenutno nije pronađen dostupan izvor.", MB_ICONWARNING)
 			}
 			return
 		}
@@ -4125,9 +4157,8 @@ func playStation(idx int) {
 				currentReq := app.playSeq == reqSeq
 				app.mu.RUnlock()
 				if currentReq {
-					setStatus("Reprodukcija trenutno nije dostupna")
+					setStatus("Reprodukcija trenutno nije dostupna · pokušaj drugu stanicu")
 					postUI()
-					queueAlert("Reprodukcija", "Stanica se trenutno ne može reproducirati. Radio Balkan je automatski provjerio i rezervne izvore.", MB_ICONWARNING)
 				}
 				return
 			}
@@ -4577,10 +4608,10 @@ func adjustVolume(delta int) {
 	}
 	v := app.state.Volume
 	app.stateMu.Unlock()
-	audioSetVolume(v)
 	scheduleStateSave()
 	setStatus(fmt.Sprintf("Glasnoća %d%%", v))
 	invalidate()
+	safeGo("audio-volume-control", func() { audioSetVolume(v) })
 }
 func copyNowPlaying() {
 	app.mu.RLock()
