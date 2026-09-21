@@ -792,17 +792,24 @@ def main() -> None:
     )
     require(
         ".github/workflows/publish.yml",
+        'workflow_run:',
+        'workflows: ["CI"]',
+        "github.event.workflow_run.conclusion == 'success'",
+        "github.event.workflow_run.event == 'push'",
+        "github.event.workflow_run.head_branch == 'main'",
+        "ref: ${{ needs.release_check.outputs.sha }}",
+        "Soak-test built Windows release",
         "Verify Windows build leaves repository clean",
         "Verify browser build leaves repository clean",
         "Verify Android build leaves repository clean",
         "Generate and verify checksums",
         'python scripts/generate_release_checksums.py release-assets "$VERSION"',
         'sha256sum -c "RadioBalkan-v${VERSION}-SHA256.txt"',
-        "paths:",
-        "- VERSION",
+        'TARGET_SHA: ${{ needs.release_check.outputs.sha }}',
     )
     forbid(
         ".github/workflows/publish.yml",
+        "workflow_dispatch:",
         "- apps/**",
         "- extensions/**",
         "- scripts/check_clean_worktree.py",
