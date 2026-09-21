@@ -800,7 +800,7 @@ func safeHTTPURLForConnection(raw string) bool {
 	if ip := net.ParseIP(host); ip != nil {
 		return !unsafeNetworkIP(ip)
 	}
-	ctx, cancel := context.WithTimeout(appContext(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(appContext(), 1500*time.Millisecond)
 	defer cancel()
 	resolved, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 	if err != nil || len(resolved) == 0 {
@@ -1119,7 +1119,8 @@ func main() {
 		messageBox(0, "Greška", err.Error(), MB_ICONERROR)
 		return
 	}
-	safeGo("audio-warmup", warmAudioEngine)
+	// Initialize audio lazily on the first playback command. A backend startup
+	// failure must never delay or block navigation, search, or any UI button.
 	safeGo("load-stations", loadStations)
 	scheduleCIRuntimeSmokeClose()
 	var msg MSG
@@ -1164,7 +1165,10 @@ func scheduleCIRuntimeSmokeClose() {
 	if !enabled {
 		return
 	}
-	safeGo("ci-runtime-audio-smoke", runCIAudioSmoke)
+	safeGo("ci-runtime-smoke-suite", func() {
+		runCIInputSmoke()
+		runCIAudioSmoke()
+	})
 	safeGo("ci-runtime-smoke-close", func() {
 		timer := time.NewTimer(18 * time.Second)
 		defer timer.Stop()
@@ -1188,6 +1192,107 @@ func scheduleCIRuntimeSmokeClose() {
 			}
 		}
 	})
+}
+
+func runCIInputSmoke() {
+	if os.Getenv("RADIO_BALKAN_RUNTIME_TEST") != "1" {
+		return
+	}
+	token := strings.TrimSpace(os.Getenv("RADIO_BALKAN_RUNTIME_TOKEN"))
+	waitFor := func(timeout time.Duration, predicate func() bool) bool {
+		deadline := time.Now().Add(timeout)
+		for time.Now().Before(deadline) {
+			if predicate() {
+				return true
+			}
+			select {
+			case <-time.After(40 * time.Millisecond):
+			case <-app.done:
+				return false
+			}
+		}
+		return predicate()
+	}
+	postClick := func(x, y int32) {
+		packed := uintptr(uint32(uint16(x)) | uint32(uint16(y))<<16)
+		procPostMessage.Call(uintptr(app.hwnd), WM_LBUTTONDOWN, 0, packed)
+	}
+
+	if !waitFor(3*time.Second, func() bool {
+		app.mu.RLock()
+		ready := app.hwnd != 0 && app.clientWidth >= 1024 && app.clientHeight > playerHeight
+		app.mu.RUnlock()
+		return ready
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=window-ready")
+		return
+	}
+
+	// Exercise the real Win32 mouse-message -> hit-region -> state path.
+	postClick(100, 153) // Top
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "popular"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=top")
+		return
+	}
+	postClick(100, 197) // Zemlje
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "countries"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=countries")
+		return
+	}
+	postClick(100, 109) // Početna
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "all" && app.country == "HR"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=home")
+		return
+	}
+
+	// Reproduce the production failure mode deliberately: hold the backend lock,
+	// click volume, then click navigation. Neither click may block the UI thread.
+	app.audioMu.Lock()
+	app.stateMu.RLock()
+	beforeVolume := app.state.Volume
+	app.stateMu.RUnlock()
+	app.mu.RLock()
+	width, height := app.clientWidth, app.clientHeight
+	app.mu.RUnlock()
+	postClick(width-90, height-playerHeight+43) // volume +
+	volumeChanged := waitFor(700*time.Millisecond, func() bool {
+		app.stateMu.RLock()
+		changed := app.state.Volume != beforeVolume
+		app.stateMu.RUnlock()
+		return changed
+	})
+	postClick(100, 197) // navigation must still work while audioMu is held
+	navigationChanged := waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "countries"
+		app.mu.RUnlock()
+		return ok
+	})
+	app.audioMu.Unlock()
+	if !volumeChanged {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=volume-blocked")
+		return
+	}
+	if !navigationChanged {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=navigation-blocked")
+		return
+	}
+	runtimeTestTrace("input-smoke-ok token=" + token)
 }
 
 func runCIAudioSmoke() {
@@ -3690,48 +3795,80 @@ func toggleCurrentPlayback() {
 		return
 	}
 	if action == playbackTogglePause {
-		if err := audioPause(); err != nil {
-			logError("audio-pause", err)
-		}
 		app.mu.Lock()
+		key := app.currentKey
 		app.playing = false
 		app.metadataSeq++
 		app.mu.Unlock()
 		setStatus("Pauzirano")
 		invalidate()
+		safeGo("audio-pause-control", func() {
+			if err := audioPause(); err != nil {
+				logError("audio-pause", err)
+				// If pause cannot be delivered to either backend, stop audio so
+				// the audible state can never disagree with the visible state.
+				audioStop()
+				app.mu.Lock()
+				if app.currentKey == key {
+					app.audioStopped = true
+					app.playing = false
+					app.metadataSeq++
+				}
+				app.mu.Unlock()
+				setStatus("Reprodukcija je zaustavljena")
+				postUI()
+			}
+		})
 		return
 	}
 	if action == playbackToggleReconnect {
 		playStationByKey(currentKey, current)
 		return
 	}
-	if err := audioResume(); err != nil {
-		logError("audio-resume", err)
-		playStationByKey(currentKey, current)
-		return
-	}
 	app.mu.Lock()
-	actual := findStationIndexLocked(currentKey, current)
-	if actual < 0 || actual >= len(app.stations) {
-		app.mu.Unlock()
-		return
-	}
-	current = actual
-	st := app.stations[current]
-	key := stationKey(st)
-	app.playing = true
-	app.audioStopped = false
-	app.nowPlayingStation = key
-	app.metadataSeq++
-	seq := app.metadataSeq
+	app.playSeq++
+	reqSeq := app.playSeq
 	app.mu.Unlock()
-	stream := effectiveURL(st)
-	setStatus("Uživo · " + st.Name)
-	safeGo("watchdog-resume-"+key, func() { playbackWatchdog(current, key) })
-	if stream != "" {
-		safeGo("metadata-resume-"+key, func() { metadataLoop(seq, current, key, stream) })
-	}
+	setStatus("Nastavljam reprodukciju…")
 	invalidate()
+	safeGo("audio-resume-control", func() {
+		if err := audioResume(); err != nil {
+			logError("audio-resume", err)
+			app.mu.RLock()
+			stillCurrent := app.playSeq == reqSeq && !app.audioStopped
+			app.mu.RUnlock()
+			if stillCurrent {
+				playStationByKey(currentKey, current)
+			}
+			return
+		}
+		app.mu.Lock()
+		if app.playSeq != reqSeq || app.audioStopped {
+			app.mu.Unlock()
+			return
+		}
+		actual := findStationIndexLocked(currentKey, current)
+		if actual < 0 || actual >= len(app.stations) {
+			app.mu.Unlock()
+			return
+		}
+		current = actual
+		st := app.stations[current]
+		key := stationKey(st)
+		app.playing = true
+		app.audioStopped = false
+		app.nowPlayingStation = key
+		app.metadataSeq++
+		seq := app.metadataSeq
+		app.mu.Unlock()
+		stream := effectiveURL(st)
+		setStatus("Uživo · " + st.Name)
+		postUI()
+		safeGo("watchdog-resume-"+key, func() { playbackWatchdog(current, key) })
+		if stream != "" {
+			safeGo("metadata-resume-"+key, func() { metadataLoop(seq, current, key, stream) })
+		}
+	})
 }
 
 func canStopPlayback(current int, stopped bool) bool {
@@ -3766,7 +3903,6 @@ func stopCurrentPlayback() {
 	if !canStop {
 		return
 	}
-	audioStop()
 	app.mu.Lock()
 	app.playing = false
 	app.audioStopped = true
@@ -3777,6 +3913,7 @@ func stopCurrentPlayback() {
 	app.mu.Unlock()
 	setStatus("Zaustavljeno")
 	invalidate()
+	safeGo("audio-stop-control", audioStop)
 }
 
 func playAdjacent(delta int) {
@@ -4101,7 +4238,6 @@ func playStation(idx int) {
 			if currentReq {
 				setStatus("Stanica trenutno nije dostupna: " + s.Name)
 				postUI()
-				queueAlert("Stanica nije dostupna", "Za ovu stanicu trenutno nije pronađen dostupan izvor.", MB_ICONWARNING)
 			}
 			return
 		}
@@ -4125,9 +4261,8 @@ func playStation(idx int) {
 				currentReq := app.playSeq == reqSeq
 				app.mu.RUnlock()
 				if currentReq {
-					setStatus("Reprodukcija trenutno nije dostupna")
+					setStatus("Reprodukcija trenutno nije dostupna · pokušaj drugu stanicu")
 					postUI()
-					queueAlert("Reprodukcija", "Stanica se trenutno ne može reproducirati. Radio Balkan je automatski provjerio i rezervne izvore.", MB_ICONWARNING)
 				}
 				return
 			}
@@ -4250,14 +4385,16 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 		s = app.stations[idx]
 	}
 	app.mu.RUnlock()
-	candidates := []string{}
+	// Prefer the fresh catalog's resolved/direct URL before persisted automatic
+	// backups from older releases. Stale state must never make every station feel
+	// dead after an upgrade; remembered sources remain available as fallbacks.
+	candidates := []string{s.URLResolved, s.URL, s.ActiveURL}
 	app.stateMu.RLock()
 	if r := app.state.Replacements[key]; r != "" {
 		candidates = append(candidates, r)
 	}
 	candidates = append(candidates, app.state.Backups[key]...)
 	app.stateMu.RUnlock()
-	candidates = append(candidates, s.ActiveURL, s.URLResolved, s.URL)
 	for _, c := range uniqueStrings(candidates) {
 		if resolved, ok := streamCandidateForPlayback(c); ok {
 			updateStationURL(idx, key, resolved, c != s.URLResolved && c != s.URL)
@@ -4577,10 +4714,10 @@ func adjustVolume(delta int) {
 	}
 	v := app.state.Volume
 	app.stateMu.Unlock()
-	audioSetVolume(v)
 	scheduleStateSave()
 	setStatus(fmt.Sprintf("Glasnoća %d%%", v))
 	invalidate()
+	safeGo("audio-volume-control", func() { audioSetVolume(v) })
 }
 func copyNowPlaying() {
 	app.mu.RLock()
@@ -6509,7 +6646,7 @@ while(($line=[Console]::In.ReadLine()) -ne $null){
         $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[1]))
         $v=[double]::Parse($sp[2],[Globalization.CultureInfo]::InvariantCulture)
         $err=''
-        if(-not $p.Play($u,$v,12000,[ref]$err)){ throw $err }
+        if(-not $p.Play($u,$v,7000,[ref]$err)){ throw $err }
       }
       'PAUSE' { $p.Pause() }
       'RESUME' { $p.Resume() }
@@ -6580,7 +6717,7 @@ try { $p.Dispose() } catch {}`
 			}
 			return errors.New("audio engine se nije ispravno inicijalizirao")
 		}
-	case <-time.After(20 * time.Second):
+	case <-time.After(10 * time.Second):
 		_ = in.Close()
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
@@ -6672,7 +6809,7 @@ func resetAudioEngineLocked() {
 
 func audioCommandTimeout(line string) time.Duration {
 	if strings.HasPrefix(line, "PLAY ") {
-		return 15 * time.Second
+		return 9 * time.Second
 	}
 	return 3 * time.Second
 }
