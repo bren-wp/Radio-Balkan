@@ -4537,6 +4537,7 @@ func selectCountry(code string) {
 	app.detailKey = ""
 	app.tab = "all"
 	app.country = code
+	app.genre = ""
 	app.scroll = 0
 	app.countryMenuOpen = false
 	app.genreMenuOpen = false
@@ -4544,6 +4545,7 @@ func selectCountry(code string) {
 	app.stateMu.Lock()
 	app.state.Tab = "all"
 	app.state.CountryCode = code
+	app.state.Genre = ""
 	app.stateMu.Unlock()
 	scheduleStateSave()
 	rebuildGenres()
