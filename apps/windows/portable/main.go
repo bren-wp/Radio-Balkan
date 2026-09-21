@@ -1374,8 +1374,11 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-after-supplemental")
 		return
 	}
+	// Put a real full-catalog paint ahead of the next click in the Win32 queue.
+	// A repaint that monopolizes the UI thread will therefore fail this test.
 	invalidate()
-	postClick(100, 153) // must remain responsive after a 6000-station home repaint
+	procPostMessage.Call(uintptr(app.hwnd), WM_PAINT, 0, 0)
+	postClick(100, 153)
 	if !waitFor(700*time.Millisecond, func() bool {
 		app.mu.RLock()
 		ok := app.tab == "popular"
@@ -1395,6 +1398,34 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-after-render")
 		return
 	}
+
+	// Exercise a real rendered station Play hit-region, not only fixed navigation.
+	app.mu.RLock()
+	widthForCard := app.clientWidth
+	beforePlaySeq := app.playSeq
+	app.mu.RUnlock()
+	mainL := sidebarWidth + mainPad
+	mainR := widthForCard - mainPad
+	columns := homeGridColumns(mainR - mainL)
+	cardW := (mainR - mainL - 8*int32(columns-1)) / int32(columns)
+	firstPlayX := mainL + cardW - 22
+	invalidate()
+	procPostMessage.Call(uintptr(app.hwnd), WM_PAINT, 0, 0)
+	postClick(firstPlayX, 200)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		advanced := app.playSeq > beforePlaySeq
+		app.mu.RUnlock()
+		return advanced
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-play")
+		return
+	}
+	// Cancel the synthetic playback request before the independent local-WAV
+	// audio smoke starts; this keeps the input test deterministic and offline.
+	app.mu.Lock()
+	app.playSeq++
+	app.mu.Unlock()
 
 	// Reproduce the production failure mode deliberately: hold the backend lock,
 	// click volume, then click navigation. Neither click may block the UI thread.
