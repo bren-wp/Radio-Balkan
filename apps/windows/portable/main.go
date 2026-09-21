@@ -1218,7 +1218,7 @@ func scheduleCIRuntimeSmokeClose() {
 		runCIAudioSmoke()
 	})
 	safeGo("ci-runtime-smoke-close", func() {
-		timer := time.NewTimer(18 * time.Second)
+		timer := time.NewTimer(24 * time.Second)
 		defer timer.Stop()
 		select {
 		case <-timer.C:
