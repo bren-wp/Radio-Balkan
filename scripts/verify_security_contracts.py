@@ -702,9 +702,12 @@ def main() -> None:
         "TestAudioAckTimeoutDiscardsStaleChannel",
         "timed-out audio helper state was not discarded",
         "TestAudioEngineCommandLifecycle",
-        "lifecycle.wav",
-        "PLAY %s 0.25",
-        "\"PAUSE\", \"VOLUME 0.60\", \"RESUME\", \"STOP\"",
+        '"PING", "VOLUME 0.60", "STOP", "PING"',
+        "TestAudioEnginePlayReportsActualMediaOpenOutcome",
+        "open-outcome.wav",
+        "PLAY %s 0.00",
+        "0XC00D11BA",
+        "structured MediaFailed outcome confirmed",
         "silentWAV",
     )
 
