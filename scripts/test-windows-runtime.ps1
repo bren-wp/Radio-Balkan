@@ -111,11 +111,18 @@ try {
     $lines = @(Get-Content -LiteralPath $logPath -ErrorAction SilentlyContinue)
   }
   $audioMarker = "[runtime-test] audio-smoke-ok token=$runtimeToken"
-  if (-not ($lines | Where-Object { $_ -like "*$audioMarker*" } | Select-Object -First 1)) {
+  $noDeviceMarker = "[runtime-test] audio-smoke-no-device token=$runtimeToken"
+  $audioOpened = $lines | Where-Object { $_ -like "*$audioMarker*" } | Select-Object -First 1
+  $noDevice = $lines | Where-Object { $_ -like "*$noDeviceMarker*" } | Select-Object -First 1
+  if (-not $audioOpened -and -not $noDevice) {
     $details = Get-CrashDetails
-    throw ("Radio Balkan audio engine did not confirm HTTP media playback during runtime smoke.`n{0}" -f $details)
+    throw ("Radio Balkan audio engine neither opened HTTP media nor returned the recognized headless-runner audio-device result.`n{0}" -f $details)
   }
-  Write-Host ("Radio Balkan runtime smoke OK: UI stayed alive for {0} seconds, HTTP audio opened successfully, and WM_CLOSE shutdown completed." -f $SoakSeconds)
+  if ($noDevice) {
+    Write-Host ("Radio Balkan runtime smoke OK: media open reached Windows MediaPlayer and returned the expected no-audio-device result on this headless runner; UI and shutdown remained healthy.")
+  } else {
+    Write-Host ("Radio Balkan runtime smoke OK: UI stayed alive for {0} seconds, HTTP audio opened successfully, and WM_CLOSE shutdown completed." -f $SoakSeconds)
+  }
 } finally {
   if ($p -and -not $p.HasExited) {
     Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
