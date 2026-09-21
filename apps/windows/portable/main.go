@@ -800,7 +800,7 @@ func safeHTTPURLForConnection(raw string) bool {
 	if ip := net.ParseIP(host); ip != nil {
 		return !unsafeNetworkIP(ip)
 	}
-	ctx, cancel := context.WithTimeout(appContext(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(appContext(), 1500*time.Millisecond)
 	defer cancel()
 	resolved, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 	if err != nil || len(resolved) == 0 {
@@ -4385,14 +4385,16 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 		s = app.stations[idx]
 	}
 	app.mu.RUnlock()
-	candidates := []string{}
+	// Prefer the fresh catalog's resolved/direct URL before persisted automatic
+	// backups from older releases. Stale state must never make every station feel
+	// dead after an upgrade; remembered sources remain available as fallbacks.
+	candidates := []string{s.URLResolved, s.URL, s.ActiveURL}
 	app.stateMu.RLock()
 	if r := app.state.Replacements[key]; r != "" {
 		candidates = append(candidates, r)
 	}
 	candidates = append(candidates, app.state.Backups[key]...)
 	app.stateMu.RUnlock()
-	candidates = append(candidates, s.ActiveURL, s.URLResolved, s.URL)
 	for _, c := range uniqueStrings(candidates) {
 		if resolved, ok := streamCandidateForPlayback(c); ok {
 			updateStationURL(idx, key, resolved, c != s.URLResolved && c != s.URL)
@@ -6644,7 +6646,7 @@ while(($line=[Console]::In.ReadLine()) -ne $null){
         $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[1]))
         $v=[double]::Parse($sp[2],[Globalization.CultureInfo]::InvariantCulture)
         $err=''
-        if(-not $p.Play($u,$v,12000,[ref]$err)){ throw $err }
+        if(-not $p.Play($u,$v,7000,[ref]$err)){ throw $err }
       }
       'PAUSE' { $p.Pause() }
       'RESUME' { $p.Resume() }
@@ -6715,7 +6717,7 @@ try { $p.Dispose() } catch {}`
 			}
 			return errors.New("audio engine se nije ispravno inicijalizirao")
 		}
-	case <-time.After(20 * time.Second):
+	case <-time.After(10 * time.Second):
 		_ = in.Close()
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
@@ -6807,7 +6809,7 @@ func resetAudioEngineLocked() {
 
 func audioCommandTimeout(line string) time.Duration {
 	if strings.HasPrefix(line, "PLAY ") {
-		return 15 * time.Second
+		return 9 * time.Second
 	}
 	return 3 * time.Second
 }
