@@ -371,6 +371,63 @@ func TestPlaybackToggleDecisionLifecycle(t *testing.T) {
 	}
 }
 
+func TestPlaybackControlsReturnImmediatelyWhenAudioBackendIsBusy(t *testing.T) {
+	app = App{
+		done:       make(chan struct{}),
+		current:    0,
+		currentKey: "station-1",
+		playing:    true,
+		stations: []RadioStation{{
+			StationUUID: "station-1",
+			Name:        "Station 1",
+			CountryCode: "HR",
+			URL:         "https://example.com/live.mp3",
+		}},
+		state: PersistedState{
+			Favorites:    map[string]bool{},
+			Replacements: map[string]string{},
+			Backups:      map[string][]string{},
+			Volume:       80,
+		},
+	}
+
+	app.audioMu.Lock()
+	start := time.Now()
+	toggleCurrentPlayback()
+	if elapsed := time.Since(start); elapsed > 150*time.Millisecond {
+		app.audioMu.Unlock()
+		t.Fatalf("pause control blocked the UI path for %s while audio backend was busy", elapsed)
+	}
+	app.mu.RLock()
+	paused := !app.playing
+	app.mu.RUnlock()
+	if !paused {
+		app.audioMu.Unlock()
+		t.Fatal("pause control did not update visible playback state immediately")
+	}
+
+	app.mu.Lock()
+	app.playing = true
+	app.audioStopped = false
+	app.mu.Unlock()
+	start = time.Now()
+	stopCurrentPlayback()
+	if elapsed := time.Since(start); elapsed > 150*time.Millisecond {
+		app.audioMu.Unlock()
+		t.Fatalf("stop control blocked the UI path for %s while audio backend was busy", elapsed)
+	}
+	app.mu.RLock()
+	stopped := app.audioStopped && !app.playing
+	app.mu.RUnlock()
+	app.audioMu.Unlock()
+	if !stopped {
+		t.Fatal("stop control did not update visible playback state immediately")
+	}
+
+	// Let the queued backend control goroutines observe the released mutex.
+	time.Sleep(40 * time.Millisecond)
+}
+
 func TestAudioAckTimeoutDiscardsStaleChannel(t *testing.T) {
 	app = App{done: make(chan struct{}), audioAck: make(chan string)}
 
