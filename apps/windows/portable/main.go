@@ -670,6 +670,7 @@ var (
 	procCopyMemory                    = kernel32.NewProc("RtlMoveMemory")
 	procShellExecute                  = shell32.NewProc("ShellExecuteW")
 	procMciSendString                 = winmm.NewProc("mciSendStringW")
+	procMciGetErrorString             = winmm.NewProc("mciGetErrorStringW")
 	procDestroyWindow                 = user32.NewProc("DestroyWindow")
 	procSetProcessDPIAware            = user32.NewProc("SetProcessDPIAware")
 	procSetProcessDpiAwarenessContext = user32.NewProc("SetProcessDpiAwarenessContext")
@@ -785,6 +786,50 @@ func safeHTTPURL(raw string) bool {
 
 func canonicalNetworkHost(host string) string {
 	return strings.TrimRight(strings.TrimSpace(strings.ToLower(host)), ".")
+}
+
+func safeHTTPURLForConnection(raw string) bool {
+	if !safeHTTPURL(raw) {
+		return false
+	}
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u == nil {
+		return false
+	}
+	host := canonicalNetworkHost(u.Hostname())
+	if ip := net.ParseIP(host); ip != nil {
+		return !unsafeNetworkIP(ip)
+	}
+	ctx, cancel := context.WithTimeout(appContext(), 3*time.Second)
+	defer cancel()
+	resolved, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil || len(resolved) == 0 {
+		return false
+	}
+	for _, candidate := range resolved {
+		if unsafeNetworkIP(candidate.IP) {
+			return false
+		}
+	}
+	return true
+}
+
+func streamCandidateForPlayback(raw string) (string, bool) {
+	raw = strings.TrimSpace(raw)
+	if !safeHTTPURLForConnection(raw) {
+		return "", false
+	}
+	if looksPlaylist(raw) {
+		resolved, ok := resolvePlaylist(raw)
+		if !ok || !safeHTTPURLForConnection(resolved) {
+			return "", false
+		}
+		return resolved, true
+	}
+	// Radio Browser's url_resolved is already a direct stream URL. Avoid opening
+	// a second GET connection before the real media decoder; many Icecast/Shoutcast
+	// servers behave differently for probes or limit concurrent listeners per client.
+	return raw, true
 }
 
 func unsafeNetworkHost(host string) bool {
@@ -1119,6 +1164,7 @@ func scheduleCIRuntimeSmokeClose() {
 	if !enabled {
 		return
 	}
+	safeGo("ci-runtime-audio-smoke", runCIAudioSmoke)
 	safeGo("ci-runtime-smoke-close", func() {
 		timer := time.NewTimer(18 * time.Second)
 		defer timer.Stop()
@@ -1142,6 +1188,83 @@ func scheduleCIRuntimeSmokeClose() {
 			}
 		}
 	})
+}
+
+func runCIAudioSmoke() {
+	if os.Getenv("RADIO_BALKAN_RUNTIME_TEST") != "1" {
+		return
+	}
+	token := strings.TrimSpace(os.Getenv("RADIO_BALKAN_RUNTIME_TOKEN"))
+	wav := makeCISmokeWAV()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		logError("runtime-test-audio", err)
+		return
+	}
+	defer ln.Close()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/tone.wav", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/wav")
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(wav)
+	})
+	server := &http.Server{Handler: mux}
+	serveDone := make(chan struct{})
+	go func() {
+		defer close(serveDone)
+		if serveErr := server.Serve(ln); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+			logError("runtime-test-audio-server", serveErr)
+		}
+	}()
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		_ = server.Shutdown(ctx)
+		cancel()
+		select {
+		case <-serveDone:
+		case <-time.After(time.Second):
+		}
+	}()
+
+	streamURL := "http://" + ln.Addr().String() + "/tone.wav"
+	encoded := base64.StdEncoding.EncodeToString([]byte(streamURL))
+	if err := audioSend(fmt.Sprintf("PLAY %s %.2f", encoded, 0.0)); err != nil {
+		if strings.Contains(strings.ToUpper(err.Error()), "0XC00D11BA") {
+			runtimeTestTrace("audio-smoke-no-device token=" + token)
+			return
+		}
+		logError("runtime-test-audio", err)
+		return
+	}
+	_ = audioSendExisting("STOP")
+	runtimeTestTrace("audio-smoke-ok token=" + token)
+}
+
+func makeCISmokeWAV() []byte {
+	const sampleRate = 8000
+	const seconds = 1
+	const channels = 1
+	const bitsPerSample = 16
+	dataSize := sampleRate * seconds * channels * (bitsPerSample / 8)
+	out := make([]byte, 44+dataSize)
+	copy(out[0:4], "RIFF")
+	binary.LittleEndian.PutUint32(out[4:8], uint32(36+dataSize))
+	copy(out[8:12], "WAVE")
+	copy(out[12:16], "fmt ")
+	binary.LittleEndian.PutUint32(out[16:20], 16)
+	binary.LittleEndian.PutUint16(out[20:22], 1)
+	binary.LittleEndian.PutUint16(out[22:24], channels)
+	binary.LittleEndian.PutUint32(out[24:28], sampleRate)
+	byteRate := sampleRate * channels * (bitsPerSample / 8)
+	binary.LittleEndian.PutUint32(out[28:32], uint32(byteRate))
+	blockAlign := channels * (bitsPerSample / 8)
+	binary.LittleEndian.PutUint16(out[32:34], uint16(blockAlign))
+	binary.LittleEndian.PutUint16(out[34:36], bitsPerSample)
+	copy(out[36:40], "data")
+	binary.LittleEndian.PutUint32(out[40:44], uint32(dataSize))
+	return out
 }
 
 func acquireSingleInstance() bool {
@@ -3991,17 +4114,24 @@ func playStation(idx int) {
 		}
 		app.mu.RUnlock()
 		if err := audioPlay(final); err != nil {
-			app.playTransitionMu.Unlock()
-			logError("audio-play", err)
-			app.mu.RLock()
-			currentReq := app.playSeq == reqSeq
-			app.mu.RUnlock()
-			if currentReq {
-				setStatus("Reprodukcija nije uspjela")
-				postUI()
-				queueAlert("Reprodukcija", "Ovu stanicu trenutno nije moguće reproducirati. Pokušaj ponovno ili odaberi drugi izvor.", MB_ICONWARNING)
+			logError("audio-play-primary", err)
+			setStatus("Prvi izvor nije uspio · pokušavam drugi…")
+			postUI()
+			alternate, altErr := tryAlternatePlayback(idx, key, final)
+			if altErr != nil {
+				app.playTransitionMu.Unlock()
+				logError("audio-play-alternate", altErr)
+				app.mu.RLock()
+				currentReq := app.playSeq == reqSeq
+				app.mu.RUnlock()
+				if currentReq {
+					setStatus("Reprodukcija trenutno nije dostupna")
+					postUI()
+					queueAlert("Reprodukcija", "Stanica se trenutno ne može reproducirati. Radio Balkan je automatski provjerio i rezervne izvore.", MB_ICONWARNING)
+				}
+				return
 			}
-			return
+			final = alternate
 		}
 		app.mu.Lock()
 		if app.playSeq != reqSeq {
@@ -4129,7 +4259,7 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 	app.stateMu.RUnlock()
 	candidates = append(candidates, s.ActiveURL, s.URLResolved, s.URL)
 	for _, c := range uniqueStrings(candidates) {
-		if resolved, ok := checkStream(c); ok {
+		if resolved, ok := streamCandidateForPlayback(c); ok {
 			updateStationURL(idx, key, resolved, c != s.URLResolved && c != s.URL)
 			return resolved, true
 		}
@@ -4137,7 +4267,7 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 	if s.StationUUID != "" {
 		if one, err := fetchStationByUUID(s.StationUUID, s.CountryCode, s.SourceCountryCode); err == nil && one != nil {
 			for _, c := range uniqueStrings([]string{one.URLResolved, one.URL}) {
-				if resolved, ok := checkStream(c); ok {
+				if resolved, ok := streamCandidateForPlayback(c); ok {
 					rememberReplacement(idx, key, resolved)
 					return resolved, true
 				}
@@ -4156,7 +4286,7 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 						break
 					}
 					checked++
-					if resolved, ok := checkStream(c); ok {
+					if resolved, ok := streamCandidateForPlayback(c); ok {
 						rememberReplacement(idx, key, resolved)
 						return resolved, true
 					}
@@ -4187,6 +4317,69 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 	postUI()
 	return "", false
 }
+func tryAlternatePlayback(idx int, key, failedURL string) (string, error) {
+	app.mu.RLock()
+	actual := findStationIndexLocked(key, idx)
+	if actual < 0 || actual >= len(app.stations) {
+		app.mu.RUnlock()
+		return "", errors.New("stanica više nije u katalogu")
+	}
+	idx = actual
+	station := app.stations[idx]
+	app.mu.RUnlock()
+
+	candidates := make([]string, 0, 24)
+	app.stateMu.RLock()
+	candidates = append(candidates, app.state.Backups[key]...)
+	app.stateMu.RUnlock()
+	candidates = append(candidates, station.URLResolved, station.URL)
+
+	if station.StationUUID != "" {
+		if refreshed, err := fetchStationByUUID(station.StationUUID, station.CountryCode, station.SourceCountryCode); err == nil && refreshed != nil {
+			candidates = append(candidates, refreshed.URLResolved, refreshed.URL)
+		}
+	}
+	if station.Name != "" {
+		if alternatives, err := searchStationsByName(station.Name, station.CountryCode, station.SourceCountryCode); err == nil {
+			for _, alt := range alternatives {
+				if sameStation(station, alt) {
+					candidates = append(candidates, alt.URLResolved, alt.URL)
+				}
+				if len(candidates) >= 24 {
+					break
+				}
+			}
+		}
+	}
+
+	var lastErr error
+	tried := 0
+	for _, candidate := range uniqueStrings(candidates) {
+		if strings.EqualFold(strings.TrimSpace(candidate), strings.TrimSpace(failedURL)) {
+			continue
+		}
+		resolved, ok := streamCandidateForPlayback(candidate)
+		if !ok || strings.EqualFold(strings.TrimSpace(resolved), strings.TrimSpace(failedURL)) {
+			continue
+		}
+		tried++
+		if err := audioPlay(resolved); err == nil {
+			rememberReplacement(idx, key, resolved)
+			return resolved, nil
+		} else {
+			lastErr = err
+			logError("audio-play-candidate", err)
+		}
+		if tried >= 3 {
+			break
+		}
+	}
+	if lastErr == nil {
+		lastErr = errors.New("nije pronađen drugi kompatibilan izvor")
+	}
+	return "", lastErr
+}
+
 func updateStationURL(idx int, key, u string, replaced bool) {
 	app.mu.Lock()
 	if actual := findStationIndexLocked(key, idx); actual >= 0 {
@@ -6168,7 +6361,177 @@ func startAudioEngineLocked() error {
 	if app.audioCmd != nil && app.audioCmd.Process != nil {
 		return nil
 	}
-	script := `$ErrorActionPreference='Stop'; Add-Type -AssemblyName PresentationCore; $p=New-Object System.Windows.Media.MediaPlayer; [Console]::Out.WriteLine('READY'); [Console]::Out.Flush(); while(($line=[Console]::In.ReadLine()) -ne $null){ try { $sp=$line.Split(' ',3); switch($sp[0]){ 'PLAY' { $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[1])); $v=[double]::Parse($sp[2],[Globalization.CultureInfo]::InvariantCulture); $p.Stop(); $p.Close(); $p.Open([Uri]$u); $p.Volume=$v; $p.Play() } 'PAUSE' { $p.Pause() } 'RESUME' { $p.Play() } 'STOP' { $p.Stop(); $p.Close() } 'VOLUME' { $p.Volume=[double]::Parse($sp[1],[Globalization.CultureInfo]::InvariantCulture) } default { throw 'unknown command' } }; [Console]::Out.WriteLine('OK'); [Console]::Out.Flush() } catch { [Console]::Out.WriteLine('ERR'); [Console]::Out.Flush() } }`
+	script := `$ErrorActionPreference='Stop'
+try {
+Add-Type -AssemblyName PresentationCore
+Add-Type -AssemblyName WindowsBase
+$source=@'
+using System;
+using System.Threading;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Threading;
+
+public sealed class RadioBalkanMediaHost : IDisposable
+{
+    private Thread thread;
+    private Dispatcher dispatcher;
+    private MediaPlayer player;
+    private readonly ManualResetEventSlim ready = new ManualResetEventSlim(false);
+    private bool disposed;
+
+    public RadioBalkanMediaHost()
+    {
+        thread = new Thread(ThreadMain);
+        thread.IsBackground = true;
+        thread.Name = "RadioBalkanMedia";
+        thread.SetApartmentState(ApartmentState.STA);
+        thread.Start();
+        if (!ready.Wait(8000))
+            throw new TimeoutException("media dispatcher startup timeout");
+    }
+
+    private void ThreadMain()
+    {
+        player = new MediaPlayer();
+        dispatcher = Dispatcher.CurrentDispatcher;
+        ready.Set();
+        Dispatcher.Run();
+    }
+
+    public bool Play(string uri, double volume, int timeoutMs, out string error)
+    {
+        error = "";
+        if (disposed || dispatcher == null)
+        {
+            error = "media host unavailable";
+            return false;
+        }
+
+        var done = new ManualResetEventSlim(false);
+        var opened = false;
+        var failure = "";
+        EventHandler onOpened = null;
+        EventHandler<ExceptionEventArgs> onFailed = null;
+
+        dispatcher.BeginInvoke(new Action(() =>
+        {
+            onOpened = (sender, args) =>
+            {
+                opened = true;
+                done.Set();
+            };
+            onFailed = (sender, args) =>
+            {
+                failure = args != null && args.ErrorException != null ? args.ErrorException.Message : "media failed";
+                done.Set();
+            };
+            player.MediaOpened += onOpened;
+            player.MediaFailed += onFailed;
+            try
+            {
+                player.Stop();
+                player.Close();
+                player.Volume = Math.Max(0.0, Math.Min(1.0, volume));
+                player.Open(new Uri(uri, UriKind.Absolute));
+                player.Play();
+            }
+            catch (Exception ex)
+            {
+                failure = ex.Message;
+                done.Set();
+            }
+        }), DispatcherPriority.Send);
+
+        if (!done.Wait(timeoutMs))
+            failure = "media open timeout";
+
+        try
+        {
+            dispatcher.Invoke(new Action(() =>
+            {
+                if (onOpened != null) player.MediaOpened -= onOpened;
+                if (onFailed != null) player.MediaFailed -= onFailed;
+            }), DispatcherPriority.Send);
+        }
+        catch (Exception ex)
+        {
+            if (String.IsNullOrEmpty(failure)) failure = ex.Message;
+        }
+
+        error = failure;
+        done.Dispose();
+        return opened && String.IsNullOrEmpty(failure);
+    }
+
+    public void Pause() { Invoke(() => player.Pause()); }
+    public void Resume() { Invoke(() => player.Play()); }
+    public void Stop() { Invoke(() => { player.Stop(); player.Close(); }); }
+    public void SetVolume(double value) { Invoke(() => player.Volume = Math.Max(0.0, Math.Min(1.0, value))); }
+
+    private void Invoke(Action action)
+    {
+        if (disposed || dispatcher == null) return;
+        dispatcher.Invoke(action, DispatcherPriority.Send);
+    }
+
+    public void Dispose()
+    {
+        if (disposed) return;
+        disposed = true;
+        if (dispatcher != null)
+        {
+            try { dispatcher.Invoke(new Action(() => { player.Stop(); player.Close(); }), DispatcherPriority.Send); } catch { }
+            try { dispatcher.BeginInvokeShutdown(DispatcherPriority.Send); } catch { }
+        }
+        if (thread != null && thread.IsAlive) thread.Join(2000);
+        ready.Dispose();
+    }
+}
+'@
+$refs=@([System.Windows.Media.MediaPlayer].Assembly.Location,[System.Windows.Threading.Dispatcher].Assembly.Location)
+Add-Type -TypeDefinition $source -ReferencedAssemblies $refs
+$p=[RadioBalkanMediaHost]::new()
+[Console]::Out.WriteLine('READY')
+[Console]::Out.Flush()
+} catch {
+  $m=$_.Exception.ToString()
+  $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m))
+  [Console]::Out.WriteLine('BOOTERR '+$encoded)
+  [Console]::Out.Flush()
+  exit 2
+}
+while(($line=[Console]::In.ReadLine()) -ne $null){
+  try {
+    $sp=$line.Split(' ',3)
+    switch($sp[0]){
+      'PLAY' {
+        $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[1]))
+        $v=[double]::Parse($sp[2],[Globalization.CultureInfo]::InvariantCulture)
+        $err=''
+        if(-not $p.Play($u,$v,12000,[ref]$err)){ throw $err }
+      }
+      'PAUSE' { $p.Pause() }
+      'RESUME' { $p.Resume() }
+      'STOP' { $p.Stop() }
+      'VOLUME' {
+        $v=[double]::Parse($sp[1],[Globalization.CultureInfo]::InvariantCulture)
+        $p.SetVolume($v)
+      }
+      'PING' { }
+      default { throw 'unknown command' }
+    }
+    [Console]::Out.WriteLine('OK')
+    [Console]::Out.Flush()
+  } catch {
+    $m=$_.Exception.Message
+    if([String]::IsNullOrWhiteSpace($m)){ $m='audio command failed' }
+    $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m))
+    [Console]::Out.WriteLine('ERR '+$encoded)
+    [Console]::Out.Flush()
+  }
+}
+try { $p.Dispose() } catch {}`
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-STA", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	in, err := cmd.StdinPipe()
@@ -6180,7 +6543,8 @@ func startAudioEngineLocked() error {
 		_ = in.Close()
 		return err
 	}
-	cmd.Stderr = nil
+	var audioStderr bytes.Buffer
+	cmd.Stderr = &audioStderr
 	if err = cmd.Start(); err != nil {
 		_ = in.Close()
 		return err
@@ -6201,13 +6565,22 @@ func startAudioEngineLocked() error {
 	select {
 	case ready, ok := <-ack:
 		if !ok || ready != "READY" {
+			detail := strings.TrimSpace(audioStderr.String())
+			if strings.HasPrefix(ready, "BOOTERR ") {
+				if decoded, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(strings.TrimPrefix(ready, "BOOTERR "))); decodeErr == nil {
+					detail = strings.TrimSpace(string(decoded))
+				}
+			}
 			_ = in.Close()
 			if cmd.Process != nil {
 				_ = cmd.Process.Kill()
 			}
+			if detail != "" {
+				return fmt.Errorf("audio engine inicijalizacija: %s", detail)
+			}
 			return errors.New("audio engine se nije ispravno inicijalizirao")
 		}
-	case <-time.After(15 * time.Second):
+	case <-time.After(20 * time.Second):
 		_ = in.Close()
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
@@ -6282,6 +6655,7 @@ func startAudioEngineLocked() error {
 	}(cmd)
 	return nil
 }
+
 func resetAudioEngineLocked() {
 	in := app.audioIn
 	cmd := app.audioCmd
@@ -6298,9 +6672,9 @@ func resetAudioEngineLocked() {
 
 func audioCommandTimeout(line string) time.Duration {
 	if strings.HasPrefix(line, "PLAY ") {
-		return 5 * time.Second
+		return 15 * time.Second
 	}
-	return 2 * time.Second
+	return 3 * time.Second
 }
 
 func waitAudioAckLocked(timeout time.Duration) error {
@@ -6317,6 +6691,11 @@ func waitAudioAckLocked(timeout time.Duration) error {
 			return errors.New("audio engine je prekinut")
 		}
 		if reply != "OK" {
+			if strings.HasPrefix(reply, "ERR ") {
+				if decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(strings.TrimPrefix(reply, "ERR "))); err == nil && len(decoded) > 0 {
+					return fmt.Errorf("audio engine: %s", strings.TrimSpace(string(decoded)))
+				}
+			}
 			return errors.New("audio engine nije prihvatio naredbu")
 		}
 		return nil
@@ -6395,11 +6774,31 @@ func audioPlay(raw string) error {
 		return nil
 	} else {
 		logError("audio-engine", err)
+		// The helper can stay alive after MediaFailed. Shut it down before
+		// activating MCI so pause/resume/volume cannot be acknowledged by an
+		// idle helper while the real audio is playing through MCI.
+		app.audioMu.Lock()
+		resetAudioEngineLocked()
+		app.audioMu.Unlock()
 	}
 	audioStopMCI()
-	cmd := fmt.Sprintf("open \"%s\" type mpegvideo alias radio", strings.ReplaceAll(raw, "\"", ""))
-	if e := mci(cmd); e != nil {
-		return e
+	cleanURL := strings.ReplaceAll(raw, "\"", "")
+	openCommands := []string{
+		fmt.Sprintf("open \"%s\" alias radio", cleanURL),
+		fmt.Sprintf("open \"%s\" type mpegvideo alias radio", cleanURL),
+	}
+	var openErr error
+	for _, command := range openCommands {
+		if e := mci(command); e == nil {
+			openErr = nil
+			break
+		} else {
+			openErr = e
+			audioStopMCI()
+		}
+	}
+	if openErr != nil {
+		return openErr
 	}
 	if e := mci("play radio"); e != nil {
 		audioStopMCI()
@@ -6438,6 +6837,12 @@ func mci(cmd string) error {
 	buf := make([]uint16, 256)
 	r, _, _ := procMciSendString.Call(uintptr(unsafe.Pointer(u16(cmd))), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), 0)
 	if r != 0 {
+		detail := make([]uint16, 256)
+		ok, _, _ := procMciGetErrorString.Call(r, uintptr(unsafe.Pointer(&detail[0])), uintptr(len(detail)))
+		message := strings.TrimSpace(syscall.UTF16ToString(detail))
+		if ok != 0 && message != "" {
+			return fmt.Errorf("MCI greška %d: %s", r, message)
+		}
 		return fmt.Errorf("MCI greška %d", r)
 	}
 	return nil

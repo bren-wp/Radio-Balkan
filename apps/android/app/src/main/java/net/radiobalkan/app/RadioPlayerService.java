@@ -21,6 +21,7 @@ import android.os.IBinder;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.net.Uri;
 import java.io.BufferedInputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -28,7 +29,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
@@ -251,7 +254,7 @@ public final class RadioPlayerService extends Service {
                 if (currentCandidate >= currentCandidates.size()) break;
                 candidate = currentCandidates.get(currentCandidate);
             }
-            String resolved = StreamResolver.resolveFirst(Collections.singletonList(candidate));
+            String resolved = StreamResolver.resolveForPlayback(candidate);
             if (resolved == null) {
                 synchronized (lock) { if (gen == generation) currentCandidate++; }
                 continue;
@@ -324,7 +327,11 @@ public final class RadioPlayerService extends Service {
             next.setWakeMode(this, PowerManager.PARTIAL_WAKE_LOCK);
             float v = state.volume() / 100f;
             next.setVolume(v, v);
-            next.setDataSource(stream);
+            Map<String, String> headers = new HashMap<>();
+            headers.put("User-Agent", AppInfo.USER_AGENT);
+            headers.put("Icy-MetaData", "1");
+            headers.put("Accept", "audio/*,application/ogg,application/vnd.apple.mpegurl,application/x-mpegURL,*/*;q=0.5");
+            next.setDataSource(this, Uri.parse(stream), headers);
             next.setOnPreparedListener(mp -> onPrepared(gen, stream, mp));
             next.setOnErrorListener((mp, what, extra) -> {
                 AppLog.e(this, "player-error", new IllegalStateException("MediaPlayer " + what + "/" + extra));

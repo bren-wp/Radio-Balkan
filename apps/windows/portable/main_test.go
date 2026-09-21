@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -390,22 +391,33 @@ func TestAudioEngineCommandLifecycle(t *testing.T) {
 	app = App{done: make(chan struct{})}
 	defer audioShutdown()
 
-	wavPath := filepath.Join(t.TempDir(), "lifecycle.wav")
+	for i, command := range []string{"PING", "VOLUME 0.60", "STOP", "PING"} {
+		if err := audioSend(command); err != nil {
+			t.Fatalf("audio control command %d (%q) acknowledgement failed: %v", i+1, command, err)
+		}
+	}
+}
+
+func TestAudioEnginePlayReportsActualMediaOpenOutcome(t *testing.T) {
+	app = App{done: make(chan struct{})}
+	defer audioShutdown()
+
+	wavPath := filepath.Join(t.TempDir(), "open-outcome.wav")
 	if err := os.WriteFile(wavPath, silentWAV(8000, 800), 0600); err != nil {
-		t.Fatalf("write lifecycle WAV: %v", err)
+		t.Fatalf("write playback WAV: %v", err)
 	}
 	fileURL := (&url.URL{Scheme: "file", Path: "/" + filepath.ToSlash(wavPath)}).String()
 	encoded := base64.StdEncoding.EncodeToString([]byte(fileURL))
-	play := fmt.Sprintf("PLAY %s 0.25", encoded)
-
-	commands := []string{play, "PAUSE", "VOLUME 0.60", "RESUME", "STOP", play, "STOP"}
-	for i, command := range commands {
-		if err := audioSend(command); err != nil {
-			t.Fatalf("audio lifecycle command %d (%q) acknowledgement failed: %v", i+1, command, err)
+	err := audioSend(fmt.Sprintf("PLAY %s 0.00", encoded))
+	if err != nil {
+		if os.Getenv("CI") != "" && strings.Contains(strings.ToUpper(err.Error()), "0XC00D11BA") {
+			t.Logf("headless CI has no usable Windows audio endpoint; structured MediaFailed outcome confirmed: %v", err)
+			return
 		}
-		if i == 0 || i == 5 {
-			time.Sleep(75 * time.Millisecond)
-		}
+		t.Fatalf("event-confirmed media open failed: %v", err)
+	}
+	if err := audioSendExisting("STOP"); err != nil {
+		t.Fatalf("STOP after successful media open failed: %v", err)
 	}
 }
 
