@@ -6243,6 +6243,7 @@ func startAudioEngineLocked() error {
 		return nil
 	}
 	script := `$ErrorActionPreference='Stop'
+try {
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 $source=@'
@@ -6369,10 +6370,18 @@ public sealed class RadioBalkanMediaHost : IDisposable
     }
 }
 '@
-Add-Type -TypeDefinition $source -ReferencedAssemblies PresentationCore.dll,WindowsBase.dll
+$refs=@([System.Windows.Media.MediaPlayer].Assembly.Location,[System.Windows.Threading.Dispatcher].Assembly.Location)
+Add-Type -TypeDefinition $source -ReferencedAssemblies $refs
 $p=[RadioBalkanMediaHost]::new()
 [Console]::Out.WriteLine('READY')
 [Console]::Out.Flush()
+} catch {
+  $m=$_.Exception.ToString()
+  $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($m))
+  [Console]::Out.WriteLine('BOOTERR '+$encoded)
+  [Console]::Out.Flush()
+  exit 2
+}
 while(($line=[Console]::In.ReadLine()) -ne $null){
   try {
     $sp=$line.Split(' ',3)
@@ -6414,7 +6423,8 @@ try { $p.Dispose() } catch {}`
 		_ = in.Close()
 		return err
 	}
-	cmd.Stderr = nil
+	var audioStderr bytes.Buffer
+	cmd.Stderr = &audioStderr
 	if err = cmd.Start(); err != nil {
 		_ = in.Close()
 		return err
@@ -6435,9 +6445,18 @@ try { $p.Dispose() } catch {}`
 	select {
 	case ready, ok := <-ack:
 		if !ok || ready != "READY" {
+			detail := strings.TrimSpace(audioStderr.String())
+			if strings.HasPrefix(ready, "BOOTERR ") {
+				if decoded, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(strings.TrimPrefix(ready, "BOOTERR "))); decodeErr == nil {
+					detail = strings.TrimSpace(string(decoded))
+				}
+			}
 			_ = in.Close()
 			if cmd.Process != nil {
 				_ = cmd.Process.Kill()
+			}
+			if detail != "" {
+				return fmt.Errorf("audio engine inicijalizacija: %s", detail)
 			}
 			return errors.New("audio engine se nije ispravno inicijalizirao")
 		}
