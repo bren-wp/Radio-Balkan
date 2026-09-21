@@ -1186,6 +1186,10 @@ func runCIAudioSmoke() {
 	streamURL := "http://" + ln.Addr().String() + "/tone.wav"
 	encoded := base64.StdEncoding.EncodeToString([]byte(streamURL))
 	if err := audioSend(fmt.Sprintf("PLAY %s %.2f", encoded, 0.0)); err != nil {
+		if strings.Contains(strings.ToUpper(err.Error()), "0XC00D11BA") {
+			runtimeTestTrace("audio-smoke-no-device token=" + token)
+			return
+		}
 		logError("runtime-test-audio", err)
 		return
 	}
@@ -6469,6 +6473,7 @@ while(($line=[Console]::In.ReadLine()) -ne $null){
         $v=[double]::Parse($sp[1],[Globalization.CultureInfo]::InvariantCulture)
         $p.SetVolume($v)
       }
+      'PING' { }
       default { throw 'unknown command' }
     }
     [Console]::Out.WriteLine('OK')
