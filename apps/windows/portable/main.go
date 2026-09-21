@@ -1165,7 +1165,10 @@ func scheduleCIRuntimeSmokeClose() {
 	if !enabled {
 		return
 	}
-	safeGo("ci-runtime-audio-smoke", runCIAudioSmoke)
+	safeGo("ci-runtime-smoke-suite", func() {
+		runCIInputSmoke()
+		runCIAudioSmoke()
+	})
 	safeGo("ci-runtime-smoke-close", func() {
 		timer := time.NewTimer(18 * time.Second)
 		defer timer.Stop()
@@ -1189,6 +1192,107 @@ func scheduleCIRuntimeSmokeClose() {
 			}
 		}
 	})
+}
+
+func runCIInputSmoke() {
+	if os.Getenv("RADIO_BALKAN_RUNTIME_TEST") != "1" {
+		return
+	}
+	token := strings.TrimSpace(os.Getenv("RADIO_BALKAN_RUNTIME_TOKEN"))
+	waitFor := func(timeout time.Duration, predicate func() bool) bool {
+		deadline := time.Now().Add(timeout)
+		for time.Now().Before(deadline) {
+			if predicate() {
+				return true
+			}
+			select {
+			case <-time.After(40 * time.Millisecond):
+			case <-app.done:
+				return false
+			}
+		}
+		return predicate()
+	}
+	postClick := func(x, y int32) {
+		packed := uintptr(uint32(uint16(x)) | uint32(uint16(y))<<16)
+		procPostMessage.Call(uintptr(app.hwnd), WM_LBUTTONDOWN, 0, packed)
+	}
+
+	if !waitFor(3*time.Second, func() bool {
+		app.mu.RLock()
+		ready := app.hwnd != 0 && app.clientWidth >= 1024 && app.clientHeight > playerHeight
+		app.mu.RUnlock()
+		return ready
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=window-ready")
+		return
+	}
+
+	// Exercise the real Win32 mouse-message -> hit-region -> state path.
+	postClick(100, 153) // Top
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "popular"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=top")
+		return
+	}
+	postClick(100, 197) // Zemlje
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "countries"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=countries")
+		return
+	}
+	postClick(100, 109) // Početna
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "all" && app.country == "HR"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=home")
+		return
+	}
+
+	// Reproduce the production failure mode deliberately: hold the backend lock,
+	// click volume, then click navigation. Neither click may block the UI thread.
+	app.audioMu.Lock()
+	app.stateMu.RLock()
+	beforeVolume := app.state.Volume
+	app.stateMu.RUnlock()
+	app.mu.RLock()
+	width, height := app.clientWidth, app.clientHeight
+	app.mu.RUnlock()
+	postClick(width-90, height-playerHeight+43) // volume +
+	volumeChanged := waitFor(700*time.Millisecond, func() bool {
+		app.stateMu.RLock()
+		changed := app.state.Volume != beforeVolume
+		app.stateMu.RUnlock()
+		return changed
+	})
+	postClick(100, 197) // navigation must still work while audioMu is held
+	navigationChanged := waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "countries"
+		app.mu.RUnlock()
+		return ok
+	})
+	app.audioMu.Unlock()
+	if !volumeChanged {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=volume-blocked")
+		return
+	}
+	if !navigationChanged {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=navigation-blocked")
+		return
+	}
+	runtimeTestTrace("input-smoke-ok token=" + token)
 }
 
 func runCIAudioSmoke() {
