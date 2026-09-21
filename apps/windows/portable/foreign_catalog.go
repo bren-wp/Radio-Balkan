@@ -60,7 +60,7 @@ func ensureCatalogGroup(code, name string) {
 
 func init() {
 	initCatalogGroups()
-	if strings.HasSuffix(strings.ToLower(filepath.Base(os.Args[0])), ".test.exe") {
+	if strings.HasSuffix(strings.ToLower(filepath.Base(os.Args[0])), ".test.exe") || os.Getenv("RADIO_BALKAN_RUNTIME_TEST") == "1" {
 		return
 	}
 	go supplementalCatalogSupervisor()
@@ -482,6 +482,7 @@ func syncSupplementalCatalog() error {
 
 	app.mu.Lock()
 	app.stations = combined
+	app.catalogRevision++
 	if currentKey != "" {
 		if idx := findStationIndexLocked(currentKey, -1); idx >= 0 {
 			app.current = idx
