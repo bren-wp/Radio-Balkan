@@ -4065,17 +4065,24 @@ func playStation(idx int) {
 		}
 		app.mu.RUnlock()
 		if err := audioPlay(final); err != nil {
-			app.playTransitionMu.Unlock()
-			logError("audio-play", err)
-			app.mu.RLock()
-			currentReq := app.playSeq == reqSeq
-			app.mu.RUnlock()
-			if currentReq {
-				setStatus("Reprodukcija nije uspjela")
-				postUI()
-				queueAlert("Reprodukcija", "Ovu stanicu trenutno nije moguće reproducirati. Pokušaj ponovno ili odaberi drugi izvor.", MB_ICONWARNING)
+			logError("audio-play-primary", err)
+			setStatus("Prvi izvor nije uspio · pokušavam drugi…")
+			postUI()
+			alternate, altErr := tryAlternatePlayback(idx, key, final)
+			if altErr != nil {
+				app.playTransitionMu.Unlock()
+				logError("audio-play-alternate", altErr)
+				app.mu.RLock()
+				currentReq := app.playSeq == reqSeq
+				app.mu.RUnlock()
+				if currentReq {
+					setStatus("Reprodukcija trenutno nije dostupna")
+					postUI()
+					queueAlert("Reprodukcija", "Stanica se trenutno ne može reproducirati. Radio Balkan je automatski provjerio i rezervne izvore.", MB_ICONWARNING)
+				}
+				return
 			}
-			return
+			final = alternate
 		}
 		app.mu.Lock()
 		if app.playSeq != reqSeq {
@@ -4261,6 +4268,69 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 	postUI()
 	return "", false
 }
+func tryAlternatePlayback(idx int, key, failedURL string) (string, error) {
+	app.mu.RLock()
+	actual := findStationIndexLocked(key, idx)
+	if actual < 0 || actual >= len(app.stations) {
+		app.mu.RUnlock()
+		return "", errors.New("stanica više nije u katalogu")
+	}
+	idx = actual
+	station := app.stations[idx]
+	app.mu.RUnlock()
+
+	candidates := make([]string, 0, 24)
+	app.stateMu.RLock()
+	candidates = append(candidates, app.state.Backups[key]...)
+	app.stateMu.RUnlock()
+	candidates = append(candidates, station.URLResolved, station.URL)
+
+	if station.StationUUID != "" {
+		if refreshed, err := fetchStationByUUID(station.StationUUID, station.CountryCode, station.SourceCountryCode); err == nil && refreshed != nil {
+			candidates = append(candidates, refreshed.URLResolved, refreshed.URL)
+		}
+	}
+	if station.Name != "" {
+		if alternatives, err := searchStationsByName(station.Name, station.CountryCode, station.SourceCountryCode); err == nil {
+			for _, alt := range alternatives {
+				if sameStation(station, alt) {
+					candidates = append(candidates, alt.URLResolved, alt.URL)
+				}
+				if len(candidates) >= 24 {
+					break
+				}
+			}
+		}
+	}
+
+	var lastErr error
+	tried := 0
+	for _, candidate := range uniqueStrings(candidates) {
+		if strings.EqualFold(strings.TrimSpace(candidate), strings.TrimSpace(failedURL)) {
+			continue
+		}
+		resolved, ok := checkStream(candidate)
+		if !ok || strings.EqualFold(strings.TrimSpace(resolved), strings.TrimSpace(failedURL)) {
+			continue
+		}
+		tried++
+		if err := audioPlay(resolved); err == nil {
+			rememberReplacement(idx, key, resolved)
+			return resolved, nil
+		} else {
+			lastErr = err
+			logError("audio-play-candidate", err)
+		}
+		if tried >= 3 {
+			break
+		}
+	}
+	if lastErr == nil {
+		lastErr = errors.New("nije pronađen drugi kompatibilan izvor")
+	}
+	return "", lastErr
+}
+
 func updateStationURL(idx int, key, u string, replaced bool) {
 	app.mu.Lock()
 	if actual := findStationIndexLocked(key, idx); actual >= 0 {
