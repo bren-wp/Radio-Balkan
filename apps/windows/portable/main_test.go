@@ -185,6 +185,13 @@ func TestValidateStateDefaultsToCroatiaOnlyOnFirstLaunch(t *testing.T) {
 	if savedSerbia.CountryCode != "RS" {
 		t.Fatalf("saved country = %q; want RS", savedSerbia.CountryCode)
 	}
+
+	for _, code := range []string{diasporaCatalogCode, foreignCatalogCode} {
+		saved := validateState(PersistedState{CountryCode: code, Volume: 80, Tab: "all"}, true)
+		if saved.CountryCode != code {
+			t.Fatalf("saved supplemental country = %q; want %q", saved.CountryCode, code)
+		}
+	}
 }
 
 func TestValidateStateDropsUnsafeReplacementURLs(t *testing.T) {
