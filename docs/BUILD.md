@@ -5,7 +5,7 @@
 Kanonska verzija nalazi se u root `VERSION` datoteci. Za novo izdanje koristi jedan sinkronizirani bump, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.36
+python scripts/bump_version.py 0.0.37
 ```
 
 `bump_version.py` prvo radi preflight svih verzijskih markera bez pisanja u source. Nova SemVer vrijednost mora biti strogo veća od trenutačne, Android `versionCode` mora rasti, a README i ovaj BUILD vodič automatski dobivaju sljedeći patch primjer. Stvarni write koristi atomske replace operacije; ako završni `scripts/check_versions.py` validator padne, alat vraća sve originalne datoteke. Za provjeru bez promjena koristi `--dry-run`.
