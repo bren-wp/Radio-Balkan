@@ -292,6 +292,14 @@ type HitRegion struct {
 	Value string
 }
 
+type audioBackendKind uint8
+
+const (
+	audioBackendNone audioBackendKind = iota
+	audioBackendWPF
+	audioBackendMCI
+)
+
 type App struct {
 	hwnd                                     syscall.Handle
 	edit                                     syscall.Handle
@@ -332,6 +340,7 @@ type App struct {
 	currentKey                               string
 	playing                                  bool
 	audioStopped                             bool
+	audioBackend                             audioBackendKind
 	audioMu                                  sync.Mutex
 	audioCmd                                 *exec.Cmd
 	audioIn                                  io.WriteCloser
@@ -593,6 +602,19 @@ func currentStationIndexLocked() int {
 		return app.current
 	}
 	return -1
+}
+
+func currentAudioBackend() audioBackendKind {
+	app.mu.RLock()
+	backend := app.audioBackend
+	app.mu.RUnlock()
+	return backend
+}
+
+func setAudioBackend(backend audioBackendKind) {
+	app.mu.Lock()
+	app.audioBackend = backend
+	app.mu.Unlock()
 }
 
 func currentStationSnapshot() (RadioStation, string, int, bool) {
@@ -1263,6 +1285,9 @@ func runCIInputSmoke() {
 	// Reproduce the production failure mode deliberately: hold the backend lock,
 	// click volume, then click navigation. Neither click may block the UI thread.
 	app.audioMu.Lock()
+	app.mu.Lock()
+	app.audioBackend = audioBackendWPF
+	app.mu.Unlock()
 	app.stateMu.RLock()
 	beforeVolume := app.state.Volume
 	app.stateMu.RUnlock()
@@ -1284,6 +1309,8 @@ func runCIInputSmoke() {
 		return ok
 	})
 	app.audioMu.Unlock()
+	time.Sleep(120 * time.Millisecond)
+	setAudioBackend(audioBackendNone)
 	if !volumeChanged {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=volume-blocked")
 		return
@@ -3802,26 +3829,32 @@ func toggleCurrentPlayback() {
 		app.mu.Unlock()
 		setStatus("Pauzirano")
 		invalidate()
-		safeGo("audio-pause-control", func() {
-			if err := audioPause(); err != nil {
-				logError("audio-pause", err)
-				// If pause cannot be delivered to either backend, stop audio so
-				// the audible state can never disagree with the visible state.
-				audioStop()
-				app.mu.Lock()
-				if app.currentKey == key {
-					app.audioStopped = true
-					app.playing = false
-					app.metadataSeq++
+		if currentAudioBackend() != audioBackendNone {
+			safeGo("audio-pause-control", func() {
+				if err := audioPause(); err != nil {
+					logError("audio-pause", err)
+					// If pause cannot be delivered to the active backend, stop
+					// playback so audible and visible state cannot diverge.
+					audioStop()
+					app.mu.Lock()
+					if app.currentKey == key {
+						app.audioStopped = true
+						app.playing = false
+						app.metadataSeq++
+					}
+					app.mu.Unlock()
+					setStatus("Reprodukcija je zaustavljena")
+					postUI()
 				}
-				app.mu.Unlock()
-				setStatus("Reprodukcija je zaustavljena")
-				postUI()
-			}
-		})
+			})
+		}
 		return
 	}
 	if action == playbackToggleReconnect {
+		playStationByKey(currentKey, current)
+		return
+	}
+	if currentAudioBackend() == audioBackendNone {
 		playStationByKey(currentKey, current)
 		return
 	}
@@ -3913,7 +3946,9 @@ func stopCurrentPlayback() {
 	app.mu.Unlock()
 	setStatus("Zaustavljeno")
 	invalidate()
-	safeGo("audio-stop-control", audioStop)
+	if currentAudioBackend() != audioBackendNone {
+		safeGo("audio-stop-control", audioStop)
+	}
 }
 
 func playAdjacent(delta int) {
@@ -4717,7 +4752,9 @@ func adjustVolume(delta int) {
 	scheduleStateSave()
 	setStatus(fmt.Sprintf("Glasnoća %d%%", v))
 	invalidate()
-	safeGo("audio-volume-control", func() { audioSetVolume(v) })
+	if currentAudioBackend() != audioBackendNone {
+		safeGo("audio-volume-control", func() { audioSetVolume(v) })
+	}
 }
 func copyNowPlaying() {
 	app.mu.RLock()
@@ -6747,6 +6784,9 @@ try { $p.Dispose() } catch {}`
 			return
 		}
 		app.mu.Lock()
+		if app.audioBackend == audioBackendWPF {
+			app.audioBackend = audioBackendNone
+		}
 		wasPlaying := app.playing
 		idx := currentStationIndexLocked()
 		key := app.currentKey
@@ -6886,12 +6926,22 @@ func warmAudioEngine() {
 }
 
 func audioShutdown() {
-	app.audioMu.Lock()
+	deadline := time.Now().Add(750 * time.Millisecond)
+	for !app.audioMu.TryLock() {
+		if time.Now().After(deadline) {
+			logError("audio-shutdown", errors.New("audio backend lock remained busy; continuing bounded shutdown"))
+			setAudioBackend(audioBackendNone)
+			audioStopMCI()
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if app.audioIn != nil {
 		_, _ = io.WriteString(app.audioIn, "STOP\n")
 	}
 	resetAudioEngineLocked()
 	app.audioMu.Unlock()
+	setAudioBackend(audioBackendNone)
 	audioStopMCI()
 }
 
@@ -6908,16 +6958,16 @@ func audioPlay(raw string) error {
 	}
 	enc := base64.StdEncoding.EncodeToString([]byte(raw))
 	if err := audioSend(fmt.Sprintf("PLAY %s %.2f", enc, vol)); err == nil {
+		setAudioBackend(audioBackendWPF)
 		return nil
 	} else {
 		logError("audio-engine", err)
-		// The helper can stay alive after MediaFailed. Shut it down before
-		// activating MCI so pause/resume/volume cannot be acknowledged by an
-		// idle helper while the real audio is playing through MCI.
 		app.audioMu.Lock()
 		resetAudioEngineLocked()
 		app.audioMu.Unlock()
+		setAudioBackend(audioBackendNone)
 	}
+
 	audioStopMCI()
 	cleanURL := strings.ReplaceAll(raw, "\"", "")
 	openCommands := []string{
@@ -6935,27 +6985,41 @@ func audioPlay(raw string) error {
 		}
 	}
 	if openErr != nil {
+		setAudioBackend(audioBackendNone)
 		return openErr
 	}
 	if e := mci("play radio"); e != nil {
 		audioStopMCI()
+		setAudioBackend(audioBackendNone)
 		return e
 	}
 	_ = mci(fmt.Sprintf("setaudio radio volume to %d", volume*10))
+	setAudioBackend(audioBackendMCI)
 	return nil
 }
+
 func audioPause() error {
-	if err := audioSendExisting("PAUSE"); err == nil {
-		return nil
+	switch currentAudioBackend() {
+	case audioBackendWPF:
+		return audioSendExisting("PAUSE")
+	case audioBackendMCI:
+		return mci("pause radio")
+	default:
+		return errors.New("audio backend nije aktivan")
 	}
-	return mci("pause radio")
 }
+
 func audioResume() error {
-	if err := audioSendExisting("RESUME"); err == nil {
-		return nil
+	switch currentAudioBackend() {
+	case audioBackendWPF:
+		return audioSendExisting("RESUME")
+	case audioBackendMCI:
+		return mci("resume radio")
+	default:
+		return errors.New("audio backend nije aktivan")
 	}
-	return mci("resume radio")
 }
+
 func audioSetVolume(v int) {
 	if v < 0 {
 		v = 0
@@ -6963,13 +7027,29 @@ func audioSetVolume(v int) {
 	if v > 100 {
 		v = 100
 	}
-	if audioSendExisting(fmt.Sprintf("VOLUME %.2f", float64(v)/100.0)) == nil {
-		return
+	switch currentAudioBackend() {
+	case audioBackendWPF:
+		_ = audioSendExisting(fmt.Sprintf("VOLUME %.2f", float64(v)/100.0))
+	case audioBackendMCI:
+		_ = mci(fmt.Sprintf("setaudio radio volume to %d", v*10))
 	}
-	_ = mci(fmt.Sprintf("setaudio radio volume to %d", v*10))
 }
-func audioStop()    { _ = audioSendExisting("STOP"); audioStopMCI() }
-func audioStopMCI() { _ = mci("stop radio"); _ = mci("close radio") }
+
+func audioStop() {
+	switch currentAudioBackend() {
+	case audioBackendWPF:
+		_ = audioSendExisting("STOP")
+	case audioBackendMCI:
+		audioStopMCI()
+	}
+	setAudioBackend(audioBackendNone)
+}
+
+func audioStopMCI() {
+	_ = mci("stop radio")
+	_ = mci("close radio")
+}
+
 func mci(cmd string) error {
 	buf := make([]uint16, 256)
 	r, _, _ := procMciSendString.Call(uintptr(unsafe.Pointer(u16(cmd))), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), 0)

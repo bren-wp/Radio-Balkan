@@ -1,27 +1,74 @@
 name: Publish GitHub release
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - VERSION
-  workflow_dispatch:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
 
 permissions:
   contents: write
 
 concurrency:
-  group: publish-${{ github.ref }}
+  group: publish-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
 jobs:
+  release_check:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.release.outputs.publish }}
+      version: ${{ steps.release.outputs.version }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - id: release
+        shell: bash
+        env:
+          TARGET_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          VERSION=$(cat VERSION)
+          TAG="v${VERSION}"
+          TAG_SHA=$(git ls-remote origin "refs/tags/${TAG}^{}" | awk '{print $1}')
+          if [ -z "$TAG_SHA" ]; then
+            TAG_SHA=$(git ls-remote origin "refs/tags/${TAG}" | awk '{print $1}')
+          fi
+          PUBLISH=false
+          if [ -z "$TAG_SHA" ]; then
+            PUBLISH=true
+          elif [ "$TAG_SHA" = "$TARGET_SHA" ]; then
+            PUBLISH=true
+          fi
+          echo "publish=$PUBLISH" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha=$TARGET_SHA" >> "$GITHUB_OUTPUT"
+          if [ "$PUBLISH" != "true" ]; then
+            echo "VERSION ${VERSION} already belongs to ${TAG_SHA}; this main commit is not a release bump."
+          fi
+
   windows:
+    needs: release_check
+    if: needs.release_check.outputs.publish == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release_check.outputs.sha }}
       - working-directory: apps/windows
         shell: pwsh
         run: ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
+      - name: Soak-test built Windows release
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION).Trim()
+          ./scripts/test-windows-runtime.ps1 -Exe "apps/windows/dist/RadioBalkan-Portable-v$version.exe" -SoakSeconds 15
       - name: Verify Windows build leaves repository clean
         run: python scripts/check_clean_worktree.py
       - uses: actions/upload-artifact@v4
@@ -30,9 +77,13 @@ jobs:
           path: apps/windows/dist/*
 
   browsers:
+    needs: release_check
+    if: needs.release_check.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release_check.outputs.sha }}
       - working-directory: extensions
         run: python tools/build_extensions.py
       - name: Verify browser build leaves repository clean
@@ -43,9 +94,13 @@ jobs:
           path: extensions/dist/*.zip
 
   android:
+    needs: release_check
+    if: needs.release_check.outputs.publish == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release_check.outputs.sha }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -106,10 +161,19 @@ jobs:
         run: rm -f radio-balkan-release.jks
 
   release:
-    needs: [windows, browsers, android]
+    needs: [release_check, windows, browsers, android]
+    if: >-
+      always() &&
+      needs.release_check.outputs.publish == 'true' &&
+      needs.windows.result == 'success' &&
+      needs.browsers.result == 'success' &&
+      needs.android.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release_check.outputs.sha }}
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           path: release-assets
@@ -123,18 +187,20 @@ jobs:
       - name: Publish release assets
         env:
           GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ needs.release_check.outputs.sha }}
         run: |
+          set -euo pipefail
           VERSION=$(cat VERSION)
           TAG="v${VERSION}"
           TAG_SHA=$(git ls-remote origin "refs/tags/${TAG}^{}" | awk '{print $1}')
           if [ -z "$TAG_SHA" ]; then
             TAG_SHA=$(git ls-remote origin "refs/tags/${TAG}" | awk '{print $1}')
           fi
-          if [ -n "$TAG_SHA" ] && [ "$TAG_SHA" != "$GITHUB_SHA" ]; then
-            echo "::error::${TAG} already points to ${TAG_SHA}; bump VERSION before publishing a different commit."
+          if [ -n "$TAG_SHA" ] && [ "$TAG_SHA" != "$TARGET_SHA" ]; then
+            echo "::error::${TAG} already points to ${TAG_SHA}; refusing to publish a different commit."
             exit 1
           fi
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --target "$GITHUB_SHA" --title "Radio Balkan ${TAG}" --notes "Produkcijsko izdanje Radio Balkan ${TAG}. Detalji: docs/RELEASES.md"
+            gh release create "$TAG" --target "$TARGET_SHA" --title "Radio Balkan ${TAG}" --notes "Produkcijsko izdanje Radio Balkan ${TAG}. Detalji: docs/RELEASES.md"
           fi
           gh release upload "$TAG" release-assets/* --clobber

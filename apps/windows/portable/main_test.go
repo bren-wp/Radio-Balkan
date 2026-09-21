@@ -428,6 +428,28 @@ func TestPlaybackControlsReturnImmediatelyWhenAudioBackendIsBusy(t *testing.T) {
 	time.Sleep(40 * time.Millisecond)
 }
 
+func TestAudioShutdownIsBoundedWhenBackendLockIsBusy(t *testing.T) {
+	app = App{done: make(chan struct{})}
+	app.audioMu.Lock()
+	defer app.audioMu.Unlock()
+
+	start := time.Now()
+	done := make(chan struct{})
+	go func() {
+		audioShutdown()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		if elapsed := time.Since(start); elapsed > 2*time.Second {
+			t.Fatalf("bounded audio shutdown took %s; want under 2s", elapsed)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("audio shutdown blocked for more than 2s on a busy backend lock")
+	}
+}
+
 func TestAudioAckTimeoutDiscardsStaleChannel(t *testing.T) {
 	app = App{done: make(chan struct{}), audioAck: make(chan string)}
 
