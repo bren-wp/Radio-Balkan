@@ -374,8 +374,12 @@ def main() -> int:
     require(errors, windows, 'func seedCIRuntimeCatalog()', "Windows post-load runtime smoke")
     require(errors, windows, 'len(app.stations) >= 6000', "Windows post-load runtime smoke")
     require(errors, windows, 'step=post-load-render', "Windows post-load runtime smoke")
+    require(errors, windows, 'step=post-load-click', "Windows post-load runtime smoke")
+    require(errors, windows, 'step=station-card-paint', "Windows station Play runtime smoke")
     require(errors, windows, 'step=station-play', "Windows station Play runtime smoke")
-    require(errors, windows, 'procPostMessage.Call(uintptr(app.hwnd), WM_PAINT, 0, 0)', "Windows post-load paint ordering")
+    require(errors, windows, 'case WM_APP + 5:', "Windows synchronized paint acknowledgement")
+    require(errors, windows, 'procUpdateWindow.Call(uintptr(hwnd))', "Windows synchronized paint acknowledgement")
+    require(errors, windows, 'ciPaintSeq++', "Windows synchronized paint acknowledgement")
     require(errors, windows, 'func handleCoreClickFallback(x, y int32) bool', "Windows core click fallback")
     require(errors, windows, 'func isSelectableCatalogCode(code string) bool', "Windows supplemental selectors")
     for needle in (
