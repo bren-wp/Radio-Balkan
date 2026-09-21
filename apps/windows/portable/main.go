@@ -1344,10 +1344,16 @@ func runCIInputSmoke() {
 		return
 	}
 
-	postClick(100, 285) // Dijaspora
+	app.mu.Lock()
+	app.genre = "rock"
+	app.mu.Unlock()
+	app.stateMu.Lock()
+	app.state.Genre = "rock"
+	app.stateMu.Unlock()
+	postClick(100, 285) // Dijaspora must also clear any stale genre filter
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
-		ok := app.country == diasporaCatalogCode
+		ok := app.country == diasporaCatalogCode && app.genre == ""
 		app.mu.RUnlock()
 		return ok
 	}) {
