@@ -112,8 +112,8 @@ try {
   }
   $audioMarker = "[runtime-test] audio-smoke-ok token=$runtimeToken"
   $noDeviceMarker = "[runtime-test] audio-smoke-no-device token=$runtimeToken"
-  $audioOpened = $lines | Where-Object { $_ -like "*$audioMarker*" } | Select-Object -First 1
-  $noDevice = $lines | Where-Object { $_ -like "*$noDeviceMarker*" } | Select-Object -First 1
+  $audioOpened = $lines | Where-Object { $_.Contains($audioMarker) } | Select-Object -First 1
+  $noDevice = $lines | Where-Object { $_.Contains($noDeviceMarker) } | Select-Object -First 1
   if (-not $audioOpened -and -not $noDevice) {
     $details = Get-CrashDetails
     throw ("Radio Balkan audio engine neither opened HTTP media nor returned the recognized headless-runner audio-device result.`n{0}" -f $details)
