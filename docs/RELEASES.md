@@ -1,5 +1,23 @@
 # Izdavanja
 
+## 0.0.37
+
+Izdanje 0.0.37 je stabilizacijski hotfix nakon regresije u kojoj Windows UI i playback mogu djelovati potpuno neaktivno kada audio backend zapne ili više nije isti backend koji stvarno reproducira zvuk.
+
+- aktivni Windows audio backend eksplicitno se prati kao WPF, MCI ili neaktivan
+- Pause, Resume, Stop i Volume šalju naredbe samo stvarno aktivnom backendu
+- Resume bez aktivnog backenda pokreće kontrolirani reconnect iste stanice
+- audio shutdown ima tvrdo ograničenje i ne može beskonačno čekati zaključani audio mutex
+- regression test namjerno zaključava backend i zahtijeva bounded shutdown
+- stvarni Windows runtime smoke klikne navigaciju i player kontrole u izgrađenom EXE-u
+- HTTP media-open smoke ostaje dio Windows gatea
+- v0.0.36 post-merge Windows CI otkrio je timeout/deadlock nakon ranije objave; taj release se zato smatra superseded izdanjem
+- Publish workflow više ne radi paralelno s main CI-jem: pokreće se tek nakon uspješnog CI workflowa
+- svi release buildovi checkoutaju točan CI-verified commit SHA, a Windows artefakt ponovno prolazi runtime click/audio smoke prije GitHub Release uploada
+- verzije, Android build/lint/test, browser player/network testovi, checksumovi i clean-worktree provjere ostaju obavezni
+
+v0.0.37 ne mijenja cilj proizvoda ni katalog samo radi verzije; prioritet ovog izdanja je da osnovna interakcija i reprodukcijski lifecycle ostanu responzivni i da se neispravan build više ne promovira prije završetka CI-ja.
+
 ## 0.0.33
 
 Izdanje 0.0.33 fokusira se na gustu i stabilnu početnu stranicu, jasniju informacijsku arhitekturu i dodatni cross-platform UI polish. Hrvatska ostaje first-run default, ali nije prisilni trajni filter. Nisu dodani analytics, telemetry, oglasi, javni korisnički računi, novi backend, remote code niti šire browser dozvole.
