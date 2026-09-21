@@ -788,6 +788,50 @@ func canonicalNetworkHost(host string) string {
 	return strings.TrimRight(strings.TrimSpace(strings.ToLower(host)), ".")
 }
 
+func safeHTTPURLForConnection(raw string) bool {
+	if !safeHTTPURL(raw) {
+		return false
+	}
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u == nil {
+		return false
+	}
+	host := canonicalNetworkHost(u.Hostname())
+	if ip := net.ParseIP(host); ip != nil {
+		return !unsafeNetworkIP(ip)
+	}
+	ctx, cancel := context.WithTimeout(appContext(), 3*time.Second)
+	defer cancel()
+	resolved, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil || len(resolved) == 0 {
+		return false
+	}
+	for _, candidate := range resolved {
+		if unsafeNetworkIP(candidate.IP) {
+			return false
+		}
+	}
+	return true
+}
+
+func streamCandidateForPlayback(raw string) (string, bool) {
+	raw = strings.TrimSpace(raw)
+	if !safeHTTPURLForConnection(raw) {
+		return "", false
+	}
+	if looksPlaylist(raw) {
+		resolved, ok := resolvePlaylist(raw)
+		if !ok || !safeHTTPURLForConnection(resolved) {
+			return "", false
+		}
+		return resolved, true
+	}
+	// Radio Browser's url_resolved is already a direct stream URL. Avoid opening
+	// a second GET connection before the real media decoder; many Icecast/Shoutcast
+	// servers behave differently for probes or limit concurrent listeners per client.
+	return raw, true
+}
+
 func unsafeNetworkHost(host string) bool {
 	host = canonicalNetworkHost(host)
 	return host == "" || host == "localhost" || strings.HasSuffix(host, ".localhost") || strings.HasSuffix(host, ".local") ||
@@ -4215,7 +4259,7 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 	app.stateMu.RUnlock()
 	candidates = append(candidates, s.ActiveURL, s.URLResolved, s.URL)
 	for _, c := range uniqueStrings(candidates) {
-		if resolved, ok := checkStream(c); ok {
+		if resolved, ok := streamCandidateForPlayback(c); ok {
 			updateStationURL(idx, key, resolved, c != s.URLResolved && c != s.URL)
 			return resolved, true
 		}
@@ -4223,7 +4267,7 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 	if s.StationUUID != "" {
 		if one, err := fetchStationByUUID(s.StationUUID, s.CountryCode, s.SourceCountryCode); err == nil && one != nil {
 			for _, c := range uniqueStrings([]string{one.URLResolved, one.URL}) {
-				if resolved, ok := checkStream(c); ok {
+				if resolved, ok := streamCandidateForPlayback(c); ok {
 					rememberReplacement(idx, key, resolved)
 					return resolved, true
 				}
@@ -4242,7 +4286,7 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 						break
 					}
 					checked++
-					if resolved, ok := checkStream(c); ok {
+					if resolved, ok := streamCandidateForPlayback(c); ok {
 						rememberReplacement(idx, key, resolved)
 						return resolved, true
 					}
@@ -4314,7 +4358,7 @@ func tryAlternatePlayback(idx int, key, failedURL string) (string, error) {
 		if strings.EqualFold(strings.TrimSpace(candidate), strings.TrimSpace(failedURL)) {
 			continue
 		}
-		resolved, ok := checkStream(candidate)
+		resolved, ok := streamCandidateForPlayback(candidate)
 		if !ok || strings.EqualFold(strings.TrimSpace(resolved), strings.TrimSpace(failedURL)) {
 			continue
 		}
