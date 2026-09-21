@@ -670,6 +670,7 @@ var (
 	procCopyMemory                    = kernel32.NewProc("RtlMoveMemory")
 	procShellExecute                  = shell32.NewProc("ShellExecuteW")
 	procMciSendString                 = winmm.NewProc("mciSendStringW")
+	procMciGetErrorString             = winmm.NewProc("mciGetErrorStringW")
 	procDestroyWindow                 = user32.NewProc("DestroyWindow")
 	procSetProcessDPIAware            = user32.NewProc("SetProcessDPIAware")
 	procSetProcessDpiAwarenessContext = user32.NewProc("SetProcessDpiAwarenessContext")
@@ -6729,11 +6730,31 @@ func audioPlay(raw string) error {
 		return nil
 	} else {
 		logError("audio-engine", err)
+		// The helper can stay alive after MediaFailed. Shut it down before
+		// activating MCI so pause/resume/volume cannot be acknowledged by an
+		// idle helper while the real audio is playing through MCI.
+		app.audioMu.Lock()
+		resetAudioEngineLocked()
+		app.audioMu.Unlock()
 	}
 	audioStopMCI()
-	cmd := fmt.Sprintf("open \"%s\" type mpegvideo alias radio", strings.ReplaceAll(raw, "\"", ""))
-	if e := mci(cmd); e != nil {
-		return e
+	cleanURL := strings.ReplaceAll(raw, "\"", "")
+	openCommands := []string{
+		fmt.Sprintf("open \"%s\" alias radio", cleanURL),
+		fmt.Sprintf("open \"%s\" type mpegvideo alias radio", cleanURL),
+	}
+	var openErr error
+	for _, command := range openCommands {
+		if e := mci(command); e == nil {
+			openErr = nil
+			break
+		} else {
+			openErr = e
+			audioStopMCI()
+		}
+	}
+	if openErr != nil {
+		return openErr
 	}
 	if e := mci("play radio"); e != nil {
 		audioStopMCI()
@@ -6772,6 +6793,12 @@ func mci(cmd string) error {
 	buf := make([]uint16, 256)
 	r, _, _ := procMciSendString.Call(uintptr(unsafe.Pointer(u16(cmd))), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), 0)
 	if r != 0 {
+		detail := make([]uint16, 256)
+		ok, _, _ := procMciGetErrorString.Call(r, uintptr(unsafe.Pointer(&detail[0])), uintptr(len(detail)))
+		message := strings.TrimSpace(syscall.UTF16ToString(detail))
+		if ok != 0 && message != "" {
+			return fmt.Errorf("MCI greška %d: %s", r, message)
+		}
 		return fmt.Errorf("MCI greška %d", r)
 	}
 	return nil
