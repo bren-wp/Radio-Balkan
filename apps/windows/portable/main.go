@@ -965,7 +965,7 @@ func validateState(st PersistedState, loaded bool) PersistedState {
 	}
 	if !loaded {
 		st.CountryCode = "HR"
-	} else if !isBalkanCode(st.CountryCode) {
+	} else if !isSelectableCatalogCode(st.CountryCode) {
 		st.CountryCode = ""
 	}
 	st.Genre = strings.TrimSpace(st.Genre)
@@ -4351,10 +4351,10 @@ func handleCoreClickFallback(x, y int32) bool {
 		case y >= 311 && y <= 347:
 			selectCountry(foreignCatalogCode)
 			return true
-		case y >= 393 && y <= 429:
+		case y >= 437 && y <= 473:
 			selectTabValue("favorites")
 			return true
-		case y >= 435 && y <= 471:
+		case y >= 479 && y <= 515:
 			selectTabValue("recent")
 			return true
 		}
