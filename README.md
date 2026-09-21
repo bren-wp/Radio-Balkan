@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.34" src="assets/badges/version.svg">
+  <img alt="version 0.0.35" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -15,22 +15,21 @@
 
 Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrvatske i regije bez korisničkog računa, bez telemetry sustava i bez teškog web runtimea u Windows aplikaciji. Projekt objedinjuje nativni Windows klijent, nativni Android klijent i produkcijske ekstenzije za Chrome, Edge, Opera i Firefox.
 
-## Što donosi v0.0.34
+## Što donosi v0.0.35
 
-- **Kompaktniji Windows prozor** — novi zadani prozor je 1240×760, minimalna podržana veličina 1024×680, a stari preveliki spremljeni prozori vraćaju se u razuman desktop raspon.
-- **Zemlje i Žanrovi su pravi zasebni prikazi** — gornje kontrole više nisu padajući izbornici; sidebar i header vode na isti pregled zemalja odnosno žanrova.
-- **Znatno bogatija početna** — responsive home koristi 3–6 stupaca, kompaktnije kartice i više vidljivih stanica bez nepotrebnog praznog prostora.
-- **Više Balkana odmah na početnoj** — Hrvatska može prikazati do tri reda, a Bosna i Hercegovina, Srbija i ostatak Balkana imaju zasebne discovery sekcije.
-- **Veliki regionalni katalog ostaje dinamičan** — aplikacije dohvaćaju širok katalog za HR, BA, RS, SI, MK, AL, ME i BG, uz deduplikaciju, sigurnu URL validaciju i cache fallback umjesto hardcodiranja nepouzdanih streamova.
-- **Ispravan kompaktni player** — Previous/Play/Stop/Next više ne mogu prekriti Favorite kontrolu na minimalnoj širini; dekorativni equalizer se po potrebi sklapa.
-- **Zemlje i Žanrovi rade i na niskom prozoru** — browse stranice dobile su ograničeno vertikalno skrolanje i scrollbar pa zadnji redovi više ne ulaze ispod stalnog playera.
-- **Android navigacija je jasnija** — Zemlje i Žanrovi su odvojene akcije i u glavnom prikazu i u meniju, uz kompaktniji 148dp hero.
-- **Browser ekstenzije ostaju guste i brze** — dedicated discovery, lazy prikaz i postojeći limit kartica zadržavaju dobar balans količine sadržaja i performansi.
-- **Čišći javni tekstovi** — tehnički timeout/fallback/recovery izrazi uklonjeni su iz korisničkog opisa stanice; aplikacija koristi kratke, razumljive statusne poruke.
-- **Regression gateovi su prošireni** — CI sada zaključava kompaktni player, scrollabilne browse stranice, gušći home, sinkronizaciju verzija, sigurnosne ugovore i stvarni Windows startup/shutdown soak.
-- **Bez novih privacy kompromisa** — nema analyticsa, telemetryja, oglasa, novog backenda ni proširenih browser dozvola.
+- **Reprodukcija je ponovno release blocker broj 1** — Windows player više ne prijavljuje lažni uspjeh prije nego što stvarni decoder potvrdi da je medij otvoren.
+- **Windows čeka stvarni `MediaOpened`** — WPF media host radi na vlastitom STA/Dispatcher threadu, a `MediaFailed` i timeout vraćaju stvarnu pogrešku umjesto statusa “svira”.
+- **Direktni stream ide direktno playeru** — sigurni `url_resolved` / `url` više se ne otvaraju dodatnim GET preflightom prije reprodukcije, čime se izbjegava odbacivanje valjanih Icecast/Shoutcast streamova i nepotrebna dupla konekcija.
+- **Automatski rezervni izvori** — ako primarni izvor ne može otvoriti Windows decoder, Radio Balkan pokušava druge URL-ove iste stanice i pamti izvor koji je stvarno proradio.
+- **WPF i MCI fallback više se ne sudaraju** — neuspjeli helper se potpuno gasi prije fallbacka pa Pause, Resume, Stop i Volume uvijek upravljaju aktivnim backendom.
+- **Bolja Windows dijagnostika** — MCI greške imaju čitljiv Windows opis, a media-host inicijalizacija i decoder pogreške ostaju u lokalnom logu bez izlaganja tehničkog sadržaja u javnom UI-ju.
+- **Android više ne “testira stream prije streama”** — direktni javni radio URL prvo dobiva stvarni `MediaPlayer`; samo M3U/PLS/ASX playlist URL-ovi prolaze resolver.
+- **Android šalje radio-kompatibilne headere** — player koristi Radio Balkan User-Agent, `Icy-MetaData` i audio Accept headere za bolju kompatibilnost sa Shoutcast/Icecast serverima.
+- **Sigurnost nije oslabljena** — private/local mrežne adrese i credentialed URL-ovi i dalje su blokirani; Windows i Android provjeravaju javno DNS/IP odredište prije playbacka.
+- **Playback regression gateovi su prošireni** — Windows CI pokreće stvarni HTTP media-open smoke, uz jasno razlikovanje poznatog headless runnera bez audio uređaja od stvarnog playback kvara.
+- **v0.0.34 UI/UX poboljšanja ostaju** — kompaktniji prozor, zasebne Zemlje/Žanrovi stranice, gušća početna i veliki Balkan katalog nisu vraćeni unatrag.
 
-Dostupnost pojedine third-party radio stanice i dalje ovisi o infrastrukturi same postaje. Radio Balkan koristi bounded timeout, fallback i recovery putanje, ali ne tvrdi da je svaki vanjski stream stalno online.
+Dostupnost pojedine third-party radio stanice i dalje ovisi o infrastrukturi same postaje. v0.0.35 uklanja aplikacijske playback blokade i poboljšava fallback, ali ne može jamčiti dostupnost svakog vanjskog streama u svakom trenutku.
 
 ## Zašto Radio Balkan
 
@@ -70,7 +69,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.34 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.34):
+Gotovi v0.0.35 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.35):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -110,7 +109,7 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.35
+python scripts/bump_version.py 0.0.36
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.
