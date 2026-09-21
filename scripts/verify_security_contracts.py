@@ -602,6 +602,8 @@ def main() -> None:
         "MediaFailed",
         "Dispatcher.Run()",
         "audio-smoke-ok token=",
+        "audio-smoke-no-device token=",
+        "'PING' { }",
         'safeGo("ci-runtime-audio-smoke", runCIAudioSmoke)',
         "audioStopped",
         "runtime.LockOSThread()",
@@ -654,7 +656,8 @@ def main() -> None:
     require(
         "scripts/test-windows-runtime.ps1",
         "Radio Balkan runtime smoke OK",
-        "audio engine did not confirm HTTP media playback",
+        "recognized headless-runner audio-device result",
+        "audio-smoke-no-device token=",
         "RADIO_BALKAN_RUNTIME_TOKEN",
         "Radio Balkan exited during the",
         "--ci-runtime-smoke",
