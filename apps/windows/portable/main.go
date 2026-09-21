@@ -4218,6 +4218,159 @@ func playAdjacent(delta int) {
 	playStation(next)
 }
 
+func selectTabValue(value string) {
+	if strings.HasPrefix(value, "country:") {
+		code := strings.ToUpper(strings.TrimSpace(strings.TrimPrefix(value, "country:")))
+		if !isRegionalCatalogCode(code) {
+			return
+		}
+		app.mu.Lock()
+		app.detailKey = ""
+		app.tab = "all"
+		app.country = code
+		app.genre = ""
+		app.scroll = 0
+		app.countryMenuOpen = false
+		app.genreMenuOpen = false
+		app.mu.Unlock()
+		app.stateMu.Lock()
+		app.state.Tab = "all"
+		app.state.CountryCode = code
+		app.state.Genre = ""
+		app.stateMu.Unlock()
+		rebuildGenres()
+		rebuildFilter()
+		scheduleStateSave()
+		invalidate()
+		return
+	}
+	if strings.HasPrefix(value, "genre:") {
+		g := strings.TrimSpace(strings.TrimPrefix(value, "genre:"))
+		app.mu.Lock()
+		app.detailKey = ""
+		app.tab = "all"
+		app.country = ""
+		app.genre = g
+		app.scroll = 0
+		app.countryMenuOpen = false
+		app.genreMenuOpen = false
+		app.mu.Unlock()
+		app.stateMu.Lock()
+		app.state.Tab = "all"
+		app.state.CountryCode = ""
+		app.state.Genre = g
+		app.stateMu.Unlock()
+		rebuildGenres()
+		rebuildFilter()
+		scheduleStateSave()
+		invalidate()
+		return
+	}
+	app.mu.Lock()
+	app.detailKey = ""
+	app.tab = value
+	app.country = ""
+	if value == "all" {
+		app.country = "HR"
+	}
+	app.genre = ""
+	app.scroll = 0
+	app.countryMenuOpen = false
+	app.genreMenuOpen = false
+	app.mu.Unlock()
+	app.stateMu.Lock()
+	app.state.Tab = value
+	app.state.CountryCode = ""
+	if value == "all" {
+		app.state.CountryCode = "HR"
+	}
+	app.state.Genre = ""
+	app.stateMu.Unlock()
+	scheduleStateSave()
+	rebuildGenres()
+	rebuildFilter()
+	invalidate()
+}
+
+func handleCoreClickFallback(x, y int32) bool {
+	app.mu.RLock()
+	width, height := app.clientWidth, app.clientHeight
+	app.mu.RUnlock()
+	if width <= 0 || height <= 0 {
+		return false
+	}
+
+	if x >= 16 && x <= sidebarWidth-14 {
+		switch {
+		case y >= 91 && y <= 127:
+			selectTabValue("all")
+			return true
+		case y >= 135 && y <= 171:
+			selectTabValue("popular")
+			return true
+		case y >= 179 && y <= 215:
+			selectTabValue("countries")
+			return true
+		case y >= 223 && y <= 259:
+			selectTabValue("genres")
+			return true
+		case y >= 267 && y <= 303:
+			selectCountry(diasporaCatalogCode)
+			return true
+		case y >= 311 && y <= 347:
+			selectCountry(foreignCatalogCode)
+			return true
+		case y >= 393 && y <= 429:
+			selectTabValue("favorites")
+			return true
+		case y >= 435 && y <= 471:
+			selectTabValue("recent")
+			return true
+		}
+	}
+
+	_, _, countryL, countryR, genreL, genreR, _, _, refreshL, refreshR := headerLayout(width)
+	if y >= 20 && y <= 72 {
+		switch {
+		case x >= countryL && x <= countryR:
+			selectTabValue("countries")
+			return true
+		case x >= genreL && x <= genreR:
+			selectTabValue("genres")
+			return true
+		case x >= refreshL && x <= refreshR:
+			safeGo("refresh-catalog", refreshAll)
+			return true
+		}
+	}
+
+	playerTop := height - playerHeight
+	if y >= playerTop && y <= height {
+		cx := playerTransportCenter(width)
+		switch {
+		case x >= cx-116 && x <= cx-70 && y >= playerTop+17 && y <= playerTop+63:
+			playAdjacent(-1)
+			return true
+		case x >= cx-35 && x <= cx+35 && y >= playerTop+7 && y <= playerTop+76:
+			toggleCurrentPlayback()
+			return true
+		case x >= cx+44 && x <= cx+92 && y >= playerTop+21 && y <= playerTop+69:
+			stopCurrentPlayback()
+			return true
+		case x >= cx+108 && x <= cx+154 && y >= playerTop+17 && y <= playerTop+63:
+			playAdjacent(1)
+			return true
+		case x >= width-200 && x <= width-168 && y >= playerTop+27 && y <= playerTop+59:
+			adjustVolume(-5)
+			return true
+		case x >= width-106 && x <= width-74 && y >= playerTop+27 && y <= playerTop+59:
+			adjustVolume(5)
+			return true
+		}
+	}
+	return false
+}
+
 func handleClick(x, y int32) {
 	app.mu.RLock()
 	menuOpen := app.countryMenuOpen || app.genreMenuOpen
@@ -4256,75 +4409,7 @@ func handleClick(x, y int32) {
 		case hitGenreChoice:
 			selectGenre(h.Value)
 		case hitTab:
-			if strings.HasPrefix(h.Value, "country:") {
-				code := strings.ToUpper(strings.TrimSpace(strings.TrimPrefix(h.Value, "country:")))
-				if !isRegionalCatalogCode(code) {
-					break
-				}
-				app.mu.Lock()
-				app.tab = "all"
-				app.country = code
-				app.genre = ""
-				app.scroll = 0
-				app.countryMenuOpen = false
-				app.genreMenuOpen = false
-				app.mu.Unlock()
-				app.stateMu.Lock()
-				app.state.Tab = "all"
-				app.state.CountryCode = code
-				app.state.Genre = ""
-				app.stateMu.Unlock()
-				rebuildGenres()
-				rebuildFilter()
-				scheduleStateSave()
-				invalidate()
-				break
-			}
-			if strings.HasPrefix(h.Value, "genre:") {
-				g := strings.TrimSpace(strings.TrimPrefix(h.Value, "genre:"))
-				app.mu.Lock()
-				app.tab = "all"
-				app.country = ""
-				app.genre = g
-				app.scroll = 0
-				app.countryMenuOpen = false
-				app.genreMenuOpen = false
-				app.mu.Unlock()
-				app.stateMu.Lock()
-				app.state.Tab = "all"
-				app.state.CountryCode = ""
-				app.state.Genre = g
-				app.stateMu.Unlock()
-				rebuildGenres()
-				rebuildFilter()
-				scheduleStateSave()
-				invalidate()
-				break
-			}
-			app.mu.Lock()
-			app.detailKey = ""
-			app.tab = h.Value
-			app.country = ""
-			if h.Value == "all" {
-				app.country = "HR"
-			}
-			app.genre = ""
-			app.scroll = 0
-			app.countryMenuOpen = false
-			app.genreMenuOpen = false
-			app.mu.Unlock()
-			app.stateMu.Lock()
-			app.state.Tab = h.Value
-			app.state.CountryCode = ""
-			if h.Value == "all" {
-				app.state.CountryCode = "HR"
-			}
-			app.state.Genre = ""
-			app.stateMu.Unlock()
-			scheduleStateSave()
-			rebuildGenres()
-			rebuildFilter()
-			invalidate()
+			selectTabValue(h.Value)
 		case hitPlay:
 			if idx := stationIndexFromHit(h); idx >= 0 {
 				activateStation(idx)
@@ -4396,6 +4481,9 @@ func handleClick(x, y int32) {
 			app.mu.Unlock()
 			safeGo("refresh-catalog", refreshAll)
 		}
+		return
+	}
+	if !menuOpen && handleCoreClickFallback(x, y) {
 		return
 	}
 	if menuOpen {
