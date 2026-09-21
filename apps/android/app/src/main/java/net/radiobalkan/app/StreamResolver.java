@@ -42,6 +42,20 @@ public final class StreamResolver {
         return r == null ? null : r.url;
     }
 
+    /**
+     * Playback fast-path: Radio Browser already exposes url_resolved as a direct stream URL.
+     * Do not open a second HTTP connection just to prove that a direct stream is alive before
+     * MediaPlayer gets a chance to play it. Plain M3U/PLS/ASX still need one resolver pass.
+     */
+    public static String resolveForPlayback(String candidate) {
+        String value = safe(candidate);
+        if (!isSafeHttpForConnection(value)) return null;
+        String lower = value.toLowerCase(Locale.ROOT).split("\\?", 2)[0];
+        boolean playlist = lower.endsWith(".m3u") || lower.endsWith(".pls") || lower.endsWith(".asx");
+        if (!playlist) return value;
+        return probe(value, 0);
+    }
+
     public static Resolution resolveCandidates(List<String> candidates) {
         Set<String> unique = new LinkedHashSet<>();
         if (candidates != null) for (String s : candidates) if (isSafeHttp(s)) unique.add(s.trim());
