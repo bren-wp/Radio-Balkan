@@ -1,5 +1,19 @@
 # Izdavanja
 
+## 0.0.44
+
+Izdanje 0.0.44 je playback-control hotfix nakon v0.0.43 i zatvara dva uska Windows race prozora otkrivena nakon glavnog A → B switching popravka.
+
+- Pause fallback Stop sada je control-aware i nakon dobivanja audio backend locka ponovno provjerava i media generation i control generation
+- Resume koji pobijedi prije zakašnjelog Pause fallbacka više ne može biti utišan starom Stop naredbom
+- cleanup pending Playa nakon završetka zahtjeva sada uvijek zakazuje završni UI repaint kada stvarno očisti generation
+- player zato ne može ostati vizualno zaglavljen u loading stanju bez Play/Stop hit-regija nakon uspješnog ili neuspješnog otvaranja streama
+- dodani su regresijski testovi za stale Pause fallback i generation-safe pending cleanup
+- prethodni v0.0.43 A → B → C latest-click-wins, pending Stop, WPF local-WAV switching i real live-stream runtime gateovi ostaju obavezni
+- Windows Portable i Setup ostaju unsigned; release se objavljuje tek nakon exact-head CI build/runtime, Android, browser, security/version i checksum provjera
+
+Ovo izdanje ne uvodi novi playback model; cilj je ukloniti preostale race uvjete bez regresije postojećeg latest-click-wins ponašanja.
+
 ## 0.0.43
 
 Izdanje 0.0.43 fokusira se na kritični Windows playback lifecycle kada korisnik tijekom aktivne reprodukcije odabere drugu radio stanicu.
