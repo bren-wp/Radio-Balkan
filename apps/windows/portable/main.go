@@ -7479,10 +7479,12 @@ func handleAudioBackendFailure(expected audioBackendKind, detail string) {
 	}
 
 	app.mu.Lock()
-	if !app.playing || app.audioBackend != expected {
+	if app.audioBackend != expected {
 		app.mu.Unlock()
 		return
 	}
+	wasPlaying := app.playing
+	wasStopped := app.audioStopped
 	idx := currentStationIndexLocked()
 	key := app.currentKey
 	if key == "" && idx >= 0 && idx < len(app.stations) {
@@ -7495,6 +7497,20 @@ func handleAudioBackendFailure(expected audioBackendKind, detail string) {
 		app.mu.Unlock()
 		setStatus("Stanica trenutno nije dostupna")
 		postUI()
+		return
+	}
+
+	// A backend can fail while the UI is paused. Mark it unavailable but do not
+	// auto-restart audio behind the user's back; the next Play/Resume will see
+	// audioBackendNone and reconnect the selected station.
+	if !wasPlaying {
+		app.audioBackend = audioBackendNone
+		app.metadataSeq++
+		app.mu.Unlock()
+		if !wasStopped {
+			setStatus("Veza je privremeno prekinuta · pritisni Play za ponovno povezivanje")
+			postUI()
+		}
 		return
 	}
 
