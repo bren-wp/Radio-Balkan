@@ -408,6 +408,7 @@ type App struct {
 	lastHealth                               time.Time
 	metadataSeq                              uint64
 	playSeq                                  uint64
+	audioControlSeq                          uint64
 	pendingPlaySeq                           uint64
 	streamSem                                chan struct{}
 	done                                     chan struct{}
@@ -4340,8 +4341,9 @@ func toggleCurrentPlayback() {
 	if action == playbackTogglePause {
 		app.mu.Lock()
 		key := app.currentKey
-		app.playSeq++
-		reqSeq := app.playSeq
+		mediaSeq := app.playSeq
+		app.audioControlSeq++
+		controlSeq := app.audioControlSeq
 		app.playing = false
 		app.metadataSeq++
 		app.mu.Unlock()
@@ -4349,17 +4351,17 @@ func toggleCurrentPlayback() {
 		invalidate()
 		if currentAudioBackend() != audioBackendNone {
 			safeGo("audio-pause-control", func() {
-				if err := audioPauseForRequest(reqSeq); err != nil {
-					if errors.Is(err, errPlayRequestSuperseded) {
+				if err := audioPauseForControl(mediaSeq, controlSeq); err != nil {
+					if errors.Is(err, errPlayRequestSuperseded) || errors.Is(err, errAudioControlSuperseded) {
 						return
 					}
 					logError("audio-pause", err)
 					// If pause cannot be delivered to the active backend, stop
 					// playback so audible and visible state cannot diverge. Keep
 					// the same generation token so a newer Play/Next always wins.
-					audioStopForRequest(reqSeq)
+					audioStopForRequest(mediaSeq)
 					app.mu.Lock()
-					stillCurrent := app.playSeq == reqSeq && app.currentKey == key
+					stillCurrent := app.playSeq == mediaSeq && app.audioControlSeq == controlSeq && app.currentKey == key
 					if stillCurrent {
 						app.audioStopped = true
 						app.playing = false
@@ -4384,19 +4386,20 @@ func toggleCurrentPlayback() {
 		return
 	}
 	app.mu.Lock()
-	app.playSeq++
-	reqSeq := app.playSeq
+	mediaSeq := app.playSeq
+	app.audioControlSeq++
+	controlSeq := app.audioControlSeq
 	app.mu.Unlock()
 	setStatus("Nastavljam reprodukciju…")
 	invalidate()
 	safeGo("audio-resume-control", func() {
-		if err := audioResumeForRequest(reqSeq); err != nil {
-			if errors.Is(err, errPlayRequestSuperseded) {
+		if err := audioResumeForControl(mediaSeq, controlSeq); err != nil {
+			if errors.Is(err, errPlayRequestSuperseded) || errors.Is(err, errAudioControlSuperseded) {
 				return
 			}
 			logError("audio-resume", err)
 			app.mu.RLock()
-			stillCurrent := app.playSeq == reqSeq && !app.audioStopped
+			stillCurrent := app.playSeq == mediaSeq && app.audioControlSeq == controlSeq && !app.audioStopped
 			app.mu.RUnlock()
 			if stillCurrent {
 				playStationByKey(currentKey, current)
@@ -4408,7 +4411,7 @@ func toggleCurrentPlayback() {
 		// instead of marking a dead MediaPlayer as "Uživo".
 		if currentAudioBackend() == audioBackendNone {
 			app.mu.RLock()
-			stillCurrent := app.playSeq == reqSeq && !app.audioStopped
+			stillCurrent := app.playSeq == mediaSeq && app.audioControlSeq == controlSeq && !app.audioStopped
 			app.mu.RUnlock()
 			if stillCurrent {
 				playStationByKey(currentKey, current)
@@ -4416,7 +4419,7 @@ func toggleCurrentPlayback() {
 			return
 		}
 		app.mu.Lock()
-		if app.playSeq != reqSeq || app.audioStopped {
+		if app.playSeq != mediaSeq || app.audioControlSeq != controlSeq || app.audioStopped {
 			app.mu.Unlock()
 			return
 		}
@@ -7902,7 +7905,17 @@ func audioCommandTimeout(line string) time.Duration {
 	return 3 * time.Second
 }
 
-var errPlayRequestSuperseded = errors.New("play request superseded")
+var (
+	errPlayRequestSuperseded  = errors.New("play request superseded")
+	errAudioControlSuperseded = errors.New("audio control superseded")
+)
+
+func audioControlStillCurrent(mediaSeq, controlSeq uint64) bool {
+	app.mu.RLock()
+	current := app.playSeq == mediaSeq && app.audioControlSeq == controlSeq
+	app.mu.RUnlock()
+	return current
+}
 
 func playRequestStillCurrent(reqSeq uint64) bool {
 	if reqSeq == 0 {
@@ -8038,14 +8051,17 @@ func audioSendForRequest(line string, reqSeq uint64) error {
 	return nil
 }
 func audioSendExisting(line string) error {
-	return audioSendExistingForRequest(line, 0)
+	return audioSendExistingForControl(line, 0, 0)
 }
 
-func audioSendExistingForRequest(line string, reqSeq uint64) error {
+func audioSendExistingForControl(line string, mediaSeq, controlSeq uint64) error {
 	app.audioMu.Lock()
 	defer app.audioMu.Unlock()
-	if !playRequestStillCurrent(reqSeq) {
+	if mediaSeq != 0 && !playRequestStillCurrent(mediaSeq) {
 		return errPlayRequestSuperseded
+	}
+	if controlSeq != 0 && !audioControlStillCurrent(mediaSeq, controlSeq) {
+		return errAudioControlSuperseded
 	}
 	if app.audioIn == nil {
 		return errors.New("audio engine nije pokrenut")
@@ -8054,7 +8070,13 @@ func audioSendExistingForRequest(line string, reqSeq uint64) error {
 		resetAudioEngineLocked()
 		return err
 	}
-	return waitAudioAckLockedForRequest(audioCommandTimeout(line), reqSeq)
+	if err := waitAudioAckLockedForRequest(audioCommandTimeout(line), mediaSeq); err != nil {
+		return err
+	}
+	if controlSeq != 0 && !audioControlStillCurrent(mediaSeq, controlSeq) {
+		return errAudioControlSuperseded
+	}
+	return nil
 }
 func audioShutdown() {
 	deadline := time.Now().Add(750 * time.Millisecond)
@@ -8168,14 +8190,17 @@ func audioPlayRequest(raw string, reqSeq uint64) error {
 }
 
 func mciQueryExisting(cmd string) (string, error) {
-	return mciQueryExistingForRequest(cmd, 0)
+	return mciQueryExistingForControl(cmd, 0, 0)
 }
 
-func mciQueryExistingForRequest(cmd string, reqSeq uint64) (string, error) {
+func mciQueryExistingForControl(cmd string, mediaSeq, controlSeq uint64) (string, error) {
 	app.audioMu.Lock()
 	defer app.audioMu.Unlock()
-	if !playRequestStillCurrent(reqSeq) {
+	if mediaSeq != 0 && !playRequestStillCurrent(mediaSeq) {
 		return "", errPlayRequestSuperseded
+	}
+	if controlSeq != 0 && !audioControlStillCurrent(mediaSeq, controlSeq) {
+		return "", errAudioControlSuperseded
 	}
 	if currentAudioBackend() != audioBackendMCI {
 		return "", errors.New("MCI backend nije aktivan")
@@ -8184,22 +8209,25 @@ func mciQueryExistingForRequest(cmd string, reqSeq uint64) (string, error) {
 	if err != nil {
 		return result, err
 	}
-	if !playRequestStillCurrent(reqSeq) {
+	if mediaSeq != 0 && !playRequestStillCurrent(mediaSeq) {
 		return "", errPlayRequestSuperseded
+	}
+	if controlSeq != 0 && !audioControlStillCurrent(mediaSeq, controlSeq) {
+		return "", errAudioControlSuperseded
 	}
 	return result, nil
 }
 
 func audioPause() error {
-	return audioPauseForRequest(0)
+	return audioPauseForControl(0, 0)
 }
 
-func audioPauseForRequest(reqSeq uint64) error {
+func audioPauseForControl(mediaSeq, controlSeq uint64) error {
 	switch currentAudioBackend() {
 	case audioBackendWPF:
-		return audioSendExistingForRequest("PAUSE", reqSeq)
+		return audioSendExistingForControl("PAUSE", mediaSeq, controlSeq)
 	case audioBackendMCI:
-		_, err := mciQueryExistingForRequest("pause radio", reqSeq)
+		_, err := mciQueryExistingForControl("pause radio", mediaSeq, controlSeq)
 		return err
 	default:
 		return errors.New("audio backend nije aktivan")
@@ -8207,15 +8235,15 @@ func audioPauseForRequest(reqSeq uint64) error {
 }
 
 func audioResume() error {
-	return audioResumeForRequest(0)
+	return audioResumeForControl(0, 0)
 }
 
-func audioResumeForRequest(reqSeq uint64) error {
+func audioResumeForControl(mediaSeq, controlSeq uint64) error {
 	switch currentAudioBackend() {
 	case audioBackendWPF:
-		return audioSendExistingForRequest("RESUME", reqSeq)
+		return audioSendExistingForControl("RESUME", mediaSeq, controlSeq)
 	case audioBackendMCI:
-		_, err := mciQueryExistingForRequest("resume radio", reqSeq)
+		_, err := mciQueryExistingForControl("resume radio", mediaSeq, controlSeq)
 		return err
 	default:
 		return errors.New("audio backend nije aktivan")
