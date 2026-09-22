@@ -3973,19 +3973,6 @@ func drawRounded(hdc syscall.Handle, l, t, r, b, rad int32, fill, border uint32)
 	procDeleteObject.Call(uintptr(br))
 	procDeleteObject.Call(pen)
 }
-func drawButton(hdc syscall.Handle, l, t, r, b int32, label string, primary bool) {
-	fill := uint32(0x2c221c)
-	border := uint32(0x49372d)
-	tc := rgb(235, 229, 224)
-	if primary {
-		fill = 0x3b2a1e
-		border = 0x8c4a20
-		tc = rgb(255, 173, 103)
-	}
-	drawRounded(hdc, l, t, r, b, 10, fill, border)
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, label, l+8, t, r-8, b, tc, DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-}
 func selectFont(hdc syscall.Handle, h syscall.Handle) {
 	procSelectObject.Call(uintptr(hdc), uintptr(h))
 }
@@ -6865,10 +6852,6 @@ func addRecentLocked(id string) {
 }
 
 const audioEngineStartupTimeout = 20 * time.Second
-
-func startAudioEngineLocked() error {
-	return startAudioEngineLockedForRequest(0)
-}
 
 func waitAudioEngineStartupSignal(ack <-chan string, reqSeq uint64, timeout time.Duration) (string, bool, error) {
 	if timeout <= 0 {
