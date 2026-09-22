@@ -17,6 +17,10 @@ Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrva
 
 ## Što donosi v0.0.39
 
+- **Klikovi se testiraju kroz stvarni Win32 input put** — sidebar, header, Search, Favorite, details/back, Play i Stop prolaze kroz izgrađeni EXE, a ne samo kroz unit funkcije.
+- **Latest-click-wins playback** — novi Play/Next prekida zastarjeli media-open, ACK i cold-start zahtjev; superseded PowerShell/WPF proces se uredno gasi i reap-a.
+- **Playback liveness nakon otvaranja streama** — WPF prosljeđuje kasni MediaFailed/MediaEnded, MCI koristi backend-native status, a Stop/Next/noviji Play uvijek pobjeđuju nad odgođenim reconnectom.
+- **Sigurniji real-network gate** — Balkan MP3/AAC/HTTPS/redirect/playlist streamovi testiraju se uz blokadu privatnih adresa, DNS-rebinding-safe pinned javne IP adrese i multi-address failover bez ponovnog DNS lookup-a.
 - **Play klik je stvarno testiran** — Windows runtime smoke nakon učitavanja velikog kataloga fizički šalje Win32 klik na renderiranu Play ikonicu stanice i zahtijeva da playback request stvarno krene.
 - **Uklonjen je glavni UI freeze nakon učitavanja kataloga** — početna više ne skenira i sortira tisuće stanica pri svakom WM_PAINT i hover događaju.
 - **Home discovery je cacheiran po revisionu kataloga** — skupi ranking radi se kontrolirano, a refresh, cache i supplemental katalog pravilno invalidiraju snapshot.
