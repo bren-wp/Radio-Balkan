@@ -8,7 +8,7 @@ Public Windows releases must:
 
 - be built from the exact CI-verified `main` commit;
 - keep Go symbols/build metadata intact (do not reintroduce `-s -w`);
-- pass Go tests, vet, Windows runtime smoke tests, click-routing coverage, and screenshot quality gates;
+- pass Go tests, vet, Windows runtime smoke tests, click-routing coverage, and screenshot-validator regression tests;
 - publish SHA-256 checksums for every artifact;
 - keep the GitHub tag target identical to the release commit;
 - avoid packers, obfuscators, self-modifying code, and antivirus-bypass behavior.
@@ -42,9 +42,9 @@ A release is considered Windows-production-ready when:
 
 - CI and the real Windows runtime smoke tests are green;
 - click-by-click navigation/playback coverage is green;
-- screenshot quality validation is green;
+- screenshot-validator regression coverage is green;
 - checksums are generated and verified;
 - the repository remains clean after build;
 - the release commit matches the tag target exactly.
 
-Signing is not part of this gate.
+Signing is not part of this gate. The separate Product screenshots workflow remains a post-merge visual QA signal and is monitored independently from the Publish trigger.
