@@ -620,6 +620,51 @@ func TestAudioAckTimeoutDiscardsStaleChannel(t *testing.T) {
 	}
 }
 
+func TestSecondStationClickSupersedesFirstPendingPlay(t *testing.T) {
+	stations := []RadioStation{
+		{StationUUID: "station-a", Name: "Station A", CountryCode: "HR", URL: "https://example.com/a.mp3"},
+		{StationUUID: "station-b", Name: "Station B", CountryCode: "HR", URL: "https://example.com/b.mp3"},
+	}
+	app = App{
+		done:       make(chan struct{}),
+		stations:   stations,
+		current:    -1,
+		filtered:   []int{0, 1},
+		state: PersistedState{
+			Favorites:    map[string]bool{},
+			Replacements: map[string]string{},
+			Backups:      map[string][]string{},
+			Volume:       80,
+		},
+	}
+
+	app.mu.Lock()
+	app.playSeq = 10
+	app.pendingPlaySeq = 10
+	app.mu.Unlock()
+
+	// Simulate the user's second click before the first station has committed
+	// backend/current state. The newer request generation must win immediately.
+	app.mu.Lock()
+	app.playSeq++
+	secondSeq := app.playSeq
+	app.pendingPlaySeq = secondSeq
+	app.mu.Unlock()
+
+	if playRequestStillCurrent(10) {
+		t.Fatal("first station request remained current after clicking a second station")
+	}
+	if !playRequestStillCurrent(secondSeq) {
+		t.Fatal("second station request did not become the current playback generation")
+	}
+	app.mu.RLock()
+	pending := app.pendingPlaySeq
+	app.mu.RUnlock()
+	if pending != secondSeq {
+		t.Fatalf("pending playback generation = %d; want second station generation %d", pending, secondSeq)
+	}
+}
+
 func TestLatestPlayRequestCancelsStaleAckWait(t *testing.T) {
 	app = App{
 		done:         make(chan struct{}),
