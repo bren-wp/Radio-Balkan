@@ -7740,6 +7740,14 @@ func audioSendForRequest(line string, reqSeq uint64) error {
 	if !playRequestStillCurrent(reqSeq) {
 		return errPlayRequestSuperseded
 	}
+	playCommand := strings.HasPrefix(strings.TrimSpace(line), "PLAY ")
+	cleanupFailedPlayLocked := func() {
+		if !playCommand {
+			return
+		}
+		resetAudioEngineLocked()
+		setAudioBackend(audioBackendNone)
+	}
 	// A newer WPF PLAY must replace an older MCI fallback stream. Otherwise the
 	// two backends can remain audible at the same time after rapid station changes.
 	if shouldStopMCIForAudioCommand(line, currentAudioBackend()) {
@@ -7747,29 +7755,33 @@ func audioSendForRequest(line string, reqSeq uint64) error {
 		setAudioBackend(audioBackendNone)
 	}
 	if err := startAudioEngineLocked(); err != nil {
+		cleanupFailedPlayLocked()
 		return err
 	}
 	if !playRequestStillCurrent(reqSeq) {
-		resetAudioEngineLocked()
+		cleanupFailedPlayLocked()
 		return errPlayRequestSuperseded
 	}
 	if app.audioIn == nil {
+		cleanupFailedPlayLocked()
 		return errors.New("audio engine nije dostupan")
 	}
 	if _, err := io.WriteString(app.audioIn, line+"\n"); err != nil {
-		resetAudioEngineLocked()
+		cleanupFailedPlayLocked()
 		return err
 	}
 	if err := waitAudioAckLockedForRequest(audioCommandTimeout(line), reqSeq); err != nil {
+		// PLAY failures are fully cleaned up while audioMu is still held. The
+		// caller must never tear down backend state after this function returns.
+		cleanupFailedPlayLocked()
 		return err
 	}
-	if strings.HasPrefix(strings.TrimSpace(line), "PLAY ") {
+	if playCommand {
 		// Commit backend ownership while audioMu is still held. A newer request can
 		// advance playSeq concurrently, but it cannot enter another backend command
 		// until this lock is released.
 		if !playRequestStillCurrent(reqSeq) {
-			resetAudioEngineLocked()
-			setAudioBackend(audioBackendNone)
+			cleanupFailedPlayLocked()
 			return errPlayRequestSuperseded
 		}
 		setAudioBackend(audioBackendWPF)
@@ -7848,10 +7860,8 @@ func audioPlayRequest(raw string, reqSeq uint64) error {
 			return err
 		}
 		logError("audio-engine", err)
-		app.audioMu.Lock()
-		resetAudioEngineLocked()
-		setAudioBackend(audioBackendNone)
-		app.audioMu.Unlock()
+		// audioSendForRequest already cleaned the failed WPF PLAY while holding
+		// audioMu; do not perform post-unlock cleanup here.
 	}
 
 	if !playRequestStillCurrent(reqSeq) {
