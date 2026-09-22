@@ -408,6 +408,8 @@ type App struct {
 	lastHealth                               time.Time
 	metadataSeq                              uint64
 	playSeq                                  uint64
+	audioControlSeq                          uint64
+	pendingPlaySeq                           uint64
 	streamSem                                chan struct{}
 	done                                     chan struct{}
 	closeOnce                                sync.Once
@@ -1735,16 +1737,66 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-play-paint")
 		return
 	}
+	homeForSwitch := cachedHomeDiscovery(columns)
+	app.mu.RLock()
+	firstTargetKey := ""
+	if len(homeForSwitch.Popular) > 0 {
+		firstTargetIdx := homeForSwitch.Popular[0]
+		if firstTargetIdx >= 0 && firstTargetIdx < len(app.stations) {
+			firstTargetKey = stationKey(app.stations[firstTargetIdx])
+		}
+	}
+	app.mu.RUnlock()
 	postClick(firstPlayX, 200)
 	if !waitFor(700*time.Millisecond, func() bool {
 		app.mu.RLock()
-		advanced := app.playSeq > beforePlaySeq
+		advanced := app.playSeq > beforePlaySeq && firstTargetKey != "" && app.currentKey == firstTargetKey
 		app.mu.RUnlock()
 		return advanced
 	}) {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-play")
 		return
 	}
+
+	// Simulate A already playing, then use the real second card Play hit-region.
+	// B must become current immediately and supersede A even before network open.
+	app.mu.Lock()
+	app.playing = true
+	app.audioStopped = false
+	app.audioBackend = audioBackendNone
+	beforeSwitchSeq := app.playSeq
+	app.mu.Unlock()
+	secondPlayX := firstPlayX
+	secondPlayY := int32(200)
+	if columns > 1 {
+		secondPlayX = mainL + (cardW + 8) + cardW - 22
+	} else {
+		secondPlayY = 200 + 82
+	}
+	app.mu.RLock()
+	secondTargetKey := ""
+	if len(homeForSwitch.Popular) > 1 {
+		secondTargetIdx := homeForSwitch.Popular[1]
+		if secondTargetIdx >= 0 && secondTargetIdx < len(app.stations) {
+			secondTargetKey = stationKey(app.stations[secondTargetIdx])
+		}
+	}
+	app.mu.RUnlock()
+	if secondTargetKey == "" {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-switch-target")
+		return
+	}
+	postClick(secondPlayX, secondPlayY)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		switched := app.playSeq > beforeSwitchSeq && app.currentKey == secondTargetKey && !app.playing
+		app.mu.RUnlock()
+		return switched
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-switch")
+		return
+	}
+
 	// Cancel the synthetic internet request before the independent local-WAV
 	// audio smoke starts; request-aware playback must observe this sequence bump.
 	app.mu.Lock()
@@ -1754,6 +1806,37 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=stop-station")
 		return
 	}
+	// Exercise the real rendered Stop hit-region while playback is still pending
+	// and no station has been committed as current yet. This guards the startup
+	// race where Stop used to be unavailable until Play finished opening media.
+	app.current = -1
+	app.currentKey = ""
+	app.playing = false
+	app.audioStopped = false
+	app.pendingPlaySeq = app.playSeq
+	pendingStopSeq := app.playSeq
+	app.audioBackend = audioBackendNone
+	app.mu.Unlock()
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=pending-stop-paint")
+		return
+	}
+	app.mu.RLock()
+	pendingStopWidth, pendingStopHeight := app.clientWidth, app.clientHeight
+	app.mu.RUnlock()
+	pendingStopCX := playerTransportCenter(pendingStopWidth)
+	postClick(pendingStopCX+68, pendingStopHeight-playerHeight+45)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		stopped := app.audioStopped && !app.playing && app.pendingPlaySeq == 0 && app.playSeq > pendingStopSeq
+		app.mu.RUnlock()
+		return stopped
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=pending-player-stop")
+		return
+	}
+
+	app.mu.Lock()
 	app.current = 0
 	app.currentKey = stationKey(app.stations[0])
 	app.playing = true
@@ -1834,12 +1917,14 @@ func runCIAudioSmoke() {
 	defer ln.Close()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/tone.wav", func(w http.ResponseWriter, r *http.Request) {
+	serveWAV := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "audio/wav")
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(wav)
-	})
+	}
+	mux.HandleFunc("/tone-a.wav", serveWAV)
+	mux.HandleFunc("/tone-b.wav", serveWAV)
 	server := &http.Server{Handler: mux}
 	serveDone := make(chan struct{})
 	go func() {
@@ -1858,10 +1943,62 @@ func runCIAudioSmoke() {
 		}
 	}()
 
-	streamURL := "http://" + ln.Addr().String() + "/tone.wav"
+	streamA := "http://" + ln.Addr().String() + "/tone-a.wav"
+	streamB := "http://" + ln.Addr().String() + "/tone-b.wav"
+
+	// Exercise the primary production WPF backend lifecycle that handles station
+	// switching. Testing the WPF command path directly preserves the real
+	// MediaPlayer HRESULT on headless CI instead of masking it behind an MCI
+	// fallback error. On an audio-capable Windows host, A then B must both open
+	// successfully in the same helper process.
+	app.stateMu.RLock()
+	volume := app.state.Volume
+	app.stateMu.RUnlock()
+	vol := float64(volume) / 100.0
+	if vol < 0 {
+		vol = 0
+	}
+	if vol > 1 {
+		vol = 1
+	}
+	playWPF := func(stream string, seq uint64) error {
+		encoded := base64.StdEncoding.EncodeToString([]byte(stream))
+		return audioSendForRequest(audioPlayCommand(seq, encoded, vol), seq)
+	}
+
+	app.mu.Lock()
+	app.playSeq++
+	seqA := app.playSeq
+	app.mu.Unlock()
+	if err := playWPF(streamA, seqA); err != nil {
+		if isExpectedHeadlessAudioError(err) {
+			runtimeTestTrace("production-audio-switch-no-device token=" + token)
+		} else {
+			logError("runtime-test-production-audio-a", err)
+			return
+		}
+	} else {
+		app.mu.Lock()
+		app.playSeq++
+		seqB := app.playSeq
+		app.mu.Unlock()
+		if err := playWPF(streamB, seqB); err != nil {
+			if isExpectedHeadlessAudioError(err) {
+				runtimeTestTrace("production-audio-switch-no-device token=" + token)
+			} else {
+				logError("runtime-test-production-audio-b", err)
+				audioStopForRequest(seqB)
+				return
+			}
+		} else {
+			runtimeTestTrace("production-audio-switch-ok token=" + token)
+		}
+		audioStopForRequest(seqB)
+	}
+
+	streamURL := streamA
 	if err := mfplaySmokeOpen(streamURL); err != nil {
-		upper := strings.ToUpper(err.Error())
-		if strings.Contains(upper, "0XC00D11BA") || strings.Contains(upper, "0XC00D36B0") {
+		if isExpectedHeadlessAudioError(err) {
 			runtimeTestTrace("audio-smoke-no-device token=" + token)
 			return
 		}
@@ -1869,6 +2006,14 @@ func runCIAudioSmoke() {
 		return
 	}
 	runtimeTestTrace("audio-smoke-ok token=" + token)
+}
+
+func isExpectedHeadlessAudioError(err error) bool {
+	if err == nil {
+		return false
+	}
+	upper := strings.ToUpper(err.Error())
+	return strings.Contains(upper, "0XC00D11BA") || strings.Contains(upper, "0XC00D36B0")
 }
 
 func makeCISmokeWAV() []byte {
@@ -3330,6 +3475,7 @@ func drawRegionCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStatio
 	app.mu.RLock()
 	selected := app.currentKey != "" && app.currentKey == key
 	selectedPlaying := selected && app.playing
+	selectedPending := selected && pendingPlayCurrentLocked()
 	app.mu.RUnlock()
 	border := color(49, 57, 68)
 	fill := color(20, 25, 33)
@@ -3352,10 +3498,14 @@ func drawRegionCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStatio
 	playLabel := "▶"
 	if selectedPlaying {
 		playLabel = "Ⅱ"
+	} else if selectedPending {
+		playLabel = "…"
 	}
 	text(hdc, playLabel, r-32, t+18, r-12, t+42, rgb(246, 248, 250), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitStationDetails, Index: idx, Value: key})
-	app.hits = append(app.hits, HitRegion{R: RECT{r - 38, t + 14, r - 6, t + 46}, Kind: hitPlay, Index: idx, Value: key})
+	if !selectedPending {
+		app.hits = append(app.hits, HitRegion{R: RECT{r - 38, t + 14, r - 6, t + 46}, Kind: hitPlay, Index: idx, Value: key})
+	}
 }
 
 func drawStationScrollBar(hdc syscall.Handle, cr RECT, top, bottom int32, count, scroll, step int) {
@@ -3707,6 +3857,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	currentCountry := ""
 	playing := false
 	stopped := true
+	pending := false
 	currentIdx := -1
 	canNavigate := false
 	var current RadioStation
@@ -3723,6 +3874,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	}
 	playing = app.playing
 	stopped = app.audioStopped
+	pending = pendingPlayCurrentLocked()
 	canNavigate = canNavigateStations(currentIdx, len(app.stations), len(app.filtered))
 	app.mu.RUnlock()
 	app.stateMu.RLock()
@@ -3773,7 +3925,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	// compact windows.
 	cx := playerTransportCenter(cr.Right)
 	compactPlayer := cr.Right < 1180
-	canStop := canStopPlayback(currentIdx, stopped)
+	canStop := canStopPlayback(currentIdx, stopped) || pending
 	selectFont(hdc, app.hFontBold)
 	prevColor := rgb(193, 199, 207)
 	if !canNavigate {
@@ -3786,11 +3938,15 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	label := "▶"
 	if playing {
 		label = "Ⅱ"
+	} else if pending {
+		label = "…"
 	}
 	drawCircle(hdc, cx-31, t+10, cx+31, t+72, color(255, 174, 52), color(255, 197, 95))
 	selectFont(hdc, app.hFontTitle)
 	text(hdc, label, cx-28, t+10, cx+28, t+72, rgb(20, 21, 24), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	app.hits = append(app.hits, HitRegion{R: RECT{cx - 35, t + 7, cx + 35, t + 76}, Kind: hitPlayerPlay, Index: -1})
+	if !pending {
+		app.hits = append(app.hits, HitRegion{R: RECT{cx - 35, t + 7, cx + 35, t + 76}, Kind: hitPlayerPlay, Index: -1})
+	}
 	if canStop {
 		drawIconButton(hdc, cx+48, t+25, cx+88, t+65, "■", false)
 		app.hits = append(app.hits, HitRegion{R: RECT{cx + 44, t + 21, cx + 92, t + 69}, Kind: hitPlayerStop, Index: -1})
@@ -4179,12 +4335,18 @@ func defaultPlaybackIndexLocked() int {
 func toggleCurrentPlayback() {
 	app.mu.RLock()
 	current, playing, stopped := currentStationIndexLocked(), app.playing, app.audioStopped
+	pending := pendingPlayCurrentLocked()
 	currentKey := app.currentKey
 	defaultIndex := defaultPlaybackIndexLocked()
 	if currentKey == "" && current >= 0 && current < len(app.stations) {
 		currentKey = stationKey(app.stations[current])
 	}
 	app.mu.RUnlock()
+	if pending {
+		// A pending PLAY already owns the latest generation. Do not translate a
+		// second click into Resume against the still-stopping previous backend.
+		return
+	}
 	action := decidePlaybackToggle(current, playing, stopped)
 	if action == playbackToggleNone {
 		if defaultIndex >= 0 {
@@ -4195,6 +4357,9 @@ func toggleCurrentPlayback() {
 	if action == playbackTogglePause {
 		app.mu.Lock()
 		key := app.currentKey
+		mediaSeq := app.playSeq
+		app.audioControlSeq++
+		controlSeq := app.audioControlSeq
 		app.playing = false
 		app.metadataSeq++
 		app.mu.Unlock()
@@ -4202,20 +4367,31 @@ func toggleCurrentPlayback() {
 		invalidate()
 		if currentAudioBackend() != audioBackendNone {
 			safeGo("audio-pause-control", func() {
-				if err := audioPause(); err != nil {
+				if err := audioPauseForControl(mediaSeq, controlSeq); err != nil {
+					if errors.Is(err, errPlayRequestSuperseded) || errors.Is(err, errAudioControlSuperseded) {
+						return
+					}
+					if !audioControlStillCurrent(mediaSeq, controlSeq) {
+						return
+					}
 					logError("audio-pause", err)
 					// If pause cannot be delivered to the active backend, stop
-					// playback so audible and visible state cannot diverge.
-					audioStop()
+					// playback so audible and visible state cannot diverge. Keep
+					// the same media generation token while the independent control
+					// generation prevents an older Pause from stopping a newer Resume.
+					audioStopForRequest(mediaSeq)
 					app.mu.Lock()
-					if app.currentKey == key {
+					stillCurrent := app.playSeq == mediaSeq && app.audioControlSeq == controlSeq && app.currentKey == key
+					if stillCurrent {
 						app.audioStopped = true
 						app.playing = false
 						app.metadataSeq++
 					}
 					app.mu.Unlock()
-					setStatus("Reprodukcija je zaustavljena")
-					postUI()
+					if stillCurrent {
+						setStatus("Reprodukcija je zaustavljena")
+						postUI()
+					}
 				}
 			})
 		}
@@ -4230,16 +4406,20 @@ func toggleCurrentPlayback() {
 		return
 	}
 	app.mu.Lock()
-	app.playSeq++
-	reqSeq := app.playSeq
+	mediaSeq := app.playSeq
+	app.audioControlSeq++
+	controlSeq := app.audioControlSeq
 	app.mu.Unlock()
 	setStatus("Nastavljam reprodukciju…")
 	invalidate()
 	safeGo("audio-resume-control", func() {
-		if err := audioResume(); err != nil {
+		if err := audioResumeForControl(mediaSeq, controlSeq); err != nil {
+			if errors.Is(err, errPlayRequestSuperseded) || errors.Is(err, errAudioControlSuperseded) {
+				return
+			}
 			logError("audio-resume", err)
 			app.mu.RLock()
-			stillCurrent := app.playSeq == reqSeq && !app.audioStopped
+			stillCurrent := app.playSeq == mediaSeq && app.audioControlSeq == controlSeq && !app.audioStopped
 			app.mu.RUnlock()
 			if stillCurrent {
 				playStationByKey(currentKey, current)
@@ -4251,7 +4431,7 @@ func toggleCurrentPlayback() {
 		// instead of marking a dead MediaPlayer as "Uživo".
 		if currentAudioBackend() == audioBackendNone {
 			app.mu.RLock()
-			stillCurrent := app.playSeq == reqSeq && !app.audioStopped
+			stillCurrent := app.playSeq == mediaSeq && app.audioControlSeq == controlSeq && !app.audioStopped
 			app.mu.RUnlock()
 			if stillCurrent {
 				playStationByKey(currentKey, current)
@@ -4259,7 +4439,7 @@ func toggleCurrentPlayback() {
 			return
 		}
 		app.mu.Lock()
-		if app.playSeq != reqSeq || app.audioStopped {
+		if app.playSeq != mediaSeq || app.audioControlSeq != controlSeq || app.audioStopped {
 			app.mu.Unlock()
 			return
 		}
@@ -4315,6 +4495,9 @@ func canNavigateStations(current, stationCount, filteredCount int) bool {
 func stopCurrentPlayback() {
 	app.mu.RLock()
 	canStop := canStopPlayback(currentStationIndexLocked(), app.audioStopped)
+	if !canStop {
+		canStop = pendingPlayCurrentLocked()
+	}
 	app.mu.RUnlock()
 	if !canStop {
 		return
@@ -4324,6 +4507,7 @@ func stopCurrentPlayback() {
 	app.audioStopped = true
 	app.metadataSeq++
 	app.playSeq++
+	app.pendingPlaySeq = 0
 	stopSeq := app.playSeq
 	backend := app.audioBackend
 	app.nowPlaying = ""
@@ -4526,8 +4710,9 @@ func handleCoreClickFallback(x, y int32) bool {
 	if y >= playerTop && y <= height {
 		app.mu.RLock()
 		currentIdx := currentStationIndexLocked()
+		pending := pendingPlayCurrentLocked()
 		canNavigate := canNavigateStations(currentIdx, len(app.stations), len(app.filtered))
-		canStop := canStopPlayback(currentIdx, app.audioStopped)
+		canStop := canStopPlayback(currentIdx, app.audioStopped) || pending
 		app.mu.RUnlock()
 		app.stateMu.RLock()
 		volume := app.state.Volume
@@ -4538,7 +4723,7 @@ func handleCoreClickFallback(x, y int32) bool {
 		case canNavigate && x >= cx-116 && x <= cx-70 && y >= playerTop+17 && y <= playerTop+63:
 			playAdjacent(-1)
 			return true
-		case x >= cx-35 && x <= cx+35 && y >= playerTop+7 && y <= playerTop+76:
+		case !pending && x >= cx-35 && x <= cx+35 && y >= playerTop+7 && y <= playerTop+76:
 			toggleCurrentPlayback()
 			return true
 		case canStop && x >= cx+44 && x <= cx+92 && y >= playerTop+21 && y <= playerTop+69:
@@ -4694,6 +4879,12 @@ func playStationByKey(key string, fallback int) {
 	}
 }
 
+func shouldStopAudioForStationSwitch(currentKey, nextKey string, backend audioBackendKind) bool {
+	currentKey = strings.TrimSpace(currentKey)
+	nextKey = strings.TrimSpace(nextKey)
+	return backend != audioBackendNone && currentKey != "" && nextKey != "" && currentKey != nextKey
+}
+
 func playStation(idx int) {
 	app.mu.Lock()
 	if idx < 0 || idx >= len(app.stations) {
@@ -4702,12 +4893,36 @@ func playStation(idx int) {
 	}
 	s := app.stations[idx]
 	key := stationKey(s)
+	stopExisting := shouldStopAudioForStationSwitch(app.currentKey, key, app.audioBackend)
 	app.playSeq++
 	reqSeq := app.playSeq
+	app.pendingPlaySeq = reqSeq
+	// A station click owns the visible selection immediately. Keeping the old
+	// station as current until the new network open completed made A remain the
+	// UI/backend owner while B was already requested, which broke rapid A -> B
+	// switching and made repeated clicks cancel the wrong generation.
+	app.current = idx
+	app.currentKey = key
+	app.playing = false
+	app.audioStopped = false
+	app.audioRecovering = false
+	app.nowPlaying = ""
+	app.nowPlayingStation = ""
+	app.metadataSeq++
 	app.mu.Unlock()
 	setStatus("Otvaram: " + s.Name)
 	invalidate()
 	safeGo("play-"+key, func() {
+		defer clearPendingPlayRequest(reqSeq)
+		if stopExisting {
+			// Stop the previous station before resolving/opening the new one. The
+			// request token prevents this delayed Stop from ever silencing C if the
+			// user clicks A -> B -> C rapidly.
+			audioStopForRequest(reqSeq)
+		}
+		if !playRequestStillCurrent(reqSeq) {
+			return
+		}
 		final, ok := ensureStreamKey(idx, key)
 		if !ok {
 			app.mu.RLock()
@@ -4788,6 +5003,21 @@ func playStation(idx int) {
 		safeGo("metadata-"+key, func() { metadataLoop(seq, idx, key, final) })
 	})
 }
+func clearPendingPlayRequest(reqSeq uint64) {
+	if reqSeq == 0 {
+		return
+	}
+	app.mu.Lock()
+	if app.pendingPlaySeq == reqSeq {
+		app.pendingPlaySeq = 0
+	}
+	app.mu.Unlock()
+}
+
+func pendingPlayCurrentLocked() bool {
+	return app.pendingPlaySeq != 0 && app.pendingPlaySeq == app.playSeq
+}
+
 func playbackBackendNeedsRecovery(active bool, backend audioBackendKind) bool {
 	return active && backend == audioBackendNone
 }
@@ -7695,7 +7925,17 @@ func audioCommandTimeout(line string) time.Duration {
 	return 3 * time.Second
 }
 
-var errPlayRequestSuperseded = errors.New("play request superseded")
+var (
+	errPlayRequestSuperseded  = errors.New("play request superseded")
+	errAudioControlSuperseded = errors.New("audio control superseded")
+)
+
+func audioControlStillCurrent(mediaSeq, controlSeq uint64) bool {
+	app.mu.RLock()
+	current := app.playSeq == mediaSeq && app.audioControlSeq == controlSeq
+	app.mu.RUnlock()
+	return current
+}
 
 func playRequestStillCurrent(reqSeq uint64) bool {
 	if reqSeq == 0 {
@@ -7831,8 +8071,18 @@ func audioSendForRequest(line string, reqSeq uint64) error {
 	return nil
 }
 func audioSendExisting(line string) error {
+	return audioSendExistingForControl(line, 0, 0)
+}
+
+func audioSendExistingForControl(line string, mediaSeq, controlSeq uint64) error {
 	app.audioMu.Lock()
 	defer app.audioMu.Unlock()
+	if mediaSeq != 0 && !playRequestStillCurrent(mediaSeq) {
+		return errPlayRequestSuperseded
+	}
+	if controlSeq != 0 && !audioControlStillCurrent(mediaSeq, controlSeq) {
+		return errAudioControlSuperseded
+	}
 	if app.audioIn == nil {
 		return errors.New("audio engine nije pokrenut")
 	}
@@ -7840,7 +8090,13 @@ func audioSendExisting(line string) error {
 		resetAudioEngineLocked()
 		return err
 	}
-	return waitAudioAckLocked(audioCommandTimeout(line))
+	if err := waitAudioAckLockedForRequest(audioCommandTimeout(line), mediaSeq); err != nil {
+		return err
+	}
+	if controlSeq != 0 && !audioControlStillCurrent(mediaSeq, controlSeq) {
+		return errAudioControlSuperseded
+	}
+	return nil
 }
 func audioShutdown() {
 	deadline := time.Now().Add(750 * time.Millisecond)
@@ -7954,20 +8210,44 @@ func audioPlayRequest(raw string, reqSeq uint64) error {
 }
 
 func mciQueryExisting(cmd string) (string, error) {
+	return mciQueryExistingForControl(cmd, 0, 0)
+}
+
+func mciQueryExistingForControl(cmd string, mediaSeq, controlSeq uint64) (string, error) {
 	app.audioMu.Lock()
 	defer app.audioMu.Unlock()
+	if mediaSeq != 0 && !playRequestStillCurrent(mediaSeq) {
+		return "", errPlayRequestSuperseded
+	}
+	if controlSeq != 0 && !audioControlStillCurrent(mediaSeq, controlSeq) {
+		return "", errAudioControlSuperseded
+	}
 	if currentAudioBackend() != audioBackendMCI {
 		return "", errors.New("MCI backend nije aktivan")
 	}
-	return mciQuery(cmd)
+	result, err := mciQuery(cmd)
+	if err != nil {
+		return result, err
+	}
+	if mediaSeq != 0 && !playRequestStillCurrent(mediaSeq) {
+		return "", errPlayRequestSuperseded
+	}
+	if controlSeq != 0 && !audioControlStillCurrent(mediaSeq, controlSeq) {
+		return "", errAudioControlSuperseded
+	}
+	return result, nil
 }
 
 func audioPause() error {
+	return audioPauseForControl(0, 0)
+}
+
+func audioPauseForControl(mediaSeq, controlSeq uint64) error {
 	switch currentAudioBackend() {
 	case audioBackendWPF:
-		return audioSendExisting("PAUSE")
+		return audioSendExistingForControl("PAUSE", mediaSeq, controlSeq)
 	case audioBackendMCI:
-		_, err := mciQueryExisting("pause radio")
+		_, err := mciQueryExistingForControl("pause radio", mediaSeq, controlSeq)
 		return err
 	default:
 		return errors.New("audio backend nije aktivan")
@@ -7975,11 +8255,15 @@ func audioPause() error {
 }
 
 func audioResume() error {
+	return audioResumeForControl(0, 0)
+}
+
+func audioResumeForControl(mediaSeq, controlSeq uint64) error {
 	switch currentAudioBackend() {
 	case audioBackendWPF:
-		return audioSendExisting("RESUME")
+		return audioSendExistingForControl("RESUME", mediaSeq, controlSeq)
 	case audioBackendMCI:
-		_, err := mciQueryExisting("resume radio")
+		_, err := mciQueryExistingForControl("resume radio", mediaSeq, controlSeq)
 		return err
 	default:
 		return errors.New("audio backend nije aktivan")

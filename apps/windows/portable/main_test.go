@@ -468,6 +468,41 @@ func TestDefaultPlaybackIndexLocked(t *testing.T) {
 	}
 }
 
+func TestPendingPlayMatchesOnlyLatestGeneration(t *testing.T) {
+	app = App{playSeq: 12, pendingPlaySeq: 12}
+	app.mu.RLock()
+	if !pendingPlayCurrentLocked() {
+		app.mu.RUnlock()
+		t.Fatal("latest pending Play was not recognized")
+	}
+	app.mu.RUnlock()
+
+	app.mu.Lock()
+	app.playSeq = 13
+	app.mu.Unlock()
+	app.mu.RLock()
+	if pendingPlayCurrentLocked() {
+		app.mu.RUnlock()
+		t.Fatal("superseded pending Play remained active")
+	}
+	app.mu.RUnlock()
+}
+
+func TestStationSwitchStopsOnlyDifferentActiveBackend(t *testing.T) {
+	if !shouldStopAudioForStationSwitch("station-a", "station-b", audioBackendWPF) {
+		t.Fatal("different station must stop the active WPF backend before opening the replacement")
+	}
+	if !shouldStopAudioForStationSwitch("station-a", "station-b", audioBackendMCI) {
+		t.Fatal("different station must stop the active MCI backend before opening the replacement")
+	}
+	if shouldStopAudioForStationSwitch("station-a", "station-a", audioBackendWPF) {
+		t.Fatal("same-station reconnect must not be treated as a station switch")
+	}
+	if shouldStopAudioForStationSwitch("station-a", "station-b", audioBackendNone) {
+		t.Fatal("station switch without an active backend must not schedule a redundant Stop")
+	}
+}
+
 func TestPlaybackToggleDecisionLifecycle(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -699,6 +734,31 @@ func TestMCIModeHealthUsesBackendStateNotHTTPProbe(t *testing.T) {
 	}
 }
 
+func TestTokenizedRuntimeFailureStillAppliesAfterPauseControlGenerationChanges(t *testing.T) {
+	st := RadioStation{StationUUID: "paused-token", Name: "Paused Token"}
+	key := stationKey(st)
+	app = App{
+		done:            make(chan struct{}),
+		stations:        []RadioStation{st},
+		current:         0,
+		currentKey:      key,
+		playing:         false,
+		audioStopped:    false,
+		audioBackend:    audioBackendWPF,
+		playSeq:         55,
+		audioControlSeq: 3,
+	}
+	handleAudioBackendFailureForRequest(audioBackendWPF, 55, "")
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.audioBackend != audioBackendNone {
+		t.Fatalf("tokenized paused runtime failure left backend %v; want none", app.audioBackend)
+	}
+	if app.playSeq != 55 {
+		t.Fatalf("runtime failure changed media generation to %d; want 55", app.playSeq)
+	}
+}
+
 func TestBackendFailureWhilePausedForcesReconnectOnNextPlay(t *testing.T) {
 	st := RadioStation{StationUUID: "paused-station", Name: "Paused Station"}
 	key := stationKey(st)
@@ -762,6 +822,30 @@ func TestWPFPlayReplacesActiveMCIBackend(t *testing.T) {
 	}
 }
 
+func TestStopCancelsPendingPlayWithoutCommittedCurrent(t *testing.T) {
+	app = App{
+		done:           make(chan struct{}),
+		current:        -1,
+		playing:        false,
+		audioStopped:   false,
+		audioBackend:   audioBackendNone,
+		playSeq:        17,
+		pendingPlaySeq: 17,
+	}
+	stopCurrentPlayback()
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.playSeq != 18 {
+		t.Fatalf("Stop playSeq = %d; want 18 so pending Play becomes stale", app.playSeq)
+	}
+	if app.pendingPlaySeq != 0 {
+		t.Fatalf("pending Play sequence = %d; want cleared after Stop", app.pendingPlaySeq)
+	}
+	if app.playing || !app.audioStopped {
+		t.Fatalf("Stop pending state playing=%v stopped=%v; want false/true", app.playing, app.audioStopped)
+	}
+}
+
 func TestStopCurrentPlaybackAdvancesRequestGeneration(t *testing.T) {
 	st := RadioStation{StationUUID: "stop-seq", Name: "Stop Sequence"}
 	app = App{
@@ -783,6 +867,57 @@ func TestStopCurrentPlaybackAdvancesRequestGeneration(t *testing.T) {
 	}
 	if app.playing || !app.audioStopped {
 		t.Fatalf("Stop state playing=%v stopped=%v; want false/true", app.playing, app.audioStopped)
+	}
+}
+
+func TestPausePreservesMediaGenerationAndAdvancesControlGeneration(t *testing.T) {
+	st := RadioStation{StationUUID: "pause-seq", Name: "Pause Sequence"}
+	app = App{
+		done:         make(chan struct{}),
+		stations:     []RadioStation{st},
+		filtered:     []int{0},
+		current:      0,
+		currentKey:   stationKey(st),
+		playing:      true,
+		audioStopped: false,
+		audioBackend: audioBackendNone,
+		playSeq:      31,
+	}
+	toggleCurrentPlayback()
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.playSeq != 31 {
+		t.Fatalf("Pause changed media playSeq to %d; active WPF runtime events must retain token 31", app.playSeq)
+	}
+	if app.audioControlSeq != 1 {
+		t.Fatalf("Pause audioControlSeq = %d; want 1", app.audioControlSeq)
+	}
+	if app.playing || app.audioStopped {
+		t.Fatalf("Pause state playing=%v stopped=%v; want false/false", app.playing, app.audioStopped)
+	}
+}
+
+func TestStalePauseAndResumeControlsCannotAffectNewerPlayback(t *testing.T) {
+	app = App{
+		done:            make(chan struct{}),
+		playSeq:         42,
+		audioControlSeq: 2,
+		audioBackend:    audioBackendWPF,
+	}
+	if err := audioPauseForControl(41, 2); !errors.Is(err, errPlayRequestSuperseded) {
+		t.Fatalf("Pause for stale media returned %v; want errPlayRequestSuperseded", err)
+	}
+	if err := audioPauseForControl(42, 1); !errors.Is(err, errAudioControlSuperseded) {
+		t.Fatalf("stale Pause control returned %v; want errAudioControlSuperseded", err)
+	}
+	if got := currentAudioBackend(); got != audioBackendWPF {
+		t.Fatalf("stale Pause changed newer backend to %v; want WPF", got)
+	}
+	if err := audioResumeForControl(42, 1); !errors.Is(err, errAudioControlSuperseded) {
+		t.Fatalf("stale Resume control returned %v; want errAudioControlSuperseded", err)
+	}
+	if got := currentAudioBackend(); got != audioBackendWPF {
+		t.Fatalf("stale Resume changed newer backend to %v; want WPF", got)
 	}
 }
 
