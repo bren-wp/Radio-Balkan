@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -470,6 +471,52 @@ func TestAudioAckTimeoutDiscardsStaleChannel(t *testing.T) {
 	}
 	if !cleared {
 		t.Fatal("timed-out audio helper state was not discarded")
+	}
+}
+
+func TestLatestPlayRequestCancelsStaleAckWait(t *testing.T) {
+	app = App{
+		done:     make(chan struct{}),
+		audioAck: make(chan string),
+		playSeq:  41,
+	}
+
+	go func() {
+		time.Sleep(70 * time.Millisecond)
+		app.mu.Lock()
+		app.playSeq = 42
+		app.mu.Unlock()
+	}()
+
+	start := time.Now()
+	app.audioMu.Lock()
+	err := waitAudioAckLockedForRequest(2*time.Second, 41)
+	cleared := app.audioAck == nil && app.audioCmd == nil && app.audioIn == nil
+	app.audioMu.Unlock()
+
+	if !errors.Is(err, errPlayRequestSuperseded) {
+		t.Fatalf("stale play wait returned %v; want errPlayRequestSuperseded", err)
+	}
+	if elapsed := time.Since(start); elapsed > 600*time.Millisecond {
+		t.Fatalf("stale play request took %s to cancel; latest click should win promptly", elapsed)
+	}
+	if !cleared {
+		t.Fatal("superseded PLAY did not discard the helper/ACK channel")
+	}
+}
+
+func TestPlaybackWatchdogRecoveryPolicyTrustsActiveBackend(t *testing.T) {
+	if playbackBackendNeedsRecovery(true, audioBackendWPF) {
+		t.Fatal("healthy WPF playback must not be challenged by an HTTP probe watchdog")
+	}
+	if playbackBackendNeedsRecovery(true, audioBackendMCI) {
+		t.Fatal("healthy MCI playback must not be challenged by an HTTP probe watchdog")
+	}
+	if !playbackBackendNeedsRecovery(true, audioBackendNone) {
+		t.Fatal("playing state without an active backend should trigger controlled recovery")
+	}
+	if playbackBackendNeedsRecovery(false, audioBackendNone) {
+		t.Fatal("inactive playback must not be restarted by the watchdog")
 	}
 }
 
