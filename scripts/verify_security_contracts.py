@@ -629,6 +629,7 @@ def main() -> None:
         'safeGo("audio-stop-control", func() { audioStopForRequest(stopSeq) })',
         "func audioStopForRequest(reqSeq uint64)",
         "if !playRequestStillCurrent(reqSeq) {",
+        'waitAudioAckLockedForRequest(audioCommandTimeout("STOP"), reqSeq)',
         'safeGo("audio-pause-control", func() {',
         'safeGo("audio-resume-control", func() {',
         "if shuttingDown() {",
