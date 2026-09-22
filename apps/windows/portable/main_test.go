@@ -608,6 +608,33 @@ func TestPlaybackWatchdogRecoveryPolicyTrustsActiveBackend(t *testing.T) {
 	}
 }
 
+func TestAudioRuntimeFailureEventParsing(t *testing.T) {
+	encoded := base64.StdEncoding.EncodeToString([]byte("network stream failed"))
+	detail, ok := parseAudioRuntimeFailure("EVENT FAILED " + encoded)
+	if !ok {
+		t.Fatal("runtime MediaFailed event was not recognized")
+	}
+	if detail != "network stream failed" {
+		t.Fatalf("runtime MediaFailed detail = %q", detail)
+	}
+	if _, ok := parseAudioRuntimeFailure("OK"); ok {
+		t.Fatal("normal command ACK was misclassified as an async runtime event")
+	}
+}
+
+func TestMCIModeHealthUsesBackendStateNotHTTPProbe(t *testing.T) {
+	for _, mode := range []string{"playing", "PLAYING", "paused", "seeking"} {
+		if !mciModeHealthy(mode) {
+			t.Fatalf("MCI mode %q should be treated as healthy", mode)
+		}
+	}
+	for _, mode := range []string{"", "stopped", "not ready", "closed"} {
+		if mciModeHealthy(mode) {
+			t.Fatalf("MCI mode %q should trigger controlled recovery", mode)
+		}
+	}
+}
+
 func TestAudioEngineCommandLifecycle(t *testing.T) {
 	app = App{done: make(chan struct{})}
 	defer audioShutdown()
