@@ -67,17 +67,20 @@ func comCall(object unsafe.Pointer, index int, args ...uintptr) error {
 	return hresultError(fmt.Sprintf("COM method %d", index), hr)
 }
 
+// VARIANTARG is 24 bytes on Windows/amd64 because its value union can contain
+// a two-pointer BRECORD. The scalar payload still starts at byte offset 8.
 type variantArg struct {
 	VT        uint16
 	Reserved1 uint16
 	Reserved2 uint16
 	Reserved3 uint16
 	Value     uint64
+	Tail      uint64
 }
 
 const (
+	vtI4      = 3
 	vtR4      = 4
-	vtHRESULT = 25
 	ccStdcall = 4
 )
 
@@ -94,7 +97,7 @@ func comCallFloat32(object unsafe.Pointer, index int, value float32) error {
 		uintptr(object),
 		uintptr(index)*unsafe.Sizeof(uintptr(0)),
 		ccStdcall,
-		vtHRESULT,
+		vtI4,
 		1,
 		uintptr(unsafe.Pointer(&argTypes[0])),
 		uintptr(unsafe.Pointer(&argPointers[0])),
@@ -103,7 +106,7 @@ func comCallFloat32(object unsafe.Pointer, index int, value float32) error {
 	if err := hresultError("DispCallFunc", hr); err != nil {
 		return err
 	}
-	return hresultError(fmt.Sprintf("COM float method %d", index), uintptr(uint32(result.Value)))
+	return hresultError(fmt.Sprintf("COM float method %d", index), uintptr(uint32(result.Value&0xffffffff)))
 }
 
 func comRelease(object unsafe.Pointer) {
