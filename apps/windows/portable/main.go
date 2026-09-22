@@ -4894,10 +4894,19 @@ const playbackRecoveryCandidateLimit = 6
 
 func playbackRecoveryCandidates(station RadioStation, refreshed *RadioStation, alternatives []RadioStation, backups []string) []string {
 	candidates := make([]string, 0, 32)
-	// Prefer the catalog's direct/resolved pair first. If one of them just failed,
-	// the caller skips it while still allowing a distinct redirect/raw URL.
+	// Prefer the current catalog's direct/resolved pair first. If one of them just
+	// failed, the caller skips it while still allowing a distinct redirect/raw URL.
 	candidates = append(candidates, station.URLResolved, station.URL)
-	if refreshed != nil {
+
+	// Keep one previously successful persisted source inside the bounded recovery
+	// window. A station may have moved away from a currently broken catalog URL.
+	if len(backups) > 0 {
+		candidates = append(candidates, backups[0])
+	}
+
+	// The by-UUID endpoint is not health-filtered, so never promote a row that the
+	// catalog explicitly marks as failed ahead of healthy search/backups.
+	if refreshed != nil && refreshed.LastCheckOK != 0 {
 		candidates = append(candidates, refreshed.URLResolved, refreshed.URL)
 	}
 	for _, alt := range alternatives {
@@ -4909,9 +4918,9 @@ func playbackRecoveryCandidates(station RadioStation, refreshed *RadioStation, a
 			break
 		}
 	}
-	// Persisted backups are valuable, but they may be older than the current
-	// Radio Browser result. Keep them after freshly verified catalog candidates.
-	candidates = append(candidates, backups...)
+	if len(backups) > 1 {
+		candidates = append(candidates, backups[1:]...)
+	}
 	return uniqueStrings(candidates)
 }
 
