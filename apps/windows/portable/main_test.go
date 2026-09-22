@@ -3,9 +3,13 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -13,6 +17,91 @@ import (
 	"testing"
 	"time"
 )
+
+
+func newResolverTestClient(t *testing.T, server *httptest.Server) *http.Client {
+	t.Helper()
+	dialAddr := server.Listener.Addr().String()
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, network, dialAddr)
+		},
+	}
+	t.Cleanup(transport.CloseIdleConnections)
+	return &http.Client{
+		Timeout:   3 * time.Second,
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) > 5 {
+				return errors.New("too many redirects")
+			}
+			return nil
+		},
+	}
+}
+
+func TestCheckStreamResolvesPlaylistThroughProductionPath(t *testing.T) {
+	const publicHost = "93.184.216.34"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/station.m3u":
+			w.Header().Set("Content-Type", "audio/x-mpegurl")
+			_, _ = fmt.Fprintf(w, "#EXTM3U\n#EXTINF:-1,CI station\nhttp://%s/live.mp3\n", publicHost)
+		case "/live.mp3":
+			w.Header().Set("Content-Type", "audio/mpeg")
+			_, _ = w.Write([]byte("ID3-realistic-stream-bytes"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	app = App{
+		http:      newResolverTestClient(t, server),
+		ctx:       context.Background(),
+		done:      make(chan struct{}),
+		streamSem: make(chan struct{}, 2),
+	}
+	resolved, ok := checkStream("http://" + publicHost + "/station.m3u")
+	if !ok {
+		t.Fatal("production stream resolver rejected a valid M3U -> MP3 path")
+	}
+	want := "http://" + publicHost + "/live.mp3"
+	if resolved != want {
+		t.Fatalf("resolved playlist URL = %q; want %q", resolved, want)
+	}
+}
+
+func TestCheckStreamFollowsHTTPRedirectThroughProductionPath(t *testing.T) {
+	const publicHost = "93.184.216.34"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/listen":
+			http.Redirect(w, r, "/stream.aac", http.StatusFound)
+		case "/stream.aac":
+			w.Header().Set("Content-Type", "audio/aac")
+			_, _ = w.Write([]byte("AAC-realistic-stream-bytes"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	app = App{
+		http:      newResolverTestClient(t, server),
+		ctx:       context.Background(),
+		done:      make(chan struct{}),
+		streamSem: make(chan struct{}, 2),
+	}
+	resolved, ok := checkStream("http://" + publicHost + "/listen")
+	if !ok {
+		t.Fatal("production stream checker rejected a valid HTTP redirect -> AAC path")
+	}
+	want := "http://" + publicHost + "/stream.aac"
+	if resolved != want {
+		t.Fatalf("redirect final URL = %q; want %q", resolved, want)
+	}
+}
 
 func TestAdminCredentialsAcceptOnlyConfiguredAdministrator(t *testing.T) {
 	password := fmt.Sprintf("%s%d", "brendigo", 2025)
@@ -473,6 +562,223 @@ func TestAudioAckTimeoutDiscardsStaleChannel(t *testing.T) {
 	}
 }
 
+func TestLatestPlayRequestCancelsStaleAckWait(t *testing.T) {
+	app = App{
+		done:         make(chan struct{}),
+		audioAck:     make(chan string),
+		playSeq:      41,
+		audioBackend: audioBackendWPF,
+	}
+
+	go func() {
+		time.Sleep(70 * time.Millisecond)
+		app.mu.Lock()
+		app.playSeq = 42
+		app.mu.Unlock()
+	}()
+
+	start := time.Now()
+	app.audioMu.Lock()
+	err := waitAudioAckLockedForRequest(2*time.Second, 41)
+	cleared := app.audioAck == nil && app.audioCmd == nil && app.audioIn == nil
+	app.audioMu.Unlock()
+	backend := currentAudioBackend()
+
+	if !errors.Is(err, errPlayRequestSuperseded) {
+		t.Fatalf("stale play wait returned %v; want errPlayRequestSuperseded", err)
+	}
+	if elapsed := time.Since(start); elapsed > 600*time.Millisecond {
+		t.Fatalf("stale play request took %s to cancel; latest click should win promptly", elapsed)
+	}
+	if !cleared {
+		t.Fatal("superseded PLAY did not discard the helper/ACK channel")
+	}
+	if backend != audioBackendNone {
+		t.Fatalf("superseded WPF ACK wait left backend %v active; want none before the newer request takes ownership", backend)
+	}
+}
+
+func TestSupersededPlayCannotClearNewerBackend(t *testing.T) {
+	app = App{
+		done:         make(chan struct{}),
+		playSeq:      52,
+		audioBackend: audioBackendWPF,
+	}
+	err := audioPlayRequest("http://93.184.216.34/live.mp3", 51)
+	if !errors.Is(err, errPlayRequestSuperseded) {
+		t.Fatalf("already-superseded Play returned %v; want errPlayRequestSuperseded", err)
+	}
+	if got := currentAudioBackend(); got != audioBackendWPF {
+		t.Fatalf("superseded Play changed newer backend to %v; want WPF", got)
+	}
+}
+
+func TestPlaybackWatchdogRecoveryPolicyTrustsActiveBackend(t *testing.T) {
+	if playbackBackendNeedsRecovery(true, audioBackendWPF) {
+		t.Fatal("healthy WPF playback must not be challenged by an HTTP probe watchdog")
+	}
+	if playbackBackendNeedsRecovery(true, audioBackendMCI) {
+		t.Fatal("healthy MCI playback must not be challenged by an HTTP probe watchdog")
+	}
+	if !playbackBackendNeedsRecovery(true, audioBackendNone) {
+		t.Fatal("playing state without an active backend should trigger controlled recovery")
+	}
+	if playbackBackendNeedsRecovery(false, audioBackendNone) {
+		t.Fatal("inactive playback must not be restarted by the watchdog")
+	}
+}
+
+func TestAudioRuntimeFailureEventParsing(t *testing.T) {
+	encoded := base64.StdEncoding.EncodeToString([]byte("network stream failed"))
+	reqSeq, detail, ok := parseAudioRuntimeFailure("EVENT FAILED 77 " + encoded)
+	if !ok {
+		t.Fatal("runtime MediaFailed event was not recognized")
+	}
+	if reqSeq != 77 {
+		t.Fatalf("runtime MediaFailed request = %d; want 77", reqSeq)
+	}
+	if detail != "network stream failed" {
+		t.Fatalf("runtime MediaFailed detail = %q", detail)
+	}
+	if _, _, ok := parseAudioRuntimeFailure("EVENT FAILED invalid " + encoded); ok {
+		t.Fatal("runtime failure with invalid playback generation was accepted")
+	}
+	if _, _, ok := parseAudioRuntimeFailure("OK"); ok {
+		t.Fatal("normal command ACK was misclassified as an async runtime event")
+	}
+}
+
+func TestStaleWPFRuntimeFailureCannotAffectNewerPlay(t *testing.T) {
+	app = App{
+		done:         make(chan struct{}),
+		playSeq:      82,
+		audioBackend: audioBackendWPF,
+		playing:      true,
+	}
+	handleAudioBackendFailureForRequest(audioBackendWPF, 81, "late failure from old stream")
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.playSeq != 82 || app.audioBackend != audioBackendWPF || !app.playing {
+		t.Fatalf("stale WPF event changed newer playback: seq=%d backend=%v playing=%v", app.playSeq, app.audioBackend, app.playing)
+	}
+}
+
+func TestMCIModeHealthUsesBackendStateNotHTTPProbe(t *testing.T) {
+	for _, mode := range []string{"playing", "PLAYING", "paused", "seeking"} {
+		if !mciModeHealthy(mode) {
+			t.Fatalf("MCI mode %q should be treated as healthy", mode)
+		}
+	}
+	for _, mode := range []string{"", "stopped", "not ready", "closed"} {
+		if mciModeHealthy(mode) {
+			t.Fatalf("MCI mode %q should trigger controlled recovery", mode)
+		}
+	}
+}
+
+func TestBackendFailureWhilePausedForcesReconnectOnNextPlay(t *testing.T) {
+	st := RadioStation{StationUUID: "paused-station", Name: "Paused Station"}
+	key := stationKey(st)
+	app = App{
+		stations:     []RadioStation{st},
+		current:      0,
+		currentKey:   key,
+		playing:      false,
+		audioStopped: false,
+		audioBackend: audioBackendWPF,
+	}
+	handleAudioBackendFailure(audioBackendWPF, "")
+
+	app.mu.RLock()
+	backend := app.audioBackend
+	playing := app.playing
+	stopped := app.audioStopped
+	app.mu.RUnlock()
+	if backend != audioBackendNone {
+		t.Fatalf("paused failed backend = %v; want audioBackendNone so Resume reconnects", backend)
+	}
+	if playing {
+		t.Fatal("paused runtime failure unexpectedly marked playback active")
+	}
+	if stopped {
+		t.Fatal("paused runtime failure must preserve resume/reconnect semantics")
+	}
+}
+
+func TestStaleAsyncStopCannotClearNewPlaybackBackend(t *testing.T) {
+	app = App{
+		done:         make(chan struct{}),
+		playSeq:      22,
+		audioBackend: audioBackendWPF,
+	}
+	audioStopForRequest(21)
+	if got := currentAudioBackend(); got != audioBackendWPF {
+		t.Fatalf("stale Stop changed newer playback backend to %v; want WPF", got)
+	}
+}
+
+func TestMCIControlRequiresActiveBackend(t *testing.T) {
+	app = App{
+		done:         make(chan struct{}),
+		audioBackend: audioBackendNone,
+	}
+	if _, err := mciQueryExisting("status radio mode"); err == nil {
+		t.Fatal("MCI command ran without MCI owning the audio backend")
+	}
+}
+
+func TestWPFPlayReplacesActiveMCIBackend(t *testing.T) {
+	if !shouldStopMCIForAudioCommand("PLAY Zm9v 0.50", audioBackendMCI) {
+		t.Fatal("WPF PLAY must close an older MCI fallback stream first")
+	}
+	if shouldStopMCIForAudioCommand("VOLUME 0.50", audioBackendMCI) {
+		t.Fatal("non-PLAY commands must not tear down MCI")
+	}
+	if shouldStopMCIForAudioCommand("PLAY Zm9v 0.50", audioBackendWPF) {
+		t.Fatal("WPF-to-WPF PLAY should reuse the media host instead of forcing MCI cleanup")
+	}
+}
+
+func TestStopCurrentPlaybackAdvancesRequestGeneration(t *testing.T) {
+	st := RadioStation{StationUUID: "stop-seq", Name: "Stop Sequence"}
+	app = App{
+		done:         make(chan struct{}),
+		stations:     []RadioStation{st},
+		filtered:     []int{0},
+		current:      0,
+		currentKey:   stationKey(st),
+		playing:      true,
+		audioStopped: false,
+		audioBackend: audioBackendNone,
+		playSeq:      9,
+	}
+	stopCurrentPlayback()
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.playSeq != 10 {
+		t.Fatalf("Stop playSeq = %d; want 10 so older async audio work becomes stale", app.playSeq)
+	}
+	if app.playing || !app.audioStopped {
+		t.Fatalf("Stop state playing=%v stopped=%v; want false/true", app.playing, app.audioStopped)
+	}
+}
+
+func TestAudioEngineStartupTimeoutIsBounded(t *testing.T) {
+	if audioEngineStartupTimeout < 15*time.Second {
+		t.Fatalf("audio engine startup timeout %s is too short for cold PresentationCore/Add-Type initialization", audioEngineStartupTimeout)
+	}
+	if audioEngineStartupTimeout > 30*time.Second {
+		t.Fatalf("audio engine startup timeout %s is too long; startup must remain bounded", audioEngineStartupTimeout)
+	}
+}
+
+func TestAudioPlayCommandIncludesRequestGeneration(t *testing.T) {
+	got := audioPlayCommand(77, "Zm9v", 0.5)
+	if got != "PLAY 77 Zm9v 0.50" {
+		t.Fatalf("audio PLAY command = %q; want tokenized protocol", got)
+	}
+}
+
 func TestAudioEngineCommandLifecycle(t *testing.T) {
 	app = App{done: make(chan struct{})}
 	defer audioShutdown()
@@ -494,7 +800,7 @@ func TestAudioEnginePlayReportsActualMediaOpenOutcome(t *testing.T) {
 	}
 	fileURL := (&url.URL{Scheme: "file", Path: "/" + filepath.ToSlash(wavPath)}).String()
 	encoded := base64.StdEncoding.EncodeToString([]byte(fileURL))
-	err := audioSend(fmt.Sprintf("PLAY %s 0.00", encoded))
+	err := audioSend(audioPlayCommand(0, encoded, 0.00))
 	if err != nil {
 		if os.Getenv("CI") != "" && strings.Contains(strings.ToUpper(err.Error()), "0XC00D11BA") {
 			t.Logf("headless CI has no usable Windows audio endpoint; structured MediaFailed outcome confirmed: %v", err)

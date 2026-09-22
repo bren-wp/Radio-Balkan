@@ -196,11 +196,14 @@ public final class RadioPlayerService extends Service {
         List<String> candidates = new ArrayList<>();
         String manual = state.manualReplacement(key);
         String automatic = state.autoReplacement(key);
+        // Explicit administrator overrides stay first. Otherwise prefer the
+        // fresh Radio Browser URLs before persisted automatic repairs/backups,
+        // which can become stale between releases.
         if (!manual.isEmpty()) candidates.add(manual);
-        if (!automatic.isEmpty()) candidates.add(automatic);
-        candidates.addAll(state.backups(key));
         if (!resolved.isEmpty()) candidates.add(resolved);
         if (!url.isEmpty()) candidates.add(url);
+        if (!automatic.isEmpty()) candidates.add(automatic);
+        candidates.addAll(state.backups(key));
         candidates = dedupe(candidates);
         synchronized (lock) {
             generation++;

@@ -194,8 +194,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
       return undefined;
     } catch (error) {
+      console.error('[Radio Balkan] background playback command failed', error);
       if (requestToken === commandGeneration) commitState({ playing: false }, true);
-      return snapshot({ error: String(error?.message || error) });
+      return snapshot({ error: 'Reprodukcija trenutačno nije dostupna' });
     }
   })().then(sendResponse);
   return true;

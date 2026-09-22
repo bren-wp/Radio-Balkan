@@ -77,6 +77,7 @@ const (
 	ES_AUTOHSCROLL      = 0x0080
 	ES_PASSWORD         = 0x0020
 	EM_SETCUEBANNER     = 0x1501
+	EM_SETSEL           = 0x00B1
 
 	SW_SHOW       = 5
 	SW_RESTORE    = 9
@@ -87,6 +88,7 @@ const (
 	WM_PAINT           = 0x000F
 	WM_ERASEBKGND      = 0x0014
 	WM_KEYDOWN         = 0x0100
+	WM_CHAR            = 0x0102
 	WM_CLOSE           = 0x0010
 	WM_ACTIVATEAPP     = 0x001C
 	WM_COMMAND         = 0x0111
@@ -104,7 +106,7 @@ const (
 	WM_APP             = 0x8000
 	WM_USER            = 0x0400
 
-	EN_CHANGE  = 0x0310
+	EN_CHANGE  = 0x0300
 	BN_CLICKED = 0
 
 	DT_LEFT         = 0x00000000
@@ -1336,6 +1338,43 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=top")
 		return
 	}
+
+	// Favorite must travel through the actual rendered library-card hit region.
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=favorite-paint")
+		return
+	}
+	app.mu.RLock()
+	favoriteIdx := -1
+	widthForFavorite := app.clientWidth
+	if len(app.filtered) > 0 {
+		favoriteIdx = app.filtered[0]
+	}
+	favoriteKey := ""
+	if favoriteIdx >= 0 && favoriteIdx < len(app.stations) {
+		favoriteKey = stationKey(app.stations[favoriteIdx])
+	}
+	app.mu.RUnlock()
+	if favoriteKey == "" {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=favorite-station")
+		return
+	}
+	app.stateMu.RLock()
+	favoriteBefore := app.state.Favorites[favoriteKey]
+	app.stateMu.RUnlock()
+	favoriteMainL := sidebarWidth + mainPad
+	favoriteMainR := widthForFavorite - mainPad
+	favoriteColW := (favoriteMainR - favoriteMainL - 14) / 2
+	postClick(favoriteMainL+favoriteColW-83, 167)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.stateMu.RLock()
+		changed := app.state.Favorites[favoriteKey] != favoriteBefore
+		app.stateMu.RUnlock()
+		return changed
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=favorite")
+		return
+	}
 	postClick(100, 197) // Zemlje
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
@@ -1346,6 +1385,16 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=countries")
 		return
 	}
+	postClick(100, 241) // Žanrovi
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "genres" && !app.countryMenuOpen && !app.genreMenuOpen
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=genres")
+		return
+	}
 	postClick(100, 109) // Početna
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
@@ -1354,6 +1403,135 @@ func runCIInputSmoke() {
 		return ok
 	}) {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=home")
+		return
+	}
+
+	app.mu.RLock()
+	widthForHeader := app.clientWidth
+	app.mu.RUnlock()
+	_, _, countryL, countryR, genreL, genreR, _, _, _, _ := headerLayout(widthForHeader)
+	postClick((countryL+countryR)/2, 46)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "countries" && !app.countryMenuOpen && !app.genreMenuOpen
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=header-countries")
+		return
+	}
+	postClick((genreL+genreR)/2, 46)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "genres" && !app.countryMenuOpen && !app.genreMenuOpen
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=header-genres")
+		return
+	}
+	postClick(100, 109)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "all" && app.country == "HR"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-after-header")
+		return
+	}
+
+	// Resize the actual top-level window, wait for WM_SIZE + repaint, then
+	// continue through the real hit regions. This catches stale pre-resize hit
+	// boxes and search-control geometry that can make a visually-correct UI dead.
+	app.mu.RLock()
+	beforeResizeW, beforeResizeH := app.clientWidth, app.clientHeight
+	app.mu.RUnlock()
+	resized, _, _ := procSetWindowPos.Call(uintptr(app.hwnd), 0, 0, 0, 1100, 720, 0x0016) // NOMOVE|NOZORDER|NOACTIVATE
+	if resized == 0 || !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		changed := app.clientWidth != beforeResizeW || app.clientHeight != beforeResizeH
+		valid := app.clientWidth >= 1024 && app.clientHeight > playerHeight
+		app.mu.RUnlock()
+		return changed && valid
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=resize")
+		return
+	}
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=resize-paint")
+		return
+	}
+	postClick(100, 197)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "countries"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=resize-click")
+		return
+	}
+	postClick(100, 109)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "all" && app.country == "HR"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=resize-home")
+		return
+	}
+
+	// Exercise the native EDIT -> WM_COMMAND/EN_CHANGE path, then ensure sidebar
+	// navigation still works while the child search control owns focus.
+	if app.edit == 0 {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=search-hwnd")
+		return
+	}
+	procSetFocus.Call(uintptr(app.edit))
+	for _, ch := range "CI Radio 00001" {
+		procPostMessage.Call(uintptr(app.edit), WM_CHAR, uintptr(ch), 0)
+	}
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.search == "CI Radio 00001"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=search-change")
+		return
+	}
+	procSendMessage.Call(uintptr(app.edit), EM_SETSEL, 0, ^uintptr(0))
+	procPostMessage.Call(uintptr(app.edit), WM_CHAR, 0x08, 0) // Backspace
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.search == ""
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=search-clear")
+		return
+	}
+	procSetFocus.Call(uintptr(app.edit))
+	postClick(100, 153)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "popular"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=search-focus-sidebar")
+		return
+	}
+	postClick(100, 109)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "all" && app.country == "HR"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-after-search")
 		return
 	}
 
@@ -1421,7 +1599,8 @@ func runCIInputSmoke() {
 		return
 	}
 
-	// Exercise a real rendered station Play hit-region, not only fixed navigation.
+	// Exercise the station card itself, its in-app Back action, then the real
+	// rendered Play hit-region. None of these may open a secondary window.
 	app.mu.RLock()
 	widthForCard := app.clientWidth
 	beforePlaySeq := app.playSeq
@@ -1435,6 +1614,34 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-card-paint")
 		return
 	}
+	postClick(mainL+80, 200)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		opened := app.detailKey != ""
+		app.mu.RUnlock()
+		return opened
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-details")
+		return
+	}
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-details-paint")
+		return
+	}
+	postClick(mainL+70, 110)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		closed := app.detailKey == ""
+		app.mu.RUnlock()
+		return closed
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-back")
+		return
+	}
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-play-paint")
+		return
+	}
 	postClick(firstPlayX, 200)
 	if !waitFor(700*time.Millisecond, func() bool {
 		app.mu.RLock()
@@ -1445,11 +1652,40 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-play")
 		return
 	}
-	// Cancel the synthetic playback request before the independent local-WAV
-	// audio smoke starts; this keeps the input test deterministic and offline.
+	// Cancel the synthetic internet request before the independent local-WAV
+	// audio smoke starts; request-aware playback must observe this sequence bump.
 	app.mu.Lock()
 	app.playSeq++
+	if len(app.stations) == 0 {
+		app.mu.Unlock()
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=stop-station")
+		return
+	}
+	app.current = 0
+	app.currentKey = stationKey(app.stations[0])
+	app.playing = true
+	app.audioStopped = false
+	beforeStopSeq := app.playSeq
+	app.audioBackend = audioBackendNone
 	app.mu.Unlock()
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=stop-paint")
+		return
+	}
+	app.mu.RLock()
+	stopWidth, stopHeight := app.clientWidth, app.clientHeight
+	app.mu.RUnlock()
+	stopCX := playerTransportCenter(stopWidth)
+	postClick(stopCX+68, stopHeight-playerHeight+45)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		stopped := app.audioStopped && !app.playing && app.playSeq > beforeStopSeq
+		app.mu.RUnlock()
+		return stopped
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=player-stop")
+		return
+	}
 
 	// Reproduce the production failure mode deliberately: hold the backend lock,
 	// click volume, then click navigation. Neither click may block the UI thread.
@@ -1531,7 +1767,7 @@ func runCIAudioSmoke() {
 
 	streamURL := "http://" + ln.Addr().String() + "/tone.wav"
 	encoded := base64.StdEncoding.EncodeToString([]byte(streamURL))
-	if err := audioSend(fmt.Sprintf("PLAY %s %.2f", encoded, 0.0)); err != nil {
+	if err := audioSend(audioPlayCommand(0, encoded, 0.0)); err != nil {
 		if strings.Contains(strings.ToUpper(err.Error()), "0XC00D11BA") {
 			runtimeTestTrace("audio-smoke-no-device token=" + token)
 			return
@@ -2037,7 +2273,7 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 	case WM_COMMAND:
 		id := loWord(wParam)
 		code := hiWord(wParam)
-		if id == 1001 && code == EN_CHANGE {
+		if id == 1001 && code == EN_CHANGE && lParam == uintptr(app.edit) {
 			app.mu.Lock()
 			app.search = getWindowText(app.edit)
 			app.scroll = 0
@@ -2244,7 +2480,6 @@ func paintClient(hdc syscall.Handle, cr RECT) {
 	drawHeader(hdc, cr)
 	drawStations(hdc, cr)
 	drawPlayer(hdc, cr)
-	drawDropdownOverlay(hdc, cr)
 }
 
 func drawSidebar(hdc syscall.Handle, cr RECT) {
@@ -4163,6 +4398,18 @@ func toggleCurrentPlayback() {
 			}
 			return
 		}
+		// MediaFailed can arrive while the RESUME command is in flight. The
+		// runtime failure handler clears the backend; reconnect immediately
+		// instead of marking a dead MediaPlayer as "Uživo".
+		if currentAudioBackend() == audioBackendNone {
+			app.mu.RLock()
+			stillCurrent := app.playSeq == reqSeq && !app.audioStopped
+			app.mu.RUnlock()
+			if stillCurrent {
+				playStationByKey(currentKey, current)
+			}
+			return
+		}
 		app.mu.Lock()
 		if app.playSeq != reqSeq || app.audioStopped {
 			app.mu.Unlock()
@@ -4229,13 +4476,15 @@ func stopCurrentPlayback() {
 	app.audioStopped = true
 	app.metadataSeq++
 	app.playSeq++
+	stopSeq := app.playSeq
+	backend := app.audioBackend
 	app.nowPlaying = ""
 	app.nowPlayingStation = ""
 	app.mu.Unlock()
 	setStatus("Zaustavljeno")
 	invalidate()
-	if currentAudioBackend() != audioBackendNone {
-		safeGo("audio-stop-control", audioStop)
+	if backend != audioBackendNone {
+		safeGo("audio-stop-control", func() { audioStopForRequest(stopSeq) })
 	}
 }
 
@@ -4455,19 +4704,9 @@ func handleClick(x, y int32) {
 		}
 		switch h.Kind {
 		case hitCountryDropdown:
-			app.mu.Lock()
-			app.countryMenuOpen = !app.countryMenuOpen
-			app.genreMenuOpen = false
-			app.countryMenuIndex = countryIndexLocked(app.country)
-			app.mu.Unlock()
-			invalidate()
+			selectTabValue("countries")
 		case hitGenreDropdown:
-			app.mu.Lock()
-			app.genreMenuOpen = !app.genreMenuOpen
-			app.countryMenuOpen = false
-			app.genreMenuIndex = genreIndexLocked(app.genre)
-			app.mu.Unlock()
-			invalidate()
+			selectTabValue("genres")
 		case hitCountryChoice:
 			selectCountry(h.Value)
 		case hitGenreChoice:
@@ -4527,7 +4766,7 @@ func handleClick(x, y int32) {
 				safeGo("manual-health", healthCheckAll)
 			}
 		case hitAbout:
-			messageBox(hwndOrZero(), "Radio Balkan", "Radio Balkan "+appVersion+"\n\nRadio iz Hrvatske i regije, posebna kategorija Dijaspora te odabrane strane postaje.\nFavoriti i povijest slušanja rade lokalno na tvojem računalu. Napredne kontrole izvora dostupne su samo u Admin načinu rada.", MB_ICONINFORMATION)
+			messageBox(hwndOrZero(), "Radio Balkan", "Radio Balkan "+appVersion+"\n\nRadio iz Hrvatske i regije, posebna kategorija Dijaspora te odabrane strane postaje.\nFavoriti i povijest slušanja rade lokalno na tvojem računalu. Napredne kontrole reprodukcije dostupne su samo u Admin načinu rada.", MB_ICONINFORMATION)
 		case hitAdmin:
 			toggleAdminSession()
 		case hitStationDetails:
@@ -4663,19 +4902,26 @@ func playStation(idx int) {
 			return
 		}
 		app.mu.RUnlock()
-		if err := audioPlay(final); err != nil {
+		if err := audioPlayRequest(final, reqSeq); err != nil {
+			if errors.Is(err, errPlayRequestSuperseded) {
+				app.playTransitionMu.Unlock()
+				return
+			}
 			logError("audio-play-primary", err)
-			setStatus("Prvi izvor nije uspio · pokušavam drugi…")
+			setStatus("Veza sa stanicom nije uspjela · pokušavam ponovno…")
 			postUI()
-			alternate, altErr := tryAlternatePlayback(idx, key, final)
+			alternate, altErr := tryAlternatePlayback(idx, key, final, reqSeq)
 			if altErr != nil {
 				app.playTransitionMu.Unlock()
+				if errors.Is(altErr, errPlayRequestSuperseded) {
+					return
+				}
 				logError("audio-play-alternate", altErr)
 				app.mu.RLock()
 				currentReq := app.playSeq == reqSeq
 				app.mu.RUnlock()
 				if currentReq {
-					setStatus("Reprodukcija trenutno nije dostupna · pokušaj drugu stanicu")
+					setStatus("Stanica trenutno nije dostupna")
 					postUI()
 				}
 				return
@@ -4717,8 +4963,11 @@ func playStation(idx int) {
 		safeGo("metadata-"+key, func() { metadataLoop(seq, idx, key, final) })
 	})
 }
+func playbackBackendNeedsRecovery(active bool, backend audioBackendKind) bool {
+	return active && backend == audioBackendNone
+}
+
 func playbackWatchdog(idx int, stationID string) {
-	failures := 0
 	for {
 		timer := time.NewTimer(45 * time.Second)
 		select {
@@ -4732,44 +4981,39 @@ func playbackWatchdog(idx int, stationID string) {
 			}
 			return
 		}
+
 		app.mu.RLock()
 		actual := findStationIndexLocked(stationID, idx)
 		active := app.playing && actual >= 0 && app.currentKey == stationID
-		var currentStation RadioStation
-		if active {
+		backend := app.audioBackend
+		if actual >= 0 {
 			idx = actual
-			currentStation = app.stations[idx]
 		}
 		app.mu.RUnlock()
 		if !active {
 			return
 		}
-		u := effectiveURL(currentStation)
-		if _, ok := checkStream(u); ok {
-			failures = 0
+
+		// The player backend is the source of truth. Never issue a second HTTP GET
+		// against an already-playing Icecast/Shoutcast/HLS stream: many healthy
+		// stations reject probes or limit concurrent listeners.
+		switch backend {
+		case audioBackendWPF:
+			// WPF forwards MediaFailed/MediaEnded asynchronously from MediaPlayer.
 			continue
-		}
-		failures++
-		if failures < 2 {
-			continue
-		}
-		setStatus("Veza je prekinuta · pokušavam ponovno…")
-		postUI()
-		if repaired, ok := ensureStreamKey(idx, stationID); ok {
-			if err := audioPlay(repaired); err == nil {
-				failures = 0
-				rebuildFilter()
-				setStatus("Veza je obnovljena · reprodukcija je nastavljena")
-				postUI()
+		case audioBackendMCI:
+			mode, err := mciQueryExisting("status radio mode")
+			if err == nil && mciModeHealthy(mode) {
 				continue
 			}
+			handleAudioBackendFailure(audioBackendMCI, "MCI playback stopped")
+			return
+		case audioBackendNone:
+			if playbackBackendNeedsRecovery(active, backend) {
+				handleAudioBackendFailure(audioBackendNone, "playback backend missing")
+				return
+			}
 		}
-		app.mu.Lock()
-		app.playing = false
-		app.mu.Unlock()
-		setStatus("Stanica trenutno nije dostupna")
-		postUI()
-		return
 	}
 }
 func ensureStream(idx int) (string, bool) {
@@ -4868,7 +5112,10 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 	postUI()
 	return "", false
 }
-func tryAlternatePlayback(idx int, key, failedURL string) (string, error) {
+func tryAlternatePlayback(idx int, key, failedURL string, reqSeq uint64) (string, error) {
+	if !playRequestStillCurrent(reqSeq) {
+		return "", errPlayRequestSuperseded
+	}
 	app.mu.RLock()
 	actual := findStationIndexLocked(key, idx)
 	if actual < 0 || actual >= len(app.stations) {
@@ -4886,11 +5133,17 @@ func tryAlternatePlayback(idx int, key, failedURL string) (string, error) {
 	candidates = append(candidates, station.URLResolved, station.URL)
 
 	if station.StationUUID != "" {
+		if !playRequestStillCurrent(reqSeq) {
+			return "", errPlayRequestSuperseded
+		}
 		if refreshed, err := fetchStationByUUID(station.StationUUID, station.CountryCode, station.SourceCountryCode); err == nil && refreshed != nil {
 			candidates = append(candidates, refreshed.URLResolved, refreshed.URL)
 		}
 	}
 	if station.Name != "" {
+		if !playRequestStillCurrent(reqSeq) {
+			return "", errPlayRequestSuperseded
+		}
 		if alternatives, err := searchStationsByName(station.Name, station.CountryCode, station.SourceCountryCode); err == nil {
 			for _, alt := range alternatives {
 				if sameStation(station, alt) {
@@ -4906,6 +5159,9 @@ func tryAlternatePlayback(idx int, key, failedURL string) (string, error) {
 	var lastErr error
 	tried := 0
 	for _, candidate := range uniqueStrings(candidates) {
+		if !playRequestStillCurrent(reqSeq) {
+			return "", errPlayRequestSuperseded
+		}
 		if strings.EqualFold(strings.TrimSpace(candidate), strings.TrimSpace(failedURL)) {
 			continue
 		}
@@ -4914,10 +5170,13 @@ func tryAlternatePlayback(idx int, key, failedURL string) (string, error) {
 			continue
 		}
 		tried++
-		if err := audioPlay(resolved); err == nil {
+		if err := audioPlayRequest(resolved, reqSeq); err == nil {
 			rememberReplacement(idx, key, resolved)
 			return resolved, nil
 		} else {
+			if errors.Is(err, errPlayRequestSuperseded) {
+				return "", err
+			}
 			lastErr = err
 			logError("audio-play-candidate", err)
 		}
@@ -4970,7 +5229,7 @@ func copyStationLink(idx int) {
 	app.mu.RUnlock()
 	u := effectiveURL(s)
 	if u == "" {
-		setStatus("Ova stanica nema dostupan izvor za reprodukciju")
+		setStatus("Stanica trenutno nije dostupna")
 		postUI()
 		return
 	}
@@ -5062,7 +5321,7 @@ func replaceStation(idx int) {
 	app.mu.RUnlock()
 	key := stationKey(s)
 	def := effectiveURL(s)
-	value, ok := inputDialog(app.hwnd, "Promijeni izvor", "Unesi novu http/https poveznicu za reprodukciju za:\n"+s.Name+"\n\nPrazno polje vraća automatski odabir.", def)
+	value, ok := inputDialog(app.hwnd, "Promijeni poveznicu", "Unesi novu http/https poveznicu za reprodukciju za:\n"+s.Name+"\n\nPrazno polje vraća automatski odabir.", def)
 	if !ok {
 		return
 	}
@@ -5077,12 +5336,12 @@ func replaceStation(idx int) {
 		postUI()
 		return
 	}
-	setStatus("Provjeravam novi izvor…")
+	setStatus("Provjeravam novu poveznicu…")
 	invalidate()
 	safeGo("manual-replace-"+key, func() {
 		resolved, valid := checkStream(value)
 		if !valid {
-			queueAlert("Neispravan URL", "Novi izvor nije dostupan.", MB_ICONWARNING)
+			queueAlert("Neispravan URL", "Nova poveznica nije dostupna.", MB_ICONWARNING)
 			setStatus("Zamjena nije spremljena")
 			postUI()
 			return
@@ -5090,9 +5349,9 @@ func replaceStation(idx int) {
 		rememberReplacement(idx, key, resolved)
 		rebuildFilter()
 		if restartCurrentStationIfPlaying(key, idx) {
-			setStatus("Izvor promijenjen · ponovno povezujem")
+			setStatus("Poveznica je promijenjena · ponovno povezujem")
 		} else {
-			setStatus("Izvor promijenjen · " + s.Name)
+			setStatus("Poveznica je promijenjena · " + s.Name)
 		}
 		postUI()
 	})
@@ -5379,13 +5638,6 @@ func refreshAll() {
 	setStatus("Osvježavam popis stanica…")
 	postUI()
 	app.mu.RLock()
-	currentKey := app.currentKey
-	wasPlaying := app.playing
-	if currentKey == "" {
-		if idx := currentStationIndexLocked(); idx >= 0 {
-			currentKey = stationKey(app.stations[idx])
-		}
-	}
 	oldStations := append([]RadioStation(nil), app.stations...)
 	app.mu.RUnlock()
 	list, err := fetchBalkanStations()
@@ -5397,8 +5649,20 @@ func refreshAll() {
 	}
 	prepareStations(list)
 	mergeRuntimeStationState(oldStations, list)
-	keepPlaying := false
+	keepCurrent := false
+	stopSeq := uint64(0)
+	stopBackend := audioBackendNone
 	app.mu.Lock()
+	// Re-read the active selection after the network refresh. A station click,
+	// Stop, Next or Play that happened while the catalog request was in flight
+	// must win over the stale pre-refresh snapshot.
+	currentKey := app.currentKey
+	if currentKey == "" {
+		if idx := currentStationIndexLocked(); idx >= 0 {
+			currentKey = stationKey(app.stations[idx])
+		}
+	}
+	wasPlaying := app.playing
 	app.stations = list
 	app.catalogRevision++
 	app.loading = false
@@ -5410,15 +5674,22 @@ func refreshAll() {
 			app.current = i
 			app.currentKey = currentKey
 			app.playing = wasPlaying
-			keepPlaying = wasPlaying
+			keepCurrent = true
 		}
 	}
+	if currentKey != "" && !keepCurrent {
+		app.playing = false
+		app.audioStopped = true
+		app.metadataSeq++
+		app.playSeq++
+		stopSeq = app.playSeq
+		stopBackend = app.audioBackend
+		app.nowPlaying = ""
+		app.nowPlayingStation = ""
+	}
 	app.mu.Unlock()
-	if wasPlaying && !keepPlaying {
-		audioStop()
-		app.mu.Lock()
-		app.currentKey = ""
-		app.mu.Unlock()
+	if stopBackend != audioBackendNone {
+		safeGo("audio-stop-refresh", func() { audioStopForRequest(stopSeq) })
 	}
 	saveCache(list)
 	postGenres()
@@ -6913,6 +7184,9 @@ func addRecentLocked(id string) {
 	}
 	app.state.Recent = out
 }
+
+const audioEngineStartupTimeout = 20 * time.Second
+
 func startAudioEngineLocked() error {
 	if app.audioCmd != nil && app.audioCmd.Process != nil {
 		return nil
@@ -6935,6 +7209,10 @@ public sealed class RadioBalkanMediaHost : IDisposable
     private MediaPlayer player;
     private readonly ManualResetEventSlim ready = new ManualResetEventSlim(false);
     private bool disposed;
+    private bool currentOpened;
+    private string currentToken = "";
+    private bool runtimeArmed;
+    private string pendingRuntimeFailure = "";
 
     public RadioBalkanMediaHost()
     {
@@ -6949,13 +7227,40 @@ public sealed class RadioBalkanMediaHost : IDisposable
 
     private void ThreadMain()
     {
-        player = new MediaPlayer();
         dispatcher = Dispatcher.CurrentDispatcher;
         ready.Set();
         Dispatcher.Run();
     }
 
-    public bool Play(string uri, double volume, int timeoutMs, out string error)
+    private void EmitRuntimeFailure(string token, string message)
+    {
+        try
+        {
+            var text = String.IsNullOrWhiteSpace(message) ? "media failed" : message;
+            var encoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(text));
+            Console.Out.WriteLine("EVENT FAILED " + token + " " + encoded);
+            Console.Out.Flush();
+        }
+        catch { }
+    }
+
+    private void NotifyRuntimeFailure(MediaPlayer sourcePlayer, string token, string message)
+    {
+        // Each Play owns a distinct MediaPlayer instance and request token.
+        // Delayed events from a closed previous stream cannot fail the new stream.
+        if (disposed || sourcePlayer == null || !Object.ReferenceEquals(player, sourcePlayer)) return;
+        if (!String.Equals(currentToken, token, StringComparison.Ordinal) || !currentOpened) return;
+        currentOpened = false;
+        var text = String.IsNullOrWhiteSpace(message) ? "media failed" : message;
+        if (!runtimeArmed)
+        {
+            pendingRuntimeFailure = text;
+            return;
+        }
+        EmitRuntimeFailure(token, text);
+    }
+
+    public bool Play(string uri, double volume, int timeoutMs, string token, out string error)
     {
         error = "";
         if (disposed || dispatcher == null)
@@ -6967,30 +7272,57 @@ public sealed class RadioBalkanMediaHost : IDisposable
         var done = new ManualResetEventSlim(false);
         var opened = false;
         var failure = "";
+        MediaPlayer next = null;
         EventHandler onOpened = null;
         EventHandler<ExceptionEventArgs> onFailed = null;
+        EventHandler onEnded = null;
 
         dispatcher.BeginInvoke(new Action(() =>
         {
-            onOpened = (sender, args) =>
-            {
-                opened = true;
-                done.Set();
-            };
-            onFailed = (sender, args) =>
-            {
-                failure = args != null && args.ErrorException != null ? args.ErrorException.Message : "media failed";
-                done.Set();
-            };
-            player.MediaOpened += onOpened;
-            player.MediaFailed += onFailed;
             try
             {
-                player.Stop();
-                player.Close();
-                player.Volume = Math.Max(0.0, Math.Min(1.0, volume));
-                player.Open(new Uri(uri, UriKind.Absolute));
-                player.Play();
+                var previous = player;
+                player = null;
+                currentOpened = false;
+                currentToken = token ?? "";
+                runtimeArmed = false;
+                pendingRuntimeFailure = "";
+                if (previous != null)
+                {
+                    try { previous.Stop(); } catch { }
+                    try { previous.Close(); } catch { }
+                }
+
+                next = new MediaPlayer();
+                player = next;
+                onOpened = (sender, args) =>
+                {
+                    if (!Object.ReferenceEquals(player, next) || !String.Equals(currentToken, token, StringComparison.Ordinal)) return;
+                    currentOpened = true;
+                    opened = true;
+                    done.Set();
+                };
+                onFailed = (sender, args) =>
+                {
+                    var message = args != null && args.ErrorException != null ? args.ErrorException.Message : "media failed";
+                    if (!opened)
+                    {
+                        failure = message;
+                        done.Set();
+                        return;
+                    }
+                    NotifyRuntimeFailure(next, token, message);
+                };
+                onEnded = (sender, args) =>
+                {
+                    if (opened) NotifyRuntimeFailure(next, token, "media ended");
+                };
+                next.MediaOpened += onOpened;
+                next.MediaFailed += onFailed;
+                next.MediaEnded += onEnded;
+                next.Volume = Math.Max(0.0, Math.Min(1.0, volume));
+                next.Open(new Uri(uri, UriKind.Absolute));
+                next.Play();
             }
             catch (Exception ex)
             {
@@ -7006,8 +7338,22 @@ public sealed class RadioBalkanMediaHost : IDisposable
         {
             dispatcher.Invoke(new Action(() =>
             {
-                if (onOpened != null) player.MediaOpened -= onOpened;
-                if (onFailed != null) player.MediaFailed -= onFailed;
+                if ((!opened || !String.IsNullOrEmpty(failure)) && next != null)
+                {
+                    if (onOpened != null) next.MediaOpened -= onOpened;
+                    if (onFailed != null) next.MediaFailed -= onFailed;
+                    if (onEnded != null) next.MediaEnded -= onEnded;
+                    if (Object.ReferenceEquals(player, next))
+                    {
+                        player = null;
+                        currentOpened = false;
+                        currentToken = "";
+                        runtimeArmed = false;
+                        pendingRuntimeFailure = "";
+                    }
+                    try { next.Stop(); } catch { }
+                    try { next.Close(); } catch { }
+                }
             }), DispatcherPriority.Send);
         }
         catch (Exception ex)
@@ -7020,10 +7366,42 @@ public sealed class RadioBalkanMediaHost : IDisposable
         return opened && String.IsNullOrEmpty(failure);
     }
 
-    public void Pause() { Invoke(() => player.Pause()); }
-    public void Resume() { Invoke(() => player.Play()); }
-    public void Stop() { Invoke(() => { player.Stop(); player.Close(); }); }
-    public void SetVolume(double value) { Invoke(() => player.Volume = Math.Max(0.0, Math.Min(1.0, value))); }
+    public void Arm(string token)
+    {
+        if (disposed || dispatcher == null) return;
+        dispatcher.Invoke(new Action(() =>
+        {
+            if (player == null || !String.Equals(currentToken, token, StringComparison.Ordinal)) return;
+            runtimeArmed = true;
+            if (!String.IsNullOrEmpty(pendingRuntimeFailure))
+            {
+                var pending = pendingRuntimeFailure;
+                pendingRuntimeFailure = "";
+                EmitRuntimeFailure(token, pending);
+            }
+        }), DispatcherPriority.Send);
+    }
+
+    public void Pause() { Invoke(() => { if (player != null) player.Pause(); }); }
+    public void Resume() { Invoke(() => { if (player != null) player.Play(); }); }
+    public void Stop()
+    {
+        Invoke(() =>
+        {
+            currentOpened = false;
+            currentToken = "";
+            runtimeArmed = false;
+            pendingRuntimeFailure = "";
+            var current = player;
+            player = null;
+            if (current != null)
+            {
+                try { current.Stop(); } catch { }
+                try { current.Close(); } catch { }
+            }
+        });
+    }
+    public void SetVolume(double value) { Invoke(() => { if (player != null) player.Volume = Math.Max(0.0, Math.Min(1.0, value)); }); }
 
     private void Invoke(Action action)
     {
@@ -7037,7 +7415,24 @@ public sealed class RadioBalkanMediaHost : IDisposable
         disposed = true;
         if (dispatcher != null)
         {
-            try { dispatcher.Invoke(new Action(() => { player.Stop(); player.Close(); }), DispatcherPriority.Send); } catch { }
+            try
+            {
+                dispatcher.Invoke(new Action(() =>
+                {
+                    currentOpened = false;
+                    currentToken = "";
+                    runtimeArmed = false;
+                    pendingRuntimeFailure = "";
+                    var current = player;
+                    player = null;
+                    if (current != null)
+                    {
+                        try { current.Stop(); } catch { }
+                        try { current.Close(); } catch { }
+                    }
+                }), DispatcherPriority.Send);
+            }
+            catch { }
             try { dispatcher.BeginInvokeShutdown(DispatcherPriority.Send); } catch { }
         }
         if (thread != null && thread.IsAlive) thread.Join(2000);
@@ -7059,13 +7454,15 @@ $p=[RadioBalkanMediaHost]::new()
 }
 while(($line=[Console]::In.ReadLine()) -ne $null){
   try {
-    $sp=$line.Split(' ',3)
+    $sp=$line.Split(' ',4)
+    $armToken=''
     switch($sp[0]){
       'PLAY' {
-        $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[1]))
-        $v=[double]::Parse($sp[2],[Globalization.CultureInfo]::InvariantCulture)
+        $armToken=$sp[1]
+        $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[2]))
+        $v=[double]::Parse($sp[3],[Globalization.CultureInfo]::InvariantCulture)
         $err=''
-        if(-not $p.Play($u,$v,7000,[ref]$err)){ throw $err }
+        if(-not $p.Play($u,$v,7000,$armToken,[ref]$err)){ throw $err }
       }
       'PAUSE' { $p.Pause() }
       'RESUME' { $p.Resume() }
@@ -7079,6 +7476,7 @@ while(($line=[Console]::In.ReadLine()) -ne $null){
     }
     [Console]::Out.WriteLine('OK')
     [Console]::Out.Flush()
+    if($sp[0] -eq 'PLAY'){ $p.Arm($armToken) }
   } catch {
     $m=$_.Exception.Message
     if([String]::IsNullOrWhiteSpace($m)){ $m='audio command failed' }
@@ -7109,8 +7507,15 @@ try { $p.Dispose() } catch {}`
 	go func() {
 		scanner := bufio.NewScanner(out)
 		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if eventSeq, detail, ok := parseAudioRuntimeFailure(line); ok {
+				safeGo("audio-runtime-failure", func() {
+					handleAudioBackendFailureForRequest(audioBackendWPF, eventSeq, detail)
+				})
+				continue
+			}
 			select {
-			case ack <- strings.TrimSpace(scanner.Text()):
+			case ack <- line:
 			case <-app.done:
 				close(ack)
 				return
@@ -7136,7 +7541,7 @@ try { $p.Dispose() } catch {}`
 			}
 			return errors.New("audio engine se nije ispravno inicijalizirao")
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(audioEngineStartupTimeout):
 		_ = in.Close()
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
@@ -7215,6 +7620,157 @@ try { $p.Dispose() } catch {}`
 	return nil
 }
 
+func parseAudioRuntimeFailure(line string) (uint64, string, bool) {
+	const prefix = "EVENT FAILED "
+	if !strings.HasPrefix(line, prefix) {
+		return 0, "", false
+	}
+	payload := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+	parts := strings.SplitN(payload, " ", 2)
+	if len(parts) != 2 {
+		return 0, "", false
+	}
+	reqSeq, err := strconv.ParseUint(strings.TrimSpace(parts[0]), 10, 64)
+	if err != nil {
+		return 0, "", false
+	}
+	encoded := strings.TrimSpace(parts[1])
+	if encoded == "" {
+		return reqSeq, "media failed", true
+	}
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return reqSeq, "media failed", true
+	}
+	detail := strings.TrimSpace(string(decoded))
+	if detail == "" {
+		detail = "media failed"
+	}
+	return reqSeq, detail, true
+}
+
+func handleAudioBackendFailure(expected audioBackendKind, detail string) {
+	handleAudioBackendFailureForRequest(expected, 0, detail)
+}
+
+func handleAudioBackendFailureForRequest(expected audioBackendKind, reqSeq uint64, detail string) {
+	if shuttingDown() {
+		return
+	}
+	if reqSeq != 0 {
+		// A runtime event can be read immediately after the PLAY ACK while the
+		// command goroutine still owns audioMu and has not committed WPF backend
+		// ownership yet. Wait briefly for that commit, but reject the event as
+		// soon as a newer playback generation wins.
+		deadline := time.Now().Add(500 * time.Millisecond)
+		for {
+			app.mu.RLock()
+			currentSeq := app.playSeq
+			backend := app.audioBackend
+			app.mu.RUnlock()
+			if currentSeq != reqSeq {
+				return
+			}
+			if backend == expected {
+				break
+			}
+			if backend != audioBackendNone || time.Now().After(deadline) {
+				return
+			}
+			select {
+			case <-time.After(10 * time.Millisecond):
+			case <-app.done:
+				return
+			}
+		}
+	}
+	if strings.TrimSpace(detail) != "" {
+		logError("audio-runtime-failure", errors.New(detail))
+	}
+
+	app.mu.Lock()
+	if app.audioBackend != expected || (reqSeq != 0 && app.playSeq != reqSeq) {
+		app.mu.Unlock()
+		return
+	}
+	wasPlaying := app.playing
+	wasStopped := app.audioStopped
+	idx := currentStationIndexLocked()
+	key := app.currentKey
+	if key == "" && idx >= 0 && idx < len(app.stations) {
+		key = stationKey(app.stations[idx])
+	}
+	if idx < 0 || key == "" {
+		app.playing = false
+		app.audioBackend = audioBackendNone
+		app.metadataSeq++
+		app.mu.Unlock()
+		setStatus("Stanica trenutno nije dostupna")
+		postUI()
+		return
+	}
+
+	// A backend can fail while the UI is paused. Mark it unavailable but do not
+	// auto-restart audio behind the user's back; the next Play/Resume will see
+	// audioBackendNone and reconnect the selected station.
+	if !wasPlaying {
+		app.audioBackend = audioBackendNone
+		app.metadataSeq++
+		app.mu.Unlock()
+		if !wasStopped {
+			setStatus("Veza je privremeno prekinuta · pritisni Play za ponovno povezivanje")
+			postUI()
+		}
+		return
+	}
+
+	now := time.Now()
+	recoverySeq := app.playSeq
+	allowRecover := !app.audioRecovering && (app.lastAudioFailure.IsZero() || now.Sub(app.lastAudioFailure) > 20*time.Second)
+	app.playing = false
+	app.audioBackend = audioBackendNone
+	app.metadataSeq++
+	if allowRecover {
+		app.audioRecovering = true
+		app.lastAudioFailure = now
+	}
+	app.mu.Unlock()
+
+	if !allowRecover {
+		setStatus("Veza je privremeno prekinuta · klikni Play za ponovni pokušaj")
+		postUI()
+		return
+	}
+
+	setStatus("Veza je privremeno prekinuta · pokušavam ponovno povezivanje…")
+	postUI()
+	safeGo("audio-recovery", func() {
+		timer := time.NewTimer(1200 * time.Millisecond)
+		select {
+		case <-timer.C:
+		case <-app.done:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			return
+		}
+
+		app.mu.Lock()
+		// A Stop, Next or newer station click always wins over delayed recovery.
+		if app.playSeq != recoverySeq || app.currentKey != key || app.audioStopped {
+			app.audioRecovering = false
+			app.mu.Unlock()
+			return
+		}
+		app.audioRecovering = false
+		app.mu.Unlock()
+		playStationByKey(key, idx)
+	})
+}
+
 func resetAudioEngineLocked() {
 	in := app.audioIn
 	cmd := app.audioCmd
@@ -7229,6 +7785,10 @@ func resetAudioEngineLocked() {
 	}
 }
 
+func audioPlayCommand(reqSeq uint64, encoded string, volume float64) string {
+	return fmt.Sprintf("PLAY %d %s %.2f", reqSeq, encoded, volume)
+}
+
 func audioCommandTimeout(line string) time.Duration {
 	if strings.HasPrefix(line, "PLAY ") {
 		return 9 * time.Second
@@ -7236,52 +7796,140 @@ func audioCommandTimeout(line string) time.Duration {
 	return 3 * time.Second
 }
 
+var errPlayRequestSuperseded = errors.New("play request superseded")
+
+func playRequestStillCurrent(reqSeq uint64) bool {
+	if reqSeq == 0 {
+		return true
+	}
+	app.mu.RLock()
+	current := app.playSeq == reqSeq
+	app.mu.RUnlock()
+	return current
+}
+
+func audioAckResultLocked(reply string, ok bool) error {
+	if !ok {
+		resetAudioEngineLocked()
+		return errors.New("audio engine je prekinut")
+	}
+	if reply == "OK" {
+		return nil
+	}
+	if strings.HasPrefix(reply, "ERR ") {
+		if decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(strings.TrimPrefix(reply, "ERR "))); err == nil && len(decoded) > 0 {
+			return fmt.Errorf("audio engine: %s", strings.TrimSpace(string(decoded)))
+		}
+	}
+	return errors.New("audio engine nije prihvatio naredbu")
+}
+
 func waitAudioAckLocked(timeout time.Duration) error {
+	return waitAudioAckLockedForRequest(timeout, 0)
+}
+
+func waitAudioAckLockedForRequest(timeout time.Duration, reqSeq uint64) error {
 	if app.audioAck == nil {
 		return errors.New("audio engine nema kanal potvrde")
 	}
 	if timeout <= 0 {
 		timeout = 2 * time.Second
 	}
-	select {
-	case reply, ok := <-app.audioAck:
-		if !ok {
-			resetAudioEngineLocked()
-			return errors.New("audio engine je prekinut")
-		}
-		if reply != "OK" {
-			if strings.HasPrefix(reply, "ERR ") {
-				if decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(strings.TrimPrefix(reply, "ERR "))); err == nil && len(decoded) > 0 {
-					return fmt.Errorf("audio engine: %s", strings.TrimSpace(string(decoded)))
-				}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	var staleTick <-chan time.Time
+	var staleTicker *time.Ticker
+	if reqSeq != 0 {
+		staleTicker = time.NewTicker(50 * time.Millisecond)
+		staleTick = staleTicker.C
+		defer staleTicker.Stop()
+	}
+
+	for {
+		select {
+		case reply, ok := <-app.audioAck:
+			return audioAckResultLocked(reply, ok)
+		case <-staleTick:
+			if !playRequestStillCurrent(reqSeq) {
+				// Kill the helper/channel together so a late ACK can never satisfy
+				// the newer station request waiting behind this one.
+				resetAudioEngineLocked()
+				setAudioBackend(audioBackendNone)
+				return errPlayRequestSuperseded
 			}
-			return errors.New("audio engine nije prihvatio naredbu")
+		case <-timer.C:
+			// A late ACK must never be consumed by the next command. Discard the
+			// entire helper process/channel before the caller falls back or retries.
+			resetAudioEngineLocked()
+			return errors.New("audio engine nije odgovorio na vrijeme")
+		case <-app.done:
+			return context.Canceled
 		}
-		return nil
-	case <-time.After(timeout):
-		// A late ACK must never be consumed by the next command. Discard the
-		// entire helper process/channel before the caller falls back or retries.
-		resetAudioEngineLocked()
-		return errors.New("audio engine nije odgovorio na vrijeme")
-	case <-app.done:
-		return context.Canceled
 	}
 }
 
 func audioSend(line string) error {
+	return audioSendForRequest(line, 0)
+}
+
+func shouldStopMCIForAudioCommand(line string, backend audioBackendKind) bool {
+	return backend == audioBackendMCI && strings.HasPrefix(strings.TrimSpace(line), "PLAY ")
+}
+
+func audioSendForRequest(line string, reqSeq uint64) error {
 	app.audioMu.Lock()
 	defer app.audioMu.Unlock()
+	if !playRequestStillCurrent(reqSeq) {
+		return errPlayRequestSuperseded
+	}
+	playCommand := strings.HasPrefix(strings.TrimSpace(line), "PLAY ")
+	cleanupFailedPlayLocked := func() {
+		if !playCommand {
+			return
+		}
+		resetAudioEngineLocked()
+		setAudioBackend(audioBackendNone)
+	}
+	// A newer WPF PLAY must replace an older MCI fallback stream. Otherwise the
+	// two backends can remain audible at the same time after rapid station changes.
+	if shouldStopMCIForAudioCommand(line, currentAudioBackend()) {
+		audioStopMCI()
+		setAudioBackend(audioBackendNone)
+	}
 	if err := startAudioEngineLocked(); err != nil {
+		cleanupFailedPlayLocked()
 		return err
 	}
+	if !playRequestStillCurrent(reqSeq) {
+		cleanupFailedPlayLocked()
+		return errPlayRequestSuperseded
+	}
 	if app.audioIn == nil {
+		cleanupFailedPlayLocked()
 		return errors.New("audio engine nije dostupan")
 	}
 	if _, err := io.WriteString(app.audioIn, line+"\n"); err != nil {
-		resetAudioEngineLocked()
+		cleanupFailedPlayLocked()
 		return err
 	}
-	return waitAudioAckLocked(audioCommandTimeout(line))
+	if err := waitAudioAckLockedForRequest(audioCommandTimeout(line), reqSeq); err != nil {
+		// PLAY failures are fully cleaned up while audioMu is still held. The
+		// caller must never tear down backend state after this function returns.
+		cleanupFailedPlayLocked()
+		return err
+	}
+	if playCommand {
+		// Commit backend ownership while audioMu is still held. A newer request can
+		// advance playSeq concurrently, but it cannot enter another backend command
+		// until this lock is released.
+		if !playRequestStillCurrent(reqSeq) {
+			cleanupFailedPlayLocked()
+			return errPlayRequestSuperseded
+		}
+		setAudioBackend(audioBackendWPF)
+	}
+	return nil
 }
 func audioSendExisting(line string) error {
 	app.audioMu.Lock()
@@ -7322,12 +7970,19 @@ func audioShutdown() {
 		_, _ = io.WriteString(app.audioIn, "STOP\n")
 	}
 	resetAudioEngineLocked()
-	app.audioMu.Unlock()
-	setAudioBackend(audioBackendNone)
 	audioStopMCI()
+	setAudioBackend(audioBackendNone)
+	app.audioMu.Unlock()
 }
 
 func audioPlay(raw string) error {
+	return audioPlayRequest(raw, 0)
+}
+
+func audioPlayRequest(raw string, reqSeq uint64) error {
+	if !playRequestStillCurrent(reqSeq) {
+		return errPlayRequestSuperseded
+	}
 	app.stateMu.RLock()
 	volume := app.state.Volume
 	app.stateMu.RUnlock()
@@ -7339,18 +7994,41 @@ func audioPlay(raw string) error {
 		vol = 1
 	}
 	enc := base64.StdEncoding.EncodeToString([]byte(raw))
-	if err := audioSend(fmt.Sprintf("PLAY %s %.2f", enc, vol)); err == nil {
-		setAudioBackend(audioBackendWPF)
+	if err := audioSendForRequest(audioPlayCommand(reqSeq, enc, vol), reqSeq); err == nil {
 		return nil
 	} else {
+		if errors.Is(err, errPlayRequestSuperseded) {
+			// The stale request must not mutate backend state after audioMu was
+			// released; a newer request may already be waiting to take ownership.
+			return err
+		}
 		logError("audio-engine", err)
-		app.audioMu.Lock()
-		resetAudioEngineLocked()
-		app.audioMu.Unlock()
-		setAudioBackend(audioBackendNone)
+		// audioSendForRequest already cleaned the failed WPF PLAY while holding
+		// audioMu; do not perform post-unlock cleanup here.
 	}
 
+	if !playRequestStillCurrent(reqSeq) {
+		return errPlayRequestSuperseded
+	}
+
+	// Serialize the complete MCI fallback lifecycle with all WPF/backend commands.
+	// This prevents a superseded MCI request from closing the shared "radio" alias
+	// after a newer request has already started.
+	app.audioMu.Lock()
+	defer app.audioMu.Unlock()
+	abortStaleMCI := func() bool {
+		if playRequestStillCurrent(reqSeq) {
+			return false
+		}
+		audioStopMCI()
+		setAudioBackend(audioBackendNone)
+		return true
+	}
+	if abortStaleMCI() {
+		return errPlayRequestSuperseded
+	}
 	audioStopMCI()
+	setAudioBackend(audioBackendNone)
 	cleanURL := strings.ReplaceAll(raw, "\"", "")
 	openCommands := []string{
 		fmt.Sprintf("open \"%s\" alias radio", cleanURL),
@@ -7358,6 +8036,9 @@ func audioPlay(raw string) error {
 	}
 	var openErr error
 	for _, command := range openCommands {
+		if abortStaleMCI() {
+			return errPlayRequestSuperseded
+		}
 		if e := mci(command); e == nil {
 			openErr = nil
 			break
@@ -7365,6 +8046,9 @@ func audioPlay(raw string) error {
 			openErr = e
 			audioStopMCI()
 		}
+	}
+	if abortStaleMCI() {
+		return errPlayRequestSuperseded
 	}
 	if openErr != nil {
 		setAudioBackend(audioBackendNone)
@@ -7375,9 +8059,24 @@ func audioPlay(raw string) error {
 		setAudioBackend(audioBackendNone)
 		return e
 	}
+	if abortStaleMCI() {
+		return errPlayRequestSuperseded
+	}
 	_ = mci(fmt.Sprintf("setaudio radio volume to %d", volume*10))
+	if abortStaleMCI() {
+		return errPlayRequestSuperseded
+	}
 	setAudioBackend(audioBackendMCI)
 	return nil
+}
+
+func mciQueryExisting(cmd string) (string, error) {
+	app.audioMu.Lock()
+	defer app.audioMu.Unlock()
+	if currentAudioBackend() != audioBackendMCI {
+		return "", errors.New("MCI backend nije aktivan")
+	}
+	return mciQuery(cmd)
 }
 
 func audioPause() error {
@@ -7385,7 +8084,8 @@ func audioPause() error {
 	case audioBackendWPF:
 		return audioSendExisting("PAUSE")
 	case audioBackendMCI:
-		return mci("pause radio")
+		_, err := mciQueryExisting("pause radio")
+		return err
 	default:
 		return errors.New("audio backend nije aktivan")
 	}
@@ -7396,7 +8096,8 @@ func audioResume() error {
 	case audioBackendWPF:
 		return audioSendExisting("RESUME")
 	case audioBackendMCI:
-		return mci("resume radio")
+		_, err := mciQueryExisting("resume radio")
+		return err
 	default:
 		return errors.New("audio backend nije aktivan")
 	}
@@ -7411,20 +8112,45 @@ func audioSetVolume(v int) {
 	}
 	switch currentAudioBackend() {
 	case audioBackendWPF:
-		_ = audioSendExisting(fmt.Sprintf("VOLUME %.2f", float64(v)/100.0))
+		if err := audioSendExisting(fmt.Sprintf("VOLUME %.2f", float64(v)/100.0)); err != nil {
+			logError("audio-volume", err)
+			// A failed WPF control may have reset/killed the helper. Recover now
+			// instead of leaving a stale WPF backend that the watchdog trusts.
+			handleAudioBackendFailure(audioBackendWPF, "volume control failed")
+		}
 	case audioBackendMCI:
-		_ = mci(fmt.Sprintf("setaudio radio volume to %d", v*10))
+		_, _ = mciQueryExisting(fmt.Sprintf("setaudio radio volume to %d", v*10))
 	}
 }
 
-func audioStop() {
+func audioStopForRequest(reqSeq uint64) {
+	app.audioMu.Lock()
+	defer app.audioMu.Unlock()
+	// Stop is dispatched asynchronously from the UI thread. If a newer Play/Next
+	// already advanced playSeq before this goroutine obtained the backend lock,
+	// the old Stop must not silence the newer stream.
+	if !playRequestStillCurrent(reqSeq) {
+		return
+	}
 	switch currentAudioBackend() {
 	case audioBackendWPF:
-		_ = audioSendExisting("STOP")
+		if app.audioIn != nil {
+			if _, err := io.WriteString(app.audioIn, "STOP\n"); err != nil {
+				resetAudioEngineLocked()
+			} else {
+				_ = waitAudioAckLockedForRequest(audioCommandTimeout("STOP"), reqSeq)
+			}
+		}
 	case audioBackendMCI:
 		audioStopMCI()
+	default:
+		return
 	}
 	setAudioBackend(audioBackendNone)
+}
+
+func audioStop() {
+	audioStopForRequest(0)
 }
 
 func audioStopMCI() {
@@ -7433,6 +8159,11 @@ func audioStopMCI() {
 }
 
 func mci(cmd string) error {
+	_, err := mciQuery(cmd)
+	return err
+}
+
+func mciQuery(cmd string) (string, error) {
 	buf := make([]uint16, 256)
 	r, _, _ := procMciSendString.Call(uintptr(unsafe.Pointer(u16(cmd))), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), 0)
 	if r != 0 {
@@ -7440,11 +8171,20 @@ func mci(cmd string) error {
 		ok, _, _ := procMciGetErrorString.Call(r, uintptr(unsafe.Pointer(&detail[0])), uintptr(len(detail)))
 		message := strings.TrimSpace(syscall.UTF16ToString(detail))
 		if ok != 0 && message != "" {
-			return fmt.Errorf("MCI greška %d: %s", r, message)
+			return "", fmt.Errorf("MCI greška %d: %s", r, message)
 		}
-		return fmt.Errorf("MCI greška %d", r)
+		return "", fmt.Errorf("MCI greška %d", r)
 	}
-	return nil
+	return strings.TrimSpace(syscall.UTF16ToString(buf)), nil
+}
+
+func mciModeHealthy(mode string) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "playing", "paused", "seeking":
+		return true
+	default:
+		return false
+	}
 }
 
 func shellOpen(target string) {

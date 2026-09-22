@@ -103,6 +103,8 @@ jobs:
         run: |
           $version = (Get-Content VERSION).Trim()
           ./scripts/test-windows-runtime.ps1 -Exe "apps/windows/dist/RadioBalkan-Portable-v$version.exe" -SoakSeconds 15
+      - name: Test real Balkan live-stream transport
+        run: python scripts/test_live_radio_streams.py
       - name: Verify Windows build leaves repository clean
         run: python scripts/check_clean_worktree.py
 
