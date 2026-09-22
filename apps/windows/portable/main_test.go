@@ -334,7 +334,6 @@ func TestValidateStateDropsUnsafeReplacementURLs(t *testing.T) {
 	}
 }
 
-
 func TestUnsafeNetworkIPRejectsLocalAndSpecialRanges(t *testing.T) {
 	rejected := []string{
 		"0.0.0.0",
@@ -360,7 +359,6 @@ func TestUnsafeNetworkIPRejectsLocalAndSpecialRanges(t *testing.T) {
 		t.Fatal("public IPv4 address was rejected")
 	}
 }
-
 
 func TestWriteFileDurablePersistsCompleteContent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.tmp")
@@ -388,7 +386,6 @@ func TestWriteFileDurablePersistsCompleteContent(t *testing.T) {
 		t.Fatalf("durable replacement content = %q; want %q", got, replacement)
 	}
 }
-
 
 func TestTransportAvailabilityUsesVisibleStationCount(t *testing.T) {
 	tests := []struct {
@@ -893,7 +890,6 @@ func putLE32(dst []byte, v uint32) {
 	dst[2] = byte(v >> 16)
 	dst[3] = byte(v >> 24)
 }
-
 
 func TestStationNameSearchPathsExcludeKnownBrokenCatalogRows(t *testing.T) {
 	paths := stationNameSearchPaths("Radio Test", "HR", "")
