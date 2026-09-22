@@ -410,13 +410,13 @@ func TestTransportAvailabilityUsesVisibleStationCount(t *testing.T) {
 		})
 	}
 
-	if canStopPlayback(-1, false) {
+	if canStopPlayback(-1, false, false) {
 		t.Fatal("stop must be disabled without a current station")
 	}
-	if canStopPlayback(0, true) {
+	if canStopPlayback(0, true, false) {
 		t.Fatal("stop must be disabled after terminal stop")
 	}
-	if !canStopPlayback(0, false) {
+	if !canStopPlayback(0, false, false) {
 		t.Fatal("stop must be enabled for an active or paused current station")
 	}
 
@@ -759,6 +759,36 @@ func TestWPFPlayReplacesActiveMCIBackend(t *testing.T) {
 	}
 	if shouldStopMCIForAudioCommand("PLAY Zm9v 0.50", audioBackendWPF) {
 		t.Fatal("WPF-to-WPF PLAY should reuse the media host instead of forcing MCI cleanup")
+	}
+}
+
+func TestStopControlIsAvailableForPendingPlayWithoutCommittedCurrent(t *testing.T) {
+	if !canStopPlayback(-1, false, true) {
+		t.Fatal("stop must remain enabled while a Play request is pending")
+	}
+}
+
+func TestStopCancelsPendingPlayWithoutCommittedCurrent(t *testing.T) {
+	app = App{
+		done:           make(chan struct{}),
+		current:        -1,
+		playing:        false,
+		audioStopped:   false,
+		audioBackend:   audioBackendNone,
+		playSeq:        17,
+		pendingPlaySeq: 17,
+	}
+	stopCurrentPlayback()
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.playSeq != 18 {
+		t.Fatalf("Stop playSeq = %d; want 18 so pending Play becomes stale", app.playSeq)
+	}
+	if app.pendingPlaySeq != 0 {
+		t.Fatalf("pending Play sequence = %d; want cleared after Stop", app.pendingPlaySeq)
+	}
+	if app.playing || !app.audioStopped {
+		t.Fatalf("Stop pending state playing=%v stopped=%v; want false/true", app.playing, app.audioStopped)
 	}
 }
 
