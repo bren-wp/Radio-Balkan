@@ -161,6 +161,69 @@ def probe_stream(url: str) -> tuple[bool, str]:
         return False, f"{type(exc).__name__}: {exc}"
 
 
+def playlist_targets(data: bytes) -> list[str]:
+    text = data.decode("utf-8", "replace")
+    targets: list[str] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" in line and line.lower().startswith("file"):
+            line = line.split("=", 1)[1].strip()
+        if usable_url(line) and line not in targets:
+            targets.append(line)
+    return targets
+
+
+def probe_indirect(raw_url: str) -> tuple[bool, str]:
+    if not usable_url(raw_url):
+        return False, "invalid raw URL"
+    started = time.monotonic()
+    try:
+        with request(
+            raw_url,
+            8.0,
+            "audio/*,application/ogg,application/vnd.apple.mpegurl,application/x-mpegurl,audio/x-scpls,*/*;q=0.3",
+        ) as response:
+            status = getattr(response, "status", 200) or 200
+            final_url = response.geturl()
+            content_type = (response.headers.get("Content-Type") or "").lower()
+            data = response.read(4096)
+        if status < 200 or status >= 400:
+            return False, f"raw HTTP {status}"
+        if "text/html" in content_type:
+            return False, f"raw unexpected {content_type}"
+
+        playlist = (
+            "mpegurl" in content_type
+            or "scpls" in content_type
+            or raw_url.lower().split("?", 1)[0].endswith((".m3u", ".m3u8", ".pls"))
+            or data.lstrip().startswith(b"#EXTM3U")
+            or b"[playlist]" in data[:128].lower()
+        )
+        if playlist:
+            targets = playlist_targets(data)
+            if not targets:
+                return False, "raw playlist had no usable stream URL"
+            failures: list[str] = []
+            for target in targets[:5]:
+                ok, detail = probe_stream(target)
+                if ok:
+                    elapsed = time.monotonic() - started
+                    return True, f"playlist -> {target} :: {detail} total={elapsed:.2f}s"
+                failures.append(detail)
+            return False, "raw playlist targets failed: " + " | ".join(failures[-3:])
+
+        if len(data) < 64:
+            return False, f"raw endpoint returned only {len(data)} bytes"
+        elapsed = time.monotonic() - started
+        if final_url != raw_url:
+            return True, f"redirect -> {final_url} {content_type or 'unknown'} {len(data)}B {elapsed:.2f}s"
+        return True, f"raw stream {content_type or 'unknown'} {len(data)}B {elapsed:.2f}s"
+    except Exception as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+
 def main() -> int:
     try:
         server, stations = collect_catalog()
@@ -183,7 +246,7 @@ def main() -> int:
     candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
     covered: set[str] = set()
     successful: list[str] = []
-    tried_urls: set[str] = set()
+    tried_urls: set[tuple[str, str]] = set()
     attempts = 0
 
     # Greedily pick stations that cover currently missing capabilities. Then
@@ -196,7 +259,9 @@ def main() -> int:
         best = (-1, -1, -1)
         for idx, (cap_count, votes, station, caps) in enumerate(candidates):
             resolved = str(station.get("url_resolved", "")).strip()
-            if resolved in tried_urls:
+            raw = str(station.get("url", "")).strip()
+            attempt_key = (resolved, raw if "indirect" in caps else "")
+            if attempt_key in tried_urls:
                 continue
             gain = len(caps & missing)
             score = (gain, cap_count, votes)
@@ -209,17 +274,33 @@ def main() -> int:
 
         station, caps = choice
         resolved = str(station.get("url_resolved", "")).strip()
-        tried_urls.add(resolved)
+        raw = str(station.get("url", "")).strip()
+        attempt_key = (resolved, raw if "indirect" in caps else "")
+        tried_urls.add(attempt_key)
         attempts += 1
         ok, detail = probe_stream(resolved)
         name = str(station.get("name", "")).strip() or "(unnamed)"
         country = str(station.get("countrycode", "")).strip()
         codec = str(station.get("codec", "")).strip()
         if ok:
-            gained = caps & missing
-            covered.update(caps)
-            successful.append(f"{country}:{name} [{codec}] => {','.join(sorted(caps))}")
-            print(f"[live-radio] PASS {country} {name!r} codec={codec} caps={sorted(caps)} :: {detail}")
+            verified_caps = set(caps)
+            indirect_detail = ""
+            if "indirect" in verified_caps and "indirect" in missing:
+                indirect_ok, indirect_detail = probe_indirect(raw)
+                if not indirect_ok:
+                    verified_caps.discard("indirect")
+                    print(
+                        f"[live-radio] indirect retry {country} {name!r} raw={raw!r} "
+                        f":: {indirect_detail}"
+                    )
+            gained = verified_caps & missing
+            covered.update(verified_caps)
+            successful.append(f"{country}:{name} [{codec}] => {','.join(sorted(verified_caps))}")
+            suffix = f" :: indirect {indirect_detail}" if indirect_detail and "indirect" in verified_caps else ""
+            print(
+                f"[live-radio] PASS {country} {name!r} codec={codec} "
+                f"caps={sorted(verified_caps)} :: {detail}{suffix}"
+            )
         else:
             print(f"[live-radio] retry {country} {name!r} codec={codec} caps={sorted(caps)} :: {detail}")
             # Keep the failed row out of future selection.
