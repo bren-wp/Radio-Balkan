@@ -408,6 +408,7 @@ type App struct {
 	lastHealth                               time.Time
 	metadataSeq                              uint64
 	playSeq                                  uint64
+	pendingPlaySeq                           uint64
 	streamSem                                chan struct{}
 	done                                     chan struct{}
 	closeOnce                                sync.Once
@@ -3707,6 +3708,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	currentCountry := ""
 	playing := false
 	stopped := true
+	pending := false
 	currentIdx := -1
 	canNavigate := false
 	var current RadioStation
@@ -3723,6 +3725,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	}
 	playing = app.playing
 	stopped = app.audioStopped
+	pending = pendingPlayCurrentLocked()
 	canNavigate = canNavigateStations(currentIdx, len(app.stations), len(app.filtered))
 	app.mu.RUnlock()
 	app.stateMu.RLock()
@@ -3773,7 +3776,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	// compact windows.
 	cx := playerTransportCenter(cr.Right)
 	compactPlayer := cr.Right < 1180
-	canStop := canStopPlayback(currentIdx, stopped)
+	canStop := canStopPlayback(currentIdx, stopped, pending)
 	selectFont(hdc, app.hFontBold)
 	prevColor := rgb(193, 199, 207)
 	if !canNavigate {
@@ -4299,8 +4302,8 @@ func toggleCurrentPlayback() {
 	})
 }
 
-func canStopPlayback(current int, stopped bool) bool {
-	return current >= 0 && !stopped
+func canStopPlayback(current int, stopped, pending bool) bool {
+	return pending || (current >= 0 && !stopped)
 }
 
 func canAdjustVolume(volume, delta int) bool {
@@ -4326,7 +4329,7 @@ func canNavigateStations(current, stationCount, filteredCount int) bool {
 
 func stopCurrentPlayback() {
 	app.mu.RLock()
-	canStop := canStopPlayback(currentStationIndexLocked(), app.audioStopped)
+	canStop := canStopPlayback(currentStationIndexLocked(), app.audioStopped, pendingPlayCurrentLocked())
 	app.mu.RUnlock()
 	if !canStop {
 		return
@@ -4336,6 +4339,7 @@ func stopCurrentPlayback() {
 	app.audioStopped = true
 	app.metadataSeq++
 	app.playSeq++
+	app.pendingPlaySeq = 0
 	stopSeq := app.playSeq
 	backend := app.audioBackend
 	app.nowPlaying = ""
@@ -4539,7 +4543,7 @@ func handleCoreClickFallback(x, y int32) bool {
 		app.mu.RLock()
 		currentIdx := currentStationIndexLocked()
 		canNavigate := canNavigateStations(currentIdx, len(app.stations), len(app.filtered))
-		canStop := canStopPlayback(currentIdx, app.audioStopped)
+		canStop := canStopPlayback(currentIdx, app.audioStopped, pendingPlayCurrentLocked())
 		app.mu.RUnlock()
 		app.stateMu.RLock()
 		volume := app.state.Volume
@@ -4716,10 +4720,12 @@ func playStation(idx int) {
 	key := stationKey(s)
 	app.playSeq++
 	reqSeq := app.playSeq
+	app.pendingPlaySeq = reqSeq
 	app.mu.Unlock()
 	setStatus("Otvaram: " + s.Name)
 	invalidate()
 	safeGo("play-"+key, func() {
+		defer clearPendingPlayRequest(reqSeq)
 		final, ok := ensureStreamKey(idx, key)
 		if !ok {
 			app.mu.RLock()
@@ -4800,6 +4806,21 @@ func playStation(idx int) {
 		safeGo("metadata-"+key, func() { metadataLoop(seq, idx, key, final) })
 	})
 }
+func clearPendingPlayRequest(reqSeq uint64) {
+	if reqSeq == 0 {
+		return
+	}
+	app.mu.Lock()
+	if app.pendingPlaySeq == reqSeq {
+		app.pendingPlaySeq = 0
+	}
+	app.mu.Unlock()
+}
+
+func pendingPlayCurrentLocked() bool {
+	return app.pendingPlaySeq != 0 && app.pendingPlaySeq == app.playSeq
+}
+
 func playbackBackendNeedsRecovery(active bool, backend audioBackendKind) bool {
 	return active && backend == audioBackendNone
 }
