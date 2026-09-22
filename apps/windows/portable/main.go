@@ -1946,14 +1946,31 @@ func runCIAudioSmoke() {
 	streamA := "http://" + ln.Addr().String() + "/tone-a.wav"
 	streamB := "http://" + ln.Addr().String() + "/tone-b.wav"
 
-	// Exercise the actual production backend lifecycle that handles station
-	// switching. A successful first PLAY followed by a second PLAY in the same
-	// app process is the regression case reported by users.
+	// Exercise the primary production WPF backend lifecycle that handles station
+	// switching. Testing the WPF command path directly preserves the real
+	// MediaPlayer HRESULT on headless CI instead of masking it behind an MCI
+	// fallback error. On an audio-capable Windows host, A then B must both open
+	// successfully in the same helper process.
+	app.stateMu.RLock()
+	volume := app.state.Volume
+	app.stateMu.RUnlock()
+	vol := float64(volume) / 100.0
+	if vol < 0 {
+		vol = 0
+	}
+	if vol > 1 {
+		vol = 1
+	}
+	playWPF := func(stream string, seq uint64) error {
+		encoded := base64.StdEncoding.EncodeToString([]byte(stream))
+		return audioSendForRequest(audioPlayCommand(seq, encoded, vol), seq)
+	}
+
 	app.mu.Lock()
 	app.playSeq++
 	seqA := app.playSeq
 	app.mu.Unlock()
-	if err := audioPlayRequest(streamA, seqA); err != nil {
+	if err := playWPF(streamA, seqA); err != nil {
 		if isExpectedHeadlessAudioError(err) {
 			runtimeTestTrace("production-audio-switch-no-device token=" + token)
 		} else {
@@ -1965,10 +1982,9 @@ func runCIAudioSmoke() {
 		app.playSeq++
 		seqB := app.playSeq
 		app.mu.Unlock()
-		if err := audioPlayRequest(streamB, seqB); err != nil {
+		if err := playWPF(streamB, seqB); err != nil {
 			if isExpectedHeadlessAudioError(err) {
 				runtimeTestTrace("production-audio-switch-no-device token=" + token)
-				audioStopForRequest(seqB)
 			} else {
 				logError("runtime-test-production-audio-b", err)
 				audioStopForRequest(seqB)
@@ -1976,8 +1992,8 @@ func runCIAudioSmoke() {
 			}
 		} else {
 			runtimeTestTrace("production-audio-switch-ok token=" + token)
-			audioStopForRequest(seqB)
 		}
+		audioStopForRequest(seqB)
 	}
 
 	streamURL := streamA
