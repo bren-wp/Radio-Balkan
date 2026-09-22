@@ -594,7 +594,8 @@ def main() -> None:
         "resetAudioEngineLocked()",
         "audio engine nije odgovorio na vrijeme",
         "READY",
-        "time.After(10 * time.Second)",
+        "const audioEngineStartupTimeout = 20 * time.Second",
+        "time.After(audioEngineStartupTimeout)",
         "func warmAudioEngine()",
         "Initialize audio lazily on the first playback command.",
         "audio engine startup timeout",
@@ -625,7 +626,9 @@ def main() -> None:
         "playStationByKey(currentKey, current)",
         "app.audioStopped = true",
         'safeGo("audio-volume-control", func() { audioSetVolume(v) })',
-        'safeGo("audio-stop-control", audioStop)',
+        'safeGo("audio-stop-control", func() { audioStopForRequest(stopSeq) })',
+        "func audioStopForRequest(reqSeq uint64)",
+        "if !playRequestStillCurrent(reqSeq) {",
         'safeGo("audio-pause-control", func() {',
         'safeGo("audio-resume-control", func() {',
         "if shuttingDown() {",
@@ -661,6 +664,10 @@ def main() -> None:
     require(
         "apps/windows/portable/main_test.go",
         "TestAdminCredentialsAcceptOnlyConfiguredAdministrator",
+        "TestAudioEngineStartupTimeoutIsBounded",
+        "TestStaleAsyncStopCannotClearNewPlaybackBackend",
+        "TestWPFPlayReplacesActiveMCIBackend",
+        "TestStopCurrentPlaybackAdvancesRequestGeneration",
     )
     forbid(
         "apps/windows/portable/main_test.go",
