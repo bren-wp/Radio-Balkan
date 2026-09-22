@@ -4395,6 +4395,9 @@ func handleCoreClickFallback(x, y int32) bool {
 		canNavigate := canNavigateStations(currentIdx, len(app.stations), len(app.filtered))
 		canStop := canStopPlayback(currentIdx, app.audioStopped)
 		app.mu.RUnlock()
+		app.stateMu.RLock()
+		volume := app.state.Volume
+		app.stateMu.RUnlock()
 
 		cx := playerTransportCenter(width)
 		switch {
@@ -4410,10 +4413,10 @@ func handleCoreClickFallback(x, y int32) bool {
 		case canNavigate && x >= cx+108 && x <= cx+154 && y >= playerTop+17 && y <= playerTop+63:
 			playAdjacent(1)
 			return true
-		case x >= width-200 && x <= width-168 && y >= playerTop+27 && y <= playerTop+59:
+		case canAdjustVolume(volume, -5) && x >= width-200 && x <= width-168 && y >= playerTop+27 && y <= playerTop+59:
 			adjustVolume(-5)
 			return true
-		case x >= width-106 && x <= width-74 && y >= playerTop+27 && y <= playerTop+59:
+		case canAdjustVolume(volume, 5) && x >= width-106 && x <= width-74 && y >= playerTop+27 && y <= playerTop+59:
 			adjustVolume(5)
 			return true
 		}
