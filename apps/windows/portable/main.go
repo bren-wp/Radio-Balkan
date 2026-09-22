@@ -4356,6 +4356,18 @@ func toggleCurrentPlayback() {
 			}
 			return
 		}
+		// MediaFailed can arrive while the RESUME command is in flight. The
+		// runtime failure handler clears the backend; reconnect immediately
+		// instead of marking a dead MediaPlayer as "Uživo".
+		if currentAudioBackend() == audioBackendNone {
+			app.mu.RLock()
+			stillCurrent := app.playSeq == reqSeq && !app.audioStopped
+			app.mu.RUnlock()
+			if stillCurrent {
+				playStationByKey(currentKey, current)
+			}
+			return
+		}
 		app.mu.Lock()
 		if app.playSeq != reqSeq || app.audioStopped {
 			app.mu.Unlock()
