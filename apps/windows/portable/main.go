@@ -1736,10 +1736,11 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-play-paint")
 		return
 	}
+	homeForSwitch := cachedHomeDiscovery(columns)
 	app.mu.RLock()
 	firstTargetKey := ""
-	if len(app.filtered) > 0 {
-		firstTargetIdx := app.filtered[0]
+	if len(homeForSwitch.Popular) > 0 {
+		firstTargetIdx := homeForSwitch.Popular[0]
 		if firstTargetIdx >= 0 && firstTargetIdx < len(app.stations) {
 			firstTargetKey = stationKey(app.stations[firstTargetIdx])
 		}
@@ -1773,8 +1774,8 @@ func runCIInputSmoke() {
 	}
 	app.mu.RLock()
 	secondTargetKey := ""
-	if len(app.filtered) > 1 {
-		secondTargetIdx := app.filtered[1]
+	if len(homeForSwitch.Popular) > 1 {
+		secondTargetIdx := homeForSwitch.Popular[1]
 		if secondTargetIdx >= 0 && secondTargetIdx < len(app.stations) {
 			secondTargetKey = stationKey(app.stations[secondTargetIdx])
 		}
