@@ -468,6 +468,26 @@ func TestDefaultPlaybackIndexLocked(t *testing.T) {
 	}
 }
 
+func TestPendingPlayMatchesOnlyLatestGeneration(t *testing.T) {
+	app = App{playSeq: 12, pendingPlaySeq: 12}
+	app.mu.RLock()
+	if !pendingPlayCurrentLocked() {
+		app.mu.RUnlock()
+		t.Fatal("latest pending Play was not recognized")
+	}
+	app.mu.RUnlock()
+
+	app.mu.Lock()
+	app.playSeq = 13
+	app.mu.Unlock()
+	app.mu.RLock()
+	if pendingPlayCurrentLocked() {
+		app.mu.RUnlock()
+		t.Fatal("superseded pending Play remained active")
+	}
+	app.mu.RUnlock()
+}
+
 func TestStationSwitchStopsOnlyDifferentActiveBackend(t *testing.T) {
 	if !shouldStopAudioForStationSwitch("station-a", "station-b", audioBackendWPF) {
 		t.Fatal("different station must stop the active WPF backend before opening the replacement")
