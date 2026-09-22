@@ -606,7 +606,10 @@ def main() -> None:
         "Object.ReferenceEquals(player, sourcePlayer)",
         'Console.Out.WriteLine("EVENT FAILED " + token + " " + encoded)',
         "handleAudioBackendFailureForRequest(audioBackendWPF, eventSeq, detail)",
-        'fmt.Sprintf("PLAY %d %s %.2f", reqSeq, enc, vol)',
+        "func audioPlayCommand(reqSeq uint64, encoded string, volume float64) string",
+        'return fmt.Sprintf("PLAY %d %s %.2f", reqSeq, encoded, volume)',
+        "audioPlayCommand(0, encoded, 0.0)",
+        "audioPlayCommand(reqSeq, enc, vol)",
         "audio-smoke-ok token=",
         "audio-smoke-no-device token=",
         "'PING' { }",
@@ -687,6 +690,7 @@ def main() -> None:
         "TestSupersededPlayCannotClearNewerBackend",
         "TestMCIControlRequiresActiveBackend",
         "TestStaleWPFRuntimeFailureCannotAffectNewerPlay",
+        "TestAudioPlayCommandIncludesRequestGeneration",
     )
     forbid(
         "apps/windows/portable/main_test.go",
@@ -746,7 +750,7 @@ def main() -> None:
         '"PING", "VOLUME 0.60", "STOP", "PING"',
         "TestAudioEnginePlayReportsActualMediaOpenOutcome",
         "open-outcome.wav",
-        "PLAY 0 %s 0.00",
+        "audioPlayCommand(0, encoded, 0.00)",
         "0XC00D11BA",
         "structured MediaFailed outcome confirmed",
         "silentWAV",
