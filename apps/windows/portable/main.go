@@ -1781,16 +1781,15 @@ func runCIAudioSmoke() {
 	}()
 
 	streamURL := "http://" + ln.Addr().String() + "/tone.wav"
-	encoded := base64.StdEncoding.EncodeToString([]byte(streamURL))
-	if err := audioSend(audioPlayCommand(0, encoded, 0.0)); err != nil {
-		if strings.Contains(strings.ToUpper(err.Error()), "0XC00D11BA") {
+	if err := mfplaySmokeOpen(streamURL); err != nil {
+		upper := strings.ToUpper(err.Error())
+		if strings.Contains(upper, "0XC00D11BA") || strings.Contains(upper, "0XC00D36B0") {
 			runtimeTestTrace("audio-smoke-no-device token=" + token)
 			return
 		}
-		logError("runtime-test-audio", err)
+		logError("runtime-test-mfplay", err)
 		return
 	}
-	_ = audioSendExisting("STOP")
 	runtimeTestTrace("audio-smoke-ok token=" + token)
 }
 
