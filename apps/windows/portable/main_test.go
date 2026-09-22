@@ -259,6 +259,61 @@ func TestCompactDesktopWindowDefaultsAndRestoreCap(t *testing.T) {
 	}
 }
 
+func TestStartupHomeStateOverridesSavedBrowseLocation(t *testing.T) {
+	saved := PersistedState{
+		Favorites:    map[string]bool{"station": true},
+		Volume:       63,
+		CountryCode:  foreignCatalogCode,
+		Genre:        "rock",
+		Tab:          "recent",
+		WindowWidth:  1360,
+		WindowHeight: 820,
+	}
+	got := startupHomeState(saved)
+	if got.Tab != "all" || got.CountryCode != "HR" || got.Genre != "" {
+		t.Fatalf("startup state = tab %q country %q genre %q; want all/HR/empty", got.Tab, got.CountryCode, got.Genre)
+	}
+	if got.Volume != 63 || !got.Favorites["station"] {
+		t.Fatal("startup home reset changed non-navigation user state")
+	}
+}
+
+func TestApplyStartupHomeStateResetsRuntimeAndPersistedBrowseState(t *testing.T) {
+	app = App{
+		tab:       "recent",
+		country:   foreignCatalogCode,
+		genre:     "rock",
+		search:    "foreign",
+		scroll:    120,
+		detailKey: "station",
+		state: PersistedState{
+			Favorites:   map[string]bool{"station": true},
+			Volume:      71,
+			CountryCode: foreignCatalogCode,
+			Genre:       "rock",
+			Tab:         "recent",
+		},
+	}
+	applyStartupHomeState()
+
+	app.mu.RLock()
+	tab, country, genre, search, scroll, detail := app.tab, app.country, app.genre, app.search, app.scroll, app.detailKey
+	app.mu.RUnlock()
+	app.stateMu.RLock()
+	persisted := app.state
+	app.stateMu.RUnlock()
+
+	if tab != "all" || country != "HR" || genre != "" || search != "" || scroll != 0 || detail != "" {
+		t.Fatalf("runtime startup state = tab %q country %q genre %q search %q scroll %d detail %q", tab, country, genre, search, scroll, detail)
+	}
+	if persisted.Tab != "all" || persisted.CountryCode != "HR" || persisted.Genre != "" {
+		t.Fatalf("persisted startup state = tab %q country %q genre %q", persisted.Tab, persisted.CountryCode, persisted.Genre)
+	}
+	if persisted.Volume != 71 || !persisted.Favorites["station"] {
+		t.Fatal("startup reset changed non-navigation persisted state")
+	}
+}
+
 func TestValidateStateDefaultsToCroatiaOnlyOnFirstLaunch(t *testing.T) {
 	fresh := validateState(PersistedState{}, false)
 	if fresh.CountryCode != "HR" {
