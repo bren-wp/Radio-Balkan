@@ -3776,7 +3776,7 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	// compact windows.
 	cx := playerTransportCenter(cr.Right)
 	compactPlayer := cr.Right < 1180
-	canStop := canStopPlayback(currentIdx, stopped, pending)
+	canStop := canStopPlayback(currentIdx, stopped) || pending
 	selectFont(hdc, app.hFontBold)
 	prevColor := rgb(193, 199, 207)
 	if !canNavigate {
@@ -4302,8 +4302,8 @@ func toggleCurrentPlayback() {
 	})
 }
 
-func canStopPlayback(current int, stopped, pending bool) bool {
-	return pending || (current >= 0 && !stopped)
+func canStopPlayback(current int, stopped bool) bool {
+	return current >= 0 && !stopped
 }
 
 func canAdjustVolume(volume, delta int) bool {
@@ -4329,7 +4329,10 @@ func canNavigateStations(current, stationCount, filteredCount int) bool {
 
 func stopCurrentPlayback() {
 	app.mu.RLock()
-	canStop := canStopPlayback(currentStationIndexLocked(), app.audioStopped, pendingPlayCurrentLocked())
+	canStop := canStopPlayback(currentStationIndexLocked(), app.audioStopped)
+	if !canStop {
+		canStop = pendingPlayCurrentLocked()
+	}
 	app.mu.RUnlock()
 	if !canStop {
 		return
@@ -4543,7 +4546,7 @@ func handleCoreClickFallback(x, y int32) bool {
 		app.mu.RLock()
 		currentIdx := currentStationIndexLocked()
 		canNavigate := canNavigateStations(currentIdx, len(app.stations), len(app.filtered))
-		canStop := canStopPlayback(currentIdx, app.audioStopped, pendingPlayCurrentLocked())
+		canStop := canStopPlayback(currentIdx, app.audioStopped) || pendingPlayCurrentLocked()
 		app.mu.RUnlock()
 		app.stateMu.RLock()
 		volume := app.state.Volume
