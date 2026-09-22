@@ -1331,6 +1331,13 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=window-ready")
 		return
 	}
+	app.mu.RLock()
+	startsHome := app.tab == "all" && app.country == "HR" && app.genre == ""
+	app.mu.RUnlock()
+	if !startsHome {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=startup-home")
+		return
+	}
 
 	// Exercise the real Win32 mouse-message -> hit-region -> state path.
 	postClick(100, 153) // Top
