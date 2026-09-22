@@ -4890,6 +4890,31 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 	postUI()
 	return "", false
 }
+const playbackRecoveryCandidateLimit = 6
+
+func playbackRecoveryCandidates(station RadioStation, refreshed *RadioStation, alternatives []RadioStation, backups []string) []string {
+	candidates := make([]string, 0, 32)
+	// Prefer the catalog's direct/resolved pair first. If one of them just failed,
+	// the caller skips it while still allowing a distinct redirect/raw URL.
+	candidates = append(candidates, station.URLResolved, station.URL)
+	if refreshed != nil {
+		candidates = append(candidates, refreshed.URLResolved, refreshed.URL)
+	}
+	for _, alt := range alternatives {
+		if !sameStation(station, alt) || alt.LastCheckOK == 0 {
+			continue
+		}
+		candidates = append(candidates, alt.URLResolved, alt.URL)
+		if len(candidates) >= 24 {
+			break
+		}
+	}
+	// Persisted backups are valuable, but they may be older than the current
+	// Radio Browser result. Keep them after freshly verified catalog candidates.
+	candidates = append(candidates, backups...)
+	return uniqueStrings(candidates)
+}
+
 func tryAlternatePlayback(idx int, key, failedURL string, reqSeq uint64) (string, error) {
 	if !playRequestStillCurrent(reqSeq) {
 		return "", errPlayRequestSuperseded
@@ -4904,39 +4929,34 @@ func tryAlternatePlayback(idx int, key, failedURL string, reqSeq uint64) (string
 	station := app.stations[idx]
 	app.mu.RUnlock()
 
-	candidates := make([]string, 0, 24)
 	app.stateMu.RLock()
-	candidates = append(candidates, app.state.Backups[key]...)
+	backups := append([]string(nil), app.state.Backups[key]...)
 	app.stateMu.RUnlock()
-	candidates = append(candidates, station.URLResolved, station.URL)
 
+	var refreshed *RadioStation
 	if station.StationUUID != "" {
 		if !playRequestStillCurrent(reqSeq) {
 			return "", errPlayRequestSuperseded
 		}
-		if refreshed, err := fetchStationByUUID(station.StationUUID, station.CountryCode, station.SourceCountryCode); err == nil && refreshed != nil {
-			candidates = append(candidates, refreshed.URLResolved, refreshed.URL)
+		if one, err := fetchStationByUUID(station.StationUUID, station.CountryCode, station.SourceCountryCode); err == nil && one != nil {
+			refreshed = one
 		}
 	}
+
+	var alternatives []RadioStation
 	if station.Name != "" {
 		if !playRequestStillCurrent(reqSeq) {
 			return "", errPlayRequestSuperseded
 		}
-		if alternatives, err := searchStationsByName(station.Name, station.CountryCode, station.SourceCountryCode); err == nil {
-			for _, alt := range alternatives {
-				if sameStation(station, alt) {
-					candidates = append(candidates, alt.URLResolved, alt.URL)
-				}
-				if len(candidates) >= 24 {
-					break
-				}
-			}
+		if list, err := searchStationsByName(station.Name, station.CountryCode, station.SourceCountryCode); err == nil {
+			alternatives = list
 		}
 	}
 
+	candidates := playbackRecoveryCandidates(station, refreshed, alternatives, backups)
 	var lastErr error
 	tried := 0
-	for _, candidate := range uniqueStrings(candidates) {
+	for _, candidate := range candidates {
 		if !playRequestStillCurrent(reqSeq) {
 			return "", errPlayRequestSuperseded
 		}
@@ -4958,7 +4978,7 @@ func tryAlternatePlayback(idx int, key, failedURL string, reqSeq uint64) (string
 			lastErr = err
 			logError("audio-play-candidate", err)
 		}
-		if tried >= 3 {
+		if tried >= playbackRecoveryCandidateLimit {
 			break
 		}
 	}
@@ -6051,19 +6071,30 @@ func fetchStationByUUID(id, requestedCode, sourceCountryCode string) (*RadioStat
 	}
 	return nil, errors.New("nije pronađeno")
 }
-func searchStationsByName(name, requestedCode, sourceCountryCode string) ([]RadioStation, error) {
+func stationNameSearchPaths(name, requestedCode, sourceCountryCode string) []string {
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return nil, errors.New("prazan naziv")
+		return nil
 	}
 	q := url.QueryEscape(name)
 	queryCountry := strings.ToUpper(strings.TrimSpace(requestedCode))
 	if isSupplementalCatalogCode(queryCountry) {
 		queryCountry = strings.ToUpper(strings.TrimSpace(sourceCountryCode))
 	}
-	paths := []string{"/json/stations/search?name=" + q + "&hidebroken=false&limit=50"}
-	if queryCountry != "" {
-		paths = []string{"/json/stations/search?name=" + q + "&countrycode=" + url.QueryEscape(queryCountry) + "&hidebroken=false&limit=50", paths[0]}
+	base := "/json/stations/search?name=" + q + "&hidebroken=true&order=votes&reverse=true&limit=50"
+	if queryCountry == "" {
+		return []string{base}
+	}
+	return []string{
+		"/json/stations/search?name=" + q + "&countrycode=" + url.QueryEscape(queryCountry) + "&hidebroken=true&order=votes&reverse=true&limit=50",
+		base,
+	}
+}
+
+func searchStationsByName(name, requestedCode, sourceCountryCode string) ([]RadioStation, error) {
+	paths := stationNameSearchPaths(name, requestedCode, sourceCountryCode)
+	if len(paths) == 0 {
+		return nil, errors.New("prazan naziv")
 	}
 	var last error
 	for _, base := range apiBases() {
@@ -6085,6 +6116,15 @@ func searchStationsByName(name, requestedCode, sourceCountryCode string) ([]Radi
 					filtered = append(filtered, st)
 				}
 				if len(filtered) > 0 {
+					sort.SliceStable(filtered, func(i, j int) bool {
+						if filtered[i].LastCheckOK != filtered[j].LastCheckOK {
+							return filtered[i].LastCheckOK > filtered[j].LastCheckOK
+						}
+						if filtered[i].Votes != filtered[j].Votes {
+							return filtered[i].Votes > filtered[j].Votes
+						}
+						return strings.ToLower(filtered[i].Name) < strings.ToLower(filtered[j].Name)
+					})
 					return filtered, nil
 				}
 			} else if err != nil {
