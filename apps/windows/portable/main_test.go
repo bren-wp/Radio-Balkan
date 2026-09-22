@@ -786,6 +786,50 @@ func TestStopCurrentPlaybackAdvancesRequestGeneration(t *testing.T) {
 	}
 }
 
+func TestPauseCurrentPlaybackAdvancesRequestGeneration(t *testing.T) {
+	st := RadioStation{StationUUID: "pause-seq", Name: "Pause Sequence"}
+	app = App{
+		done:         make(chan struct{}),
+		stations:     []RadioStation{st},
+		filtered:     []int{0},
+		current:      0,
+		currentKey:   stationKey(st),
+		playing:      true,
+		audioStopped: false,
+		audioBackend: audioBackendNone,
+		playSeq:      31,
+	}
+	toggleCurrentPlayback()
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.playSeq != 32 {
+		t.Fatalf("Pause playSeq = %d; want 32 so delayed recovery and older controls become stale", app.playSeq)
+	}
+	if app.playing || app.audioStopped {
+		t.Fatalf("Pause state playing=%v stopped=%v; want false/false", app.playing, app.audioStopped)
+	}
+}
+
+func TestStalePauseAndResumeControlsCannotAffectNewerPlayback(t *testing.T) {
+	app = App{
+		done:         make(chan struct{}),
+		playSeq:      42,
+		audioBackend: audioBackendWPF,
+	}
+	if err := audioPauseForRequest(41); !errors.Is(err, errPlayRequestSuperseded) {
+		t.Fatalf("stale Pause returned %v; want errPlayRequestSuperseded", err)
+	}
+	if got := currentAudioBackend(); got != audioBackendWPF {
+		t.Fatalf("stale Pause changed newer backend to %v; want WPF", got)
+	}
+	if err := audioResumeForRequest(41); !errors.Is(err, errPlayRequestSuperseded) {
+		t.Fatalf("stale Resume returned %v; want errPlayRequestSuperseded", err)
+	}
+	if got := currentAudioBackend(); got != audioBackendWPF {
+		t.Fatalf("stale Resume changed newer backend to %v; want WPF", got)
+	}
+}
+
 func TestAudioEngineStartupWaitCancelsSupersededPlay(t *testing.T) {
 	app = App{
 		done:    make(chan struct{}),
