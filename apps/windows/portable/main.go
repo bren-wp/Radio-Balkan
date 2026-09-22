@@ -1441,6 +1441,48 @@ func runCIInputSmoke() {
 		return
 	}
 
+	// Resize the actual top-level window, wait for WM_SIZE + repaint, then
+	// continue through the real hit regions. This catches stale pre-resize hit
+	// boxes and search-control geometry that can make a visually-correct UI dead.
+	app.mu.RLock()
+	beforeResizeW, beforeResizeH := app.clientWidth, app.clientHeight
+	app.mu.RUnlock()
+	resized, _, _ := procSetWindowPos.Call(uintptr(app.hwnd), 0, 0, 0, 1100, 720, 0x0016) // NOMOVE|NOZORDER|NOACTIVATE
+	if resized == 0 || !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		changed := app.clientWidth != beforeResizeW || app.clientHeight != beforeResizeH
+		valid := app.clientWidth >= 1024 && app.clientHeight > playerHeight
+		app.mu.RUnlock()
+		return changed && valid
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=resize")
+		return
+	}
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=resize-paint")
+		return
+	}
+	postClick(100, 197)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "countries"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=resize-click")
+		return
+	}
+	postClick(100, 109)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "all" && app.country == "HR"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=resize-home")
+		return
+	}
+
 	// Exercise the native EDIT -> WM_COMMAND/EN_CHANGE path, then ensure sidebar
 	// navigation still works while the child search control owns focus.
 	if app.edit == 0 {
