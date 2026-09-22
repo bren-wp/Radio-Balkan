@@ -7969,7 +7969,12 @@ func audioSetVolume(v int) {
 	}
 	switch currentAudioBackend() {
 	case audioBackendWPF:
-		_ = audioSendExisting(fmt.Sprintf("VOLUME %.2f", float64(v)/100.0))
+		if err := audioSendExisting(fmt.Sprintf("VOLUME %.2f", float64(v)/100.0)); err != nil {
+			logError("audio-volume", err)
+			// A failed WPF control may have reset/killed the helper. Recover now
+			// instead of leaving a stale WPF backend that the watchdog trusts.
+			handleAudioBackendFailure(audioBackendWPF, "volume control failed")
+		}
 	case audioBackendMCI:
 		_, _ = mciQueryExisting(fmt.Sprintf("setaudio radio volume to %d", v*10))
 	}
