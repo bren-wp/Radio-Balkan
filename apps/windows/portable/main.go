@@ -8457,7 +8457,8 @@ func inputDialog(parent syscall.Handle, title, prompt, def string) (string, bool
 	if edit == 0 || label == 0 || cancelBtn == 0 || okBtn == 0 {
 		logError("input-dialog-controls", errors.New("nije moguće izraditi sve kontrole dijaloga"))
 		procDestroyWindow.Call(h)
-		return inputDialogPowerShell(title, prompt, def)
+		queueAlert("Greška", "Nije moguće otvoriti ulazni dijalog.", MB_ICONERROR)
+		return "", false
 	}
 	st.edit = syscall.Handle(edit)
 	for _, ch := range []uintptr{label, edit, cancelBtn, okBtn} {
