@@ -7508,9 +7508,9 @@ try { $p.Dispose() } catch {}`
 		scanner := bufio.NewScanner(out)
 		for scanner.Scan() {
 			line := strings.TrimSpace(scanner.Text())
-			if detail, ok := parseAudioRuntimeFailure(line); ok {
+			if eventSeq, detail, ok := parseAudioRuntimeFailure(line); ok {
 				safeGo("audio-runtime-failure", func() {
-					handleAudioBackendFailure(audioBackendWPF, detail)
+					handleAudioBackendFailureForRequest(audioBackendWPF, eventSeq, detail)
 				})
 				continue
 			}
@@ -7620,36 +7620,76 @@ try { $p.Dispose() } catch {}`
 	return nil
 }
 
-func parseAudioRuntimeFailure(line string) (string, bool) {
+func parseAudioRuntimeFailure(line string) (uint64, string, bool) {
 	const prefix = "EVENT FAILED "
 	if !strings.HasPrefix(line, prefix) {
-		return "", false
+		return 0, "", false
 	}
-	encoded := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+	payload := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+	parts := strings.SplitN(payload, " ", 2)
+	if len(parts) != 2 {
+		return 0, "", false
+	}
+	reqSeq, err := strconv.ParseUint(strings.TrimSpace(parts[0]), 10, 64)
+	if err != nil {
+		return 0, "", false
+	}
+	encoded := strings.TrimSpace(parts[1])
 	if encoded == "" {
-		return "media failed", true
+		return reqSeq, "media failed", true
 	}
 	decoded, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
-		return "media failed", true
+		return reqSeq, "media failed", true
 	}
 	detail := strings.TrimSpace(string(decoded))
 	if detail == "" {
 		detail = "media failed"
 	}
-	return detail, true
+	return reqSeq, detail, true
 }
 
 func handleAudioBackendFailure(expected audioBackendKind, detail string) {
+	handleAudioBackendFailureForRequest(expected, 0, detail)
+}
+
+func handleAudioBackendFailureForRequest(expected audioBackendKind, reqSeq uint64, detail string) {
 	if shuttingDown() {
 		return
+	}
+	if reqSeq != 0 {
+		// A runtime event can be read immediately after the PLAY ACK while the
+		// command goroutine still owns audioMu and has not committed WPF backend
+		// ownership yet. Wait briefly for that commit, but reject the event as
+		// soon as a newer playback generation wins.
+		deadline := time.Now().Add(500 * time.Millisecond)
+		for {
+			app.mu.RLock()
+			currentSeq := app.playSeq
+			backend := app.audioBackend
+			app.mu.RUnlock()
+			if currentSeq != reqSeq {
+				return
+			}
+			if backend == expected {
+				break
+			}
+			if backend != audioBackendNone || time.Now().After(deadline) {
+				return
+			}
+			select {
+			case <-time.After(10 * time.Millisecond):
+			case <-app.done:
+				return
+			}
+		}
 	}
 	if strings.TrimSpace(detail) != "" {
 		logError("audio-runtime-failure", errors.New(detail))
 	}
 
 	app.mu.Lock()
-	if app.audioBackend != expected {
+	if app.audioBackend != expected || (reqSeq != 0 && app.playSeq != reqSeq) {
 		app.mu.Unlock()
 		return
 	}
@@ -7950,7 +7990,7 @@ func audioPlayRequest(raw string, reqSeq uint64) error {
 		vol = 1
 	}
 	enc := base64.StdEncoding.EncodeToString([]byte(raw))
-	if err := audioSendForRequest(fmt.Sprintf("PLAY %s %.2f", enc, vol), reqSeq); err == nil {
+	if err := audioSendForRequest(fmt.Sprintf("PLAY %d %s %.2f", reqSeq, enc, vol), reqSeq); err == nil {
 		return nil
 	} else {
 		if errors.Is(err, errPlayRequestSuperseded) {
