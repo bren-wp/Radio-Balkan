@@ -1336,6 +1336,43 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=top")
 		return
 	}
+
+	// Favorite must travel through the actual rendered library-card hit region.
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=favorite-paint")
+		return
+	}
+	app.mu.RLock()
+	favoriteIdx := -1
+	widthForFavorite := app.clientWidth
+	if len(app.filtered) > 0 {
+		favoriteIdx = app.filtered[0]
+	}
+	favoriteKey := ""
+	if favoriteIdx >= 0 && favoriteIdx < len(app.stations) {
+		favoriteKey = stationKey(app.stations[favoriteIdx])
+	}
+	app.mu.RUnlock()
+	if favoriteKey == "" {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=favorite-station")
+		return
+	}
+	app.stateMu.RLock()
+	favoriteBefore := app.state.Favorites[favoriteKey]
+	app.stateMu.RUnlock()
+	favoriteMainL := sidebarWidth + mainPad
+	favoriteMainR := widthForFavorite - mainPad
+	favoriteColW := (favoriteMainR - favoriteMainL - 14) / 2
+	postClick(favoriteMainL+favoriteColW-83, 167)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.stateMu.RLock()
+		changed := app.state.Favorites[favoriteKey] != favoriteBefore
+		app.stateMu.RUnlock()
+		return changed
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=favorite")
+		return
+	}
 	postClick(100, 197) // Zemlje
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
@@ -1346,6 +1383,16 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=countries")
 		return
 	}
+	postClick(100, 241) // Žanrovi
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "genres" && !app.countryMenuOpen && !app.genreMenuOpen
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=genres")
+		return
+	}
 	postClick(100, 109) // Početna
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
@@ -1354,6 +1401,89 @@ func runCIInputSmoke() {
 		return ok
 	}) {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=home")
+		return
+	}
+
+	app.mu.RLock()
+	widthForHeader := app.clientWidth
+	app.mu.RUnlock()
+	_, _, countryL, countryR, genreL, genreR, _, _, _, _ := headerLayout(widthForHeader)
+	postClick((countryL+countryR)/2, 46)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "countries" && !app.countryMenuOpen && !app.genreMenuOpen
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=header-countries")
+		return
+	}
+	postClick((genreL+genreR)/2, 46)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "genres" && !app.countryMenuOpen && !app.genreMenuOpen
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=header-genres")
+		return
+	}
+	postClick(100, 109)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "all" && app.country == "HR"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-after-header")
+		return
+	}
+
+	// Exercise the native EDIT -> WM_COMMAND/EN_CHANGE path, then ensure sidebar
+	// navigation still works while the child search control owns focus.
+	if app.edit == 0 {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=search-hwnd")
+		return
+	}
+	procSetWindowText.Call(uintptr(app.edit), uintptr(unsafe.Pointer(u16("CI Radio 00001"))))
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.search == "CI Radio 00001"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=search-change")
+		return
+	}
+	procSetWindowText.Call(uintptr(app.edit), uintptr(unsafe.Pointer(u16(""))))
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.search == ""
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=search-clear")
+		return
+	}
+	procSetFocus.Call(uintptr(app.edit))
+	postClick(100, 153)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "popular"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=search-focus-sidebar")
+		return
+	}
+	postClick(100, 109)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "all" && app.country == "HR"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-after-search")
 		return
 	}
 
@@ -1421,7 +1551,8 @@ func runCIInputSmoke() {
 		return
 	}
 
-	// Exercise a real rendered station Play hit-region, not only fixed navigation.
+	// Exercise the station card itself, its in-app Back action, then the real
+	// rendered Play hit-region. None of these may open a secondary window.
 	app.mu.RLock()
 	widthForCard := app.clientWidth
 	beforePlaySeq := app.playSeq
@@ -1435,6 +1566,34 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-card-paint")
 		return
 	}
+	postClick(mainL+80, 200)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		opened := app.detailKey != ""
+		app.mu.RUnlock()
+		return opened
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-details")
+		return
+	}
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-details-paint")
+		return
+	}
+	postClick(mainL+70, 110)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		closed := app.detailKey == ""
+		app.mu.RUnlock()
+		return closed
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-back")
+		return
+	}
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-play-paint")
+		return
+	}
 	postClick(firstPlayX, 200)
 	if !waitFor(700*time.Millisecond, func() bool {
 		app.mu.RLock()
@@ -1445,11 +1604,40 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-play")
 		return
 	}
-	// Cancel the synthetic playback request before the independent local-WAV
-	// audio smoke starts; this keeps the input test deterministic and offline.
+	// Cancel the synthetic internet request before the independent local-WAV
+	// audio smoke starts; request-aware playback must observe this sequence bump.
 	app.mu.Lock()
 	app.playSeq++
+	if len(app.stations) == 0 {
+		app.mu.Unlock()
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=stop-station")
+		return
+	}
+	app.current = 0
+	app.currentKey = stationKey(app.stations[0])
+	app.playing = true
+	app.audioStopped = false
+	beforeStopSeq := app.playSeq
+	app.audioBackend = audioBackendNone
 	app.mu.Unlock()
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=stop-paint")
+		return
+	}
+	app.mu.RLock()
+	stopWidth, stopHeight := app.clientWidth, app.clientHeight
+	app.mu.RUnlock()
+	stopCX := playerTransportCenter(stopWidth)
+	postClick(stopCX+68, stopHeight-playerHeight+45)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		stopped := app.audioStopped && !app.playing && app.playSeq > beforeStopSeq
+		app.mu.RUnlock()
+		return stopped
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=player-stop")
+		return
+	}
 
 	// Reproduce the production failure mode deliberately: hold the backend lock,
 	// click volume, then click navigation. Neither click may block the UI thread.
@@ -4713,6 +4901,10 @@ func playStation(idx int) {
 		safeGo("metadata-"+key, func() { metadataLoop(seq, idx, key, final) })
 	})
 }
+func playbackBackendNeedsRecovery(active bool, backend audioBackendKind) bool {
+	return active && backend == audioBackendNone
+}
+
 func playbackWatchdog(idx int, stationID string) {
 	for {
 		timer := time.NewTimer(45 * time.Second)
@@ -4743,7 +4935,7 @@ func playbackWatchdog(idx int, stationID string) {
 		// A live player is the source of truth. Do not issue a second HTTP GET
 		// against an already-playing Icecast/Shoutcast/HLS stream: many healthy
 		// stations reject or stall probes even while the media backend is fine.
-		if backend != audioBackendNone {
+		if !playbackBackendNeedsRecovery(active, backend) {
 			continue
 		}
 
