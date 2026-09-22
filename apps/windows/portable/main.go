@@ -7383,7 +7383,7 @@ try { $p.Dispose() } catch {}`
 			}
 			return errors.New("audio engine se nije ispravno inicijalizirao")
 		}
-	case <-time.After(10 * time.Second):
+	case <-time.After(20 * time.Second):
 		_ = in.Close()
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
