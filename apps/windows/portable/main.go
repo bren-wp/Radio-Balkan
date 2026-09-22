@@ -2998,7 +2998,6 @@ func cachedHomeDiscovery(columns int) HomeDiscoveryCache {
 	return HomeDiscoveryCache{Columns: columns}
 }
 
-
 func addExcluded(excluded map[int]struct{}, ids []int) {
 	for _, idx := range ids {
 		excluded[idx] = struct{}{}
@@ -3994,6 +3993,7 @@ func handleKeyDown(key uint32) {
 		safeGo("refresh-hotkey", refreshAll)
 	}
 }
+
 type playbackToggleAction uint8
 
 const (
