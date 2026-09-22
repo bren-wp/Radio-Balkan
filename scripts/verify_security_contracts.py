@@ -635,6 +635,9 @@ def main() -> None:
         "caller must never tear down backend state after this function returns.",
         "Serialize the complete MCI fallback lifecycle with all WPF/backend commands.",
         "abortStaleMCI := func() bool",
+        "func mciQueryExisting(cmd string) (string, error)",
+        'mode, err := mciQueryExisting("status radio mode")',
+        "audioStopForRequest(0)",
         'safeGo("audio-pause-control", func() {',
         'safeGo("audio-resume-control", func() {',
         "if shuttingDown() {",
@@ -676,6 +679,7 @@ def main() -> None:
         "TestWPFPlayReplacesActiveMCIBackend",
         "TestStopCurrentPlaybackAdvancesRequestGeneration",
         "TestSupersededPlayCannotClearNewerBackend",
+        "TestMCIControlRequiresActiveBackend",
     )
     forbid(
         "apps/windows/portable/main_test.go",
