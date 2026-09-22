@@ -7184,6 +7184,7 @@ func addRecentLocked(id string) {
 	}
 	app.state.Recent = out
 }
+
 const audioEngineStartupTimeout = 20 * time.Second
 
 func startAudioEngineLocked() error {
