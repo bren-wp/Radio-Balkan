@@ -83,6 +83,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     private TextView heroName, heroMeta, stationsTitle, statusText, playerName, playerMeta;
     private ImageView playerArtwork;
     private View searchBox, playerStationInfo;
+    private View heroSection, quickAreasSection, stationsHeaderSection, brendigoFooter;
     private LinearLayout browsePanel;
     private String browseSection = "countries";
     private EqualizerView playerEqualizer;
@@ -176,8 +177,10 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.VERTICAL);
-        header.addView(buildHero(), marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(148), 0, 3, 0, 8));
-        header.addView(buildQuickAreas(), marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48), 0, 0, 0, 8));
+        heroSection = buildHero();
+        header.addView(heroSection, marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(148), 0, 3, 0, 8));
+        quickAreasSection = buildQuickAreas();
+        header.addView(quickAreasSection, marginParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48), 0, 0, 0, 8));
         browsePanel = buildInlineBrowsePanel();
         browsePanel.setVisibility(View.GONE);
         header.addView(browsePanel, marginParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0, 0, 0, 8));
@@ -201,12 +204,14 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         genreLp.setMargins(dp(6), 0, 0, 0);
         browseActions.addView(genresButton, genreLp);
         stationsHeader.addView(browseActions, new LinearLayout.LayoutParams(dp(186), dp(46)));
-        header.addView(stationsHeader);
+        stationsHeaderSection = stationsHeader;
+        header.addView(stationsHeaderSection);
 
         adapter = new StationAdapter(this, this, images);
         list = new ListView(this);
         list.addHeaderView(header, null, false);
-        list.addFooterView(buildBrendigoFooter(), null, true);
+        brendigoFooter = buildBrendigoFooter();
+        list.addFooterView(brendigoFooter, null, true);
         list.setAdapter(adapter);
         list.setDivider(null);
         list.setDividerHeight(0);
@@ -531,6 +536,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         item.setContentDescription(title);
         item.setOnClickListener(v -> {
             if ("more".equals(action)) { showAppMenu(); return; }
+            hideBrowsePage();
             selectBottomNav(action);
             if ("all".equals(action)) {
                 tab = "all"; country = "HR"; genre = "";
@@ -802,8 +808,20 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setPadding(dp(12), dp(10), dp(12), dp(10));
         panel.setBackground(rounded(0xFF101821, 0xFF4A382A, 18));
-        panel.setContentDescription("Pregled zemalja i žanrova");
+        panel.setContentDescription("Pregled");
         return panel;
+    }
+
+    private boolean isBrowsePageVisible() {
+        return browsePanel != null && browsePanel.getVisibility() == View.VISIBLE;
+    }
+
+    private void hideBrowsePage() {
+        if (browsePanel != null) browsePanel.setVisibility(View.GONE);
+        if (heroSection != null) heroSection.setVisibility(View.VISIBLE);
+        if (quickAreasSection != null) quickAreasSection.setVisibility(View.VISIBLE);
+        if (stationsHeaderSection != null) stationsHeaderSection.setVisibility(View.VISIBLE);
+        if (brendigoFooter != null) brendigoFooter.setVisibility(View.VISIBLE);
     }
 
     private void populateInlineBrowsePanel() {
@@ -811,6 +829,7 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         browsePanel.removeAllViews();
 
         boolean countriesMode = !"genres".equals(browseSection);
+        browsePanel.setContentDescription(countriesMode ? "Pregled zemalja" : "Pregled žanrova");
         LinearLayout heading = new LinearLayout(this);
         heading.setGravity(Gravity.CENTER_VERTICAL);
         TextView title = label(countriesMode ? "Zemlje" : "Žanrovi", 17, Color.WHITE, true);
@@ -825,7 +844,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
         browsePanel.addView(heading, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
 
         if (countriesMode) {
-            LinearLayout countries = chipRow();
+            LinearLayout countries = new LinearLayout(this);
+            countries.setOrientation(LinearLayout.VERTICAL);
             Map<String,Integer> counts = countryCounts();
             for (String[] entry : RadioRepository.COUNTRIES) {
                 String code = entry[0], name = entry[1];
@@ -833,6 +853,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 int count = counts.getOrDefault(code, 0);
                 Button button = chip(count > 0 ? name + " · " + count : name, code.equalsIgnoreCase(country) && genre.isEmpty());
                 button.setTag(code);
+                button.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+                button.setContentDescription(name + (count > 0 ? ", " + count + " stanica" : ""));
                 applyFlag(button, code);
                 button.setOnClickListener(v -> {
                     tab = "all";
@@ -842,17 +864,20 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                     state.setCountry(code);
                     state.setGenre("");
                     selectBottomNav("filter");
-                    browsePanel.setVisibility(View.GONE);
+                    hideBrowsePage();
                     applyFilterAsync();
                     if (list != null) list.smoothScrollToPosition(0);
                 });
-                countries.addView(button, chipParams());
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+                lp.setMargins(0, 0, 0, dp(6));
+                countries.addView(button, lp);
             }
-            browsePanel.addView(horizontal(countries), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+            browsePanel.addView(countries, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             return;
         }
 
-        LinearLayout genres = chipRow();
+        LinearLayout genres = new LinearLayout(this);
+        genres.setOrientation(LinearLayout.VERTICAL);
         String[][] items = {
                 {"Svi žanrovi",""}, {"Domaća / regionalna","domaca"}, {"Pop & Rock","pop"},
                 {"Narodna / Folk","folk"}, {"Elektronička","electronic"}, {"Jazz","jazz"},
@@ -862,6 +887,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
             String label = item[0], value = item[1];
             Button button = chip(label, value.equalsIgnoreCase(genre));
             button.setTag(value);
+            button.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+            button.setContentDescription("Žanr " + label);
             button.setOnClickListener(v -> {
                 tab = "all";
                 country = "";
@@ -870,26 +897,29 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 state.setCountry("");
                 state.setGenre(value);
                 selectBottomNav(value.isEmpty() ? "all" : "filter");
-                browsePanel.setVisibility(View.GONE);
+                hideBrowsePage();
                 applyFilterAsync();
                 if (list != null) list.smoothScrollToPosition(0);
             });
-            genres.addView(button, chipParams());
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+            lp.setMargins(0, 0, 0, dp(6));
+            genres.addView(button, lp);
         }
-        browsePanel.addView(horizontal(genres), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+        browsePanel.addView(genres, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     }
 
     private void showBrowsePage(String section) {
         if (browsePanel == null) return;
         String requested = "genres".equals(section) ? "genres" : "countries";
-        boolean sameVisible = browsePanel.getVisibility() == View.VISIBLE && requested.equals(browseSection);
-        if (sameVisible) {
-            browsePanel.setVisibility(View.GONE);
-            return;
-        }
         browseSection = requested;
+        if (searchBox != null && searchBox.getVisibility() == View.VISIBLE) setSearchVisible(false);
         populateInlineBrowsePanel();
+        if (heroSection != null) heroSection.setVisibility(View.GONE);
+        if (quickAreasSection != null) quickAreasSection.setVisibility(View.GONE);
+        if (stationsHeaderSection != null) stationsHeaderSection.setVisibility(View.GONE);
+        if (brendigoFooter != null) brendigoFooter.setVisibility(View.GONE);
         browsePanel.setVisibility(View.VISIBLE);
+        if (adapter != null) adapter.setSnapshot(new ArrayList<>(), currentKey, playing);
         if (list != null) list.smoothScrollToPosition(0);
     }
 
@@ -1004,7 +1034,8 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
                 postIfActive(() -> {
                     if (generation != filterGeneration.get()) return;
                     visibleStations = out;
-                    adapter.setSnapshot(out, currentKey, playing);
+                    if (isBrowsePageVisible()) adapter.setSnapshot(new ArrayList<>(), currentKey, playing);
+                    else adapter.setSnapshot(out, currentKey, playing);
                     featured = out.isEmpty() ? null : out.get(0);
                     if (featured == null) {
                         heroName.setText("Nema rezultata");
@@ -1496,6 +1527,12 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     }
 
     @Override public void onBackPressed() {
+        if (isBrowsePageVisible()) {
+            hideBrowsePage();
+            applyFilterAsync();
+            if (list != null) list.smoothScrollToPosition(0);
+            return;
+        }
         if (searchBox != null && searchBox.getVisibility() == View.VISIBLE) {
             setSearchVisible(false);
             return;
