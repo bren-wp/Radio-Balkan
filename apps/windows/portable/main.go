@@ -7210,6 +7210,9 @@ public sealed class RadioBalkanMediaHost : IDisposable
     private readonly ManualResetEventSlim ready = new ManualResetEventSlim(false);
     private bool disposed;
     private bool currentOpened;
+    private string currentToken = "";
+    private bool runtimeArmed;
+    private string pendingRuntimeFailure = "";
 
     public RadioBalkanMediaHost()
     {
@@ -7224,35 +7227,40 @@ public sealed class RadioBalkanMediaHost : IDisposable
 
     private void ThreadMain()
     {
-        player = new MediaPlayer();
-        player.MediaFailed += (sender, args) =>
-        {
-            var message = args != null && args.ErrorException != null ? args.ErrorException.Message : "media failed";
-            NotifyRuntimeFailure(message);
-        };
-        player.MediaEnded += (sender, args) => NotifyRuntimeFailure("media ended");
         dispatcher = Dispatcher.CurrentDispatcher;
         ready.Set();
         Dispatcher.Run();
     }
 
-    private void NotifyRuntimeFailure(string message)
+    private void EmitRuntimeFailure(string token, string message)
     {
-        // Opening failures are returned synchronously by Play(). Only emit an
-        // asynchronous event after MediaOpened confirmed the current stream.
-        if (!currentOpened || disposed) return;
-        currentOpened = false;
         try
         {
             var text = String.IsNullOrWhiteSpace(message) ? "media failed" : message;
             var encoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(text));
-            Console.Out.WriteLine("EVENT FAILED " + encoded);
+            Console.Out.WriteLine("EVENT FAILED " + token + " " + encoded);
             Console.Out.Flush();
         }
         catch { }
     }
 
-    public bool Play(string uri, double volume, int timeoutMs, out string error)
+    private void NotifyRuntimeFailure(MediaPlayer sourcePlayer, string token, string message)
+    {
+        // Each Play owns a distinct MediaPlayer instance and request token.
+        // Delayed events from a closed previous stream cannot fail the new stream.
+        if (disposed || sourcePlayer == null || !Object.ReferenceEquals(player, sourcePlayer)) return;
+        if (!String.Equals(currentToken, token, StringComparison.Ordinal) || !currentOpened) return;
+        currentOpened = false;
+        var text = String.IsNullOrWhiteSpace(message) ? "media failed" : message;
+        if (!runtimeArmed)
+        {
+            pendingRuntimeFailure = text;
+            return;
+        }
+        EmitRuntimeFailure(token, text);
+    }
+
+    public bool Play(string uri, double volume, int timeoutMs, string token, out string error)
     {
         error = "";
         if (disposed || dispatcher == null)
@@ -7264,32 +7272,57 @@ public sealed class RadioBalkanMediaHost : IDisposable
         var done = new ManualResetEventSlim(false);
         var opened = false;
         var failure = "";
+        MediaPlayer next = null;
         EventHandler onOpened = null;
         EventHandler<ExceptionEventArgs> onFailed = null;
+        EventHandler onEnded = null;
 
         dispatcher.BeginInvoke(new Action(() =>
         {
-            onOpened = (sender, args) =>
-            {
-                currentOpened = true;
-                opened = true;
-                done.Set();
-            };
-            onFailed = (sender, args) =>
-            {
-                failure = args != null && args.ErrorException != null ? args.ErrorException.Message : "media failed";
-                done.Set();
-            };
-            player.MediaOpened += onOpened;
-            player.MediaFailed += onFailed;
             try
             {
+                var previous = player;
+                player = null;
                 currentOpened = false;
-                player.Stop();
-                player.Close();
-                player.Volume = Math.Max(0.0, Math.Min(1.0, volume));
-                player.Open(new Uri(uri, UriKind.Absolute));
-                player.Play();
+                currentToken = token ?? "";
+                runtimeArmed = false;
+                pendingRuntimeFailure = "";
+                if (previous != null)
+                {
+                    try { previous.Stop(); } catch { }
+                    try { previous.Close(); } catch { }
+                }
+
+                next = new MediaPlayer();
+                player = next;
+                onOpened = (sender, args) =>
+                {
+                    if (!Object.ReferenceEquals(player, next) || !String.Equals(currentToken, token, StringComparison.Ordinal)) return;
+                    currentOpened = true;
+                    opened = true;
+                    done.Set();
+                };
+                onFailed = (sender, args) =>
+                {
+                    var message = args != null && args.ErrorException != null ? args.ErrorException.Message : "media failed";
+                    if (!opened)
+                    {
+                        failure = message;
+                        done.Set();
+                        return;
+                    }
+                    NotifyRuntimeFailure(next, token, message);
+                };
+                onEnded = (sender, args) =>
+                {
+                    if (opened) NotifyRuntimeFailure(next, token, "media ended");
+                };
+                next.MediaOpened += onOpened;
+                next.MediaFailed += onFailed;
+                next.MediaEnded += onEnded;
+                next.Volume = Math.Max(0.0, Math.Min(1.0, volume));
+                next.Open(new Uri(uri, UriKind.Absolute));
+                next.Play();
             }
             catch (Exception ex)
             {
@@ -7305,8 +7338,22 @@ public sealed class RadioBalkanMediaHost : IDisposable
         {
             dispatcher.Invoke(new Action(() =>
             {
-                if (onOpened != null) player.MediaOpened -= onOpened;
-                if (onFailed != null) player.MediaFailed -= onFailed;
+                if ((!opened || !String.IsNullOrEmpty(failure)) && next != null)
+                {
+                    if (onOpened != null) next.MediaOpened -= onOpened;
+                    if (onFailed != null) next.MediaFailed -= onFailed;
+                    if (onEnded != null) next.MediaEnded -= onEnded;
+                    if (Object.ReferenceEquals(player, next))
+                    {
+                        player = null;
+                        currentOpened = false;
+                        currentToken = "";
+                        runtimeArmed = false;
+                        pendingRuntimeFailure = "";
+                    }
+                    try { next.Stop(); } catch { }
+                    try { next.Close(); } catch { }
+                }
             }), DispatcherPriority.Send);
         }
         catch (Exception ex)
@@ -7319,10 +7366,42 @@ public sealed class RadioBalkanMediaHost : IDisposable
         return opened && String.IsNullOrEmpty(failure);
     }
 
-    public void Pause() { Invoke(() => player.Pause()); }
-    public void Resume() { Invoke(() => player.Play()); }
-    public void Stop() { Invoke(() => { currentOpened = false; player.Stop(); player.Close(); }); }
-    public void SetVolume(double value) { Invoke(() => player.Volume = Math.Max(0.0, Math.Min(1.0, value))); }
+    public void Arm(string token)
+    {
+        if (disposed || dispatcher == null) return;
+        dispatcher.Invoke(new Action(() =>
+        {
+            if (player == null || !String.Equals(currentToken, token, StringComparison.Ordinal)) return;
+            runtimeArmed = true;
+            if (!String.IsNullOrEmpty(pendingRuntimeFailure))
+            {
+                var pending = pendingRuntimeFailure;
+                pendingRuntimeFailure = "";
+                EmitRuntimeFailure(token, pending);
+            }
+        }), DispatcherPriority.Send);
+    }
+
+    public void Pause() { Invoke(() => { if (player != null) player.Pause(); }); }
+    public void Resume() { Invoke(() => { if (player != null) player.Play(); }); }
+    public void Stop()
+    {
+        Invoke(() =>
+        {
+            currentOpened = false;
+            currentToken = "";
+            runtimeArmed = false;
+            pendingRuntimeFailure = "";
+            var current = player;
+            player = null;
+            if (current != null)
+            {
+                try { current.Stop(); } catch { }
+                try { current.Close(); } catch { }
+            }
+        });
+    }
+    public void SetVolume(double value) { Invoke(() => { if (player != null) player.Volume = Math.Max(0.0, Math.Min(1.0, value)); }); }
 
     private void Invoke(Action action)
     {
@@ -7336,7 +7415,24 @@ public sealed class RadioBalkanMediaHost : IDisposable
         disposed = true;
         if (dispatcher != null)
         {
-            try { dispatcher.Invoke(new Action(() => { currentOpened = false; player.Stop(); player.Close(); }), DispatcherPriority.Send); } catch { }
+            try
+            {
+                dispatcher.Invoke(new Action(() =>
+                {
+                    currentOpened = false;
+                    currentToken = "";
+                    runtimeArmed = false;
+                    pendingRuntimeFailure = "";
+                    var current = player;
+                    player = null;
+                    if (current != null)
+                    {
+                        try { current.Stop(); } catch { }
+                        try { current.Close(); } catch { }
+                    }
+                }), DispatcherPriority.Send);
+            }
+            catch { }
             try { dispatcher.BeginInvokeShutdown(DispatcherPriority.Send); } catch { }
         }
         if (thread != null && thread.IsAlive) thread.Join(2000);
@@ -7358,13 +7454,15 @@ $p=[RadioBalkanMediaHost]::new()
 }
 while(($line=[Console]::In.ReadLine()) -ne $null){
   try {
-    $sp=$line.Split(' ',3)
+    $sp=$line.Split(' ',4)
+    $armToken=''
     switch($sp[0]){
       'PLAY' {
-        $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[1]))
-        $v=[double]::Parse($sp[2],[Globalization.CultureInfo]::InvariantCulture)
+        $armToken=$sp[1]
+        $u=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($sp[2]))
+        $v=[double]::Parse($sp[3],[Globalization.CultureInfo]::InvariantCulture)
         $err=''
-        if(-not $p.Play($u,$v,7000,[ref]$err)){ throw $err }
+        if(-not $p.Play($u,$v,7000,$armToken,[ref]$err)){ throw $err }
       }
       'PAUSE' { $p.Pause() }
       'RESUME' { $p.Resume() }
@@ -7378,6 +7476,7 @@ while(($line=[Console]::In.ReadLine()) -ne $null){
     }
     [Console]::Out.WriteLine('OK')
     [Console]::Out.Flush()
+    if($sp[0] -eq 'PLAY'){ $p.Arm($armToken) }
   } catch {
     $m=$_.Exception.Message
     if([String]::IsNullOrWhiteSpace($m)){ $m='audio command failed' }
