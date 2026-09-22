@@ -276,10 +276,7 @@ const (
 	hitVolumeDown
 	hitVolumeUp
 	hitCopyNowPlaying
-	hitCountryDropdown
-	hitGenreDropdown
 	hitCountryChoice
-	hitGenreChoice
 	hitAbout
 	hitAdmin
 	hitStationDetails
@@ -342,10 +339,6 @@ type App struct {
 	genre                                    string
 	country                                  string
 	genreOptions                             []string
-	countryMenuOpen                          bool
-	genreMenuOpen                            bool
-	countryMenuIndex                         int
-	genreMenuIndex                           int
 	safeMode                                 bool
 	adminMode                                bool
 	adminFailures                            int
@@ -1194,10 +1187,7 @@ func main() {
 				}
 				continue
 			}
-			app.mu.RLock()
-			menuOpen := app.countryMenuOpen || app.genreMenuOpen
-			app.mu.RUnlock()
-			if menuOpen || key == VK_F5 {
+			if key == VK_F5 {
 				handleKeyDown(key)
 				continue
 			}
@@ -1400,7 +1390,7 @@ func runCIInputSmoke() {
 	postClick(100, 241) // Žanrovi
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
-		ok := app.tab == "genres" && !app.countryMenuOpen && !app.genreMenuOpen
+		ok := app.tab == "genres"
 		app.mu.RUnlock()
 		return ok
 	}) {
@@ -1425,7 +1415,7 @@ func runCIInputSmoke() {
 	postClick((countryL+countryR)/2, 46)
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
-		ok := app.tab == "countries" && !app.countryMenuOpen && !app.genreMenuOpen
+		ok := app.tab == "countries"
 		app.mu.RUnlock()
 		return ok
 	}) {
@@ -1435,7 +1425,7 @@ func runCIInputSmoke() {
 	postClick((genreL+genreR)/2, 46)
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
-		ok := app.tab == "genres" && !app.countryMenuOpen && !app.genreMenuOpen
+		ok := app.tab == "genres"
 		app.mu.RUnlock()
 		return ok
 	}) {
@@ -2289,8 +2279,6 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 			app.mu.Lock()
 			app.search = getWindowText(app.edit)
 			app.scroll = 0
-			app.countryMenuOpen = false
-			app.genreMenuOpen = false
 			app.mu.Unlock()
 			scheduleSearchFilter()
 			return 0
@@ -2318,15 +2306,6 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 			return r
 		}
 		return 1
-	case WM_ACTIVATEAPP:
-		if wParam == 0 {
-			app.mu.Lock()
-			app.countryMenuOpen = false
-			app.genreMenuOpen = false
-			app.mu.Unlock()
-			invalidate()
-		}
-		return 0
 	case WM_MOUSEMOVE:
 		x := int32(int16(loWord(lParam)))
 		y := int32(int16(hiWord(lParam)))
@@ -2341,10 +2320,6 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 	case WM_MOUSEWHEEL:
 		d := int(signedHiWord(wParam))
 		app.mu.Lock()
-		if app.countryMenuOpen || app.genreMenuOpen {
-			app.mu.Unlock()
-			return 0
-		}
 		app.scroll -= d / 4
 		clampScrollLocked()
 		app.mu.Unlock()
@@ -2653,116 +2628,6 @@ func drawIconButton(hdc syscall.Handle, l, t, r, b int32, label string, accent b
 	text(hdc, label, l, t, r, b, tc, DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 }
 
-func drawSelectBox(hdc syscall.Handle, l, t, r, b int32, label string, open bool) {
-	fill, border := color(17, 25, 35), color(43, 53, 66)
-	if open {
-		border = color(151, 99, 41)
-	}
-	drawRounded(hdc, l, t, r, b, 13, fill, border)
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, label, l+14, t, r-32, b, rgb(225, 229, 234), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	arrow := "⌄"
-	if open {
-		arrow = "⌃"
-	}
-	text(hdc, arrow, r-28, t, r-8, b, rgb(146, 156, 168), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-}
-
-func drawCountrySelectBox(hdc syscall.Handle, l, t, r, b int32, code, label string, open bool) {
-	fill, border := color(17, 25, 35), color(43, 53, 66)
-	if open {
-		border = color(151, 99, 41)
-	}
-	drawRounded(hdc, l, t, r, b, 13, fill, border)
-	drawCountryFlag(hdc, l+12, t+18, l+38, t+34, code)
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, label, l+46, t, r-32, b, rgb(225, 229, 234), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	arrow := "⌄"
-	if open {
-		arrow = "⌃"
-	}
-	text(hdc, arrow, r-28, t, r-8, b, rgb(146, 156, 168), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-}
-
-func drawDropdownOverlay(hdc syscall.Handle, cr RECT) {
-	app.mu.RLock()
-	countryOpen, genreOpen := app.countryMenuOpen, app.genreMenuOpen
-	selectedCountry, selectedGenre := app.country, app.genre
-	countryFocus, genreFocus := app.countryMenuIndex, app.genreMenuIndex
-	genres := append([]string(nil), app.genreOptions...)
-	app.mu.RUnlock()
-	if !countryOpen && !genreOpen {
-		return
-	}
-	_, _, countryL, countryR, genreL, genreR, _, _, _, _ := headerLayout(cr.Right)
-	if countryOpen {
-		items := append([]CountryDef(nil), balkanCountries...)
-		drawCountryMenu(hdc, countryL, countryR, 76, items, selectedCountry, countryFocus)
-	}
-	if genreOpen {
-		if len(genres) == 0 {
-			genres = []string{"Svi žanrovi"}
-		}
-		drawGenreMenu(hdc, genreL, genreR, 76, genres, selectedGenre, genreFocus)
-	}
-}
-
-func drawCountryMenu(hdc syscall.Handle, l, r, top int32, items []CountryDef, selected string, focus int) {
-	rowH := int32(30)
-	bottom := top + int32(len(items))*rowH + 10
-	drawRounded(hdc, l, top, r, bottom, 10, color(15, 21, 29), color(54, 64, 77))
-	counts := countryCountsSnapshot()
-	for i, item := range items {
-		t := top + 5 + int32(i)*rowH
-		sel := strings.EqualFold(item.Code, selected)
-		foc := i == focus
-		if sel || foc {
-			fill, border := color(45, 34, 24), color(125, 82, 36)
-			if foc && !sel {
-				fill, border = color(27, 35, 45), color(69, 81, 96)
-			}
-			drawRounded(hdc, l+5, t, r-5, t+rowH-2, 7, fill, border)
-		}
-		drawCountryFlag(hdc, l+11, t+7, l+35, t+21, item.Code)
-		selectFont(hdc, app.hFontSmall)
-		text(hdc, item.Name, l+43, t, r-48, t+rowH-2, rgb(232, 224, 218), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-		count := counts[strings.ToUpper(item.Code)]
-		if item.Code == "" {
-			count = counts[""]
-		}
-		text(hdc, fmt.Sprintf("%d", count), r-45, t, r-12, t+rowH-2, rgb(126, 113, 106), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
-		app.hits = append(app.hits, HitRegion{R: RECT{l + 5, t, r - 5, t + rowH - 2}, Kind: hitCountryChoice, Value: item.Code})
-	}
-}
-
-func drawGenreMenu(hdc syscall.Handle, l, r, top int32, items []string, selected string, focus int) {
-	if len(items) > 15 {
-		items = items[:15]
-	}
-	rowH := int32(30)
-	bottom := top + int32(len(items))*rowH + 10
-	drawRounded(hdc, l, top, r, bottom, 10, color(15, 21, 29), color(54, 64, 77))
-	for i, label := range items {
-		t := top + 5 + int32(i)*rowH
-		value := label
-		if label == "Svi žanrovi" {
-			value = ""
-		}
-		sel := strings.EqualFold(value, selected)
-		foc := i == focus
-		if sel || foc {
-			fill, border := color(45, 34, 24), color(125, 82, 36)
-			if foc && !sel {
-				fill, border = color(27, 35, 45), color(69, 81, 96)
-			}
-			drawRounded(hdc, l+5, t, r-5, t+rowH-2, 7, fill, border)
-		}
-		selectFont(hdc, app.hFontSmall)
-		text(hdc, label, l+12, t, r-12, t+rowH-2, rgb(232, 224, 218), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-		app.hits = append(app.hits, HitRegion{R: RECT{l + 5, t, r - 5, t + rowH - 2}, Kind: hitGenreChoice, Value: value})
-	}
-}
-
 func genreDisplayName(g string) string {
 	switch strings.ToLower(strings.TrimSpace(g)) {
 	case "domaca":
@@ -2925,7 +2790,7 @@ func drawCountryBrowsePage(hdc syscall.Handle, cr RECT) {
 			continue
 		}
 		fill, border := color(16, 23, 31), color(45, 56, 69)
-		if hovered(hitCountryChoice, -1, item.Code) {
+		if hovered(hitTab, -1, "country:"+item.Code) {
 			fill, border = color(31, 31, 33), color(132, 87, 38)
 		}
 		drawRounded(hdc, l, t, r, b, 13, fill, border)
@@ -2975,7 +2840,7 @@ func drawGenreBrowsePage(hdc syscall.Handle, cr RECT) {
 			continue
 		}
 		fill, border := color(16, 23, 31), color(45, 56, 69)
-		if hovered(hitGenreChoice, -1, item.Value) {
+		if hovered(hitTab, -1, "genre:"+item.Value) {
 			fill, border = color(31, 31, 33), color(132, 87, 38)
 		}
 		drawRounded(hdc, l, t, r, b, 13, fill, border)
@@ -4205,107 +4070,11 @@ func updateHover(x, y int32) {
 	}
 }
 
-func countryIndexLocked(code string) int {
-	for i, c := range balkanCountries {
-		if strings.EqualFold(c.Code, code) {
-			return i
-		}
-	}
-	return 0
-}
-
-func genreIndexLocked(genre string) int {
-	if len(app.genreOptions) == 0 {
-		return 0
-	}
-	for i, label := range app.genreOptions {
-		value := label
-		if label == "Svi žanrovi" {
-			value = ""
-		}
-		if strings.EqualFold(value, genre) {
-			return i
-		}
-	}
-	return 0
-}
-
 func handleKeyDown(key uint32) {
-	app.mu.RLock()
-	countryOpen := app.countryMenuOpen
-	genreOpen := app.genreMenuOpen
-	app.mu.RUnlock()
-	if !countryOpen && !genreOpen {
-		if key == VK_F5 {
-			safeGo("refresh-hotkey", refreshAll)
-		}
-		return
-	}
-	if key == VK_ESCAPE {
-		app.mu.Lock()
-		app.countryMenuOpen = false
-		app.genreMenuOpen = false
-		app.mu.Unlock()
-		invalidate()
-		return
-	}
-	if countryOpen {
-		app.mu.Lock()
-		max := len(balkanCountries) - 1
-		switch key {
-		case VK_UP:
-			if app.countryMenuIndex > 0 {
-				app.countryMenuIndex--
-			}
-		case VK_DOWN:
-			if app.countryMenuIndex < max {
-				app.countryMenuIndex++
-			}
-		case VK_RETURN:
-			idx := app.countryMenuIndex
-			app.mu.Unlock()
-			if idx >= 0 && idx < len(balkanCountries) {
-				selectCountry(balkanCountries[idx].Code)
-			}
-			return
-		}
-		app.mu.Unlock()
-		invalidate()
-		return
-	}
-	if genreOpen {
-		app.mu.Lock()
-		limit := len(app.genreOptions)
-		if limit > 15 {
-			limit = 15
-		}
-		switch key {
-		case VK_UP:
-			if app.genreMenuIndex > 0 {
-				app.genreMenuIndex--
-			}
-		case VK_DOWN:
-			if app.genreMenuIndex+1 < limit {
-				app.genreMenuIndex++
-			}
-		case VK_RETURN:
-			idx := app.genreMenuIndex
-			var value string
-			if idx >= 0 && idx < limit {
-				value = app.genreOptions[idx]
-				if value == "Svi žanrovi" {
-					value = ""
-				}
-			}
-			app.mu.Unlock()
-			selectGenre(value)
-			return
-		}
-		app.mu.Unlock()
-		invalidate()
+	if key == VK_F5 {
+		safeGo("refresh-hotkey", refreshAll)
 	}
 }
-
 type playbackToggleAction uint8
 
 const (
@@ -4556,8 +4325,6 @@ func selectTabValue(value string) {
 		app.country = code
 		app.genre = ""
 		app.scroll = 0
-		app.countryMenuOpen = false
-		app.genreMenuOpen = false
 		app.mu.Unlock()
 		app.stateMu.Lock()
 		app.state.Tab = "all"
@@ -4578,8 +4345,6 @@ func selectTabValue(value string) {
 		app.country = ""
 		app.genre = g
 		app.scroll = 0
-		app.countryMenuOpen = false
-		app.genreMenuOpen = false
 		app.mu.Unlock()
 		app.stateMu.Lock()
 		app.state.Tab = "all"
@@ -4601,8 +4366,6 @@ func selectTabValue(value string) {
 	}
 	app.genre = ""
 	app.scroll = 0
-	app.countryMenuOpen = false
-	app.genreMenuOpen = false
 	app.mu.Unlock()
 	app.stateMu.Lock()
 	app.state.Tab = value
@@ -4698,32 +4461,14 @@ func handleCoreClickFallback(x, y int32) bool {
 }
 
 func handleClick(x, y int32) {
-	app.mu.RLock()
-	menuOpen := app.countryMenuOpen || app.genreMenuOpen
-	app.mu.RUnlock()
-
 	for i := len(app.hits) - 1; i >= 0; i-- {
 		h := app.hits[i]
 		if !inRect(x, y, h.R) {
 			continue
 		}
-		if menuOpen && h.Kind != hitCountryChoice && h.Kind != hitGenreChoice && h.Kind != hitCountryDropdown && h.Kind != hitGenreDropdown {
-			app.mu.Lock()
-			app.countryMenuOpen = false
-			app.genreMenuOpen = false
-			app.mu.Unlock()
-			invalidate()
-			return
-		}
 		switch h.Kind {
-		case hitCountryDropdown:
-			selectTabValue("countries")
-		case hitGenreDropdown:
-			selectTabValue("genres")
 		case hitCountryChoice:
 			selectCountry(h.Value)
-		case hitGenreChoice:
-			selectGenre(h.Value)
 		case hitTab:
 			selectTabValue(h.Value)
 		case hitPlay:
@@ -4791,23 +4536,12 @@ func handleClick(x, y int32) {
 		case hitBrendigo:
 			shellOpen("https://brendigo.com/")
 		case hitRefresh:
-			app.mu.Lock()
-			app.countryMenuOpen = false
-			app.genreMenuOpen = false
-			app.mu.Unlock()
 			safeGo("refresh-catalog", refreshAll)
 		}
 		return
 	}
-	if !menuOpen && handleCoreClickFallback(x, y) {
+	if handleCoreClickFallback(x, y) {
 		return
-	}
-	if menuOpen {
-		app.mu.Lock()
-		app.countryMenuOpen = false
-		app.genreMenuOpen = false
-		app.mu.Unlock()
-		invalidate()
 	}
 }
 
@@ -4824,8 +4558,6 @@ func selectCountry(code string) {
 	app.country = code
 	app.genre = ""
 	app.scroll = 0
-	app.countryMenuOpen = false
-	app.genreMenuOpen = false
 	app.mu.Unlock()
 	app.stateMu.Lock()
 	app.state.Tab = "all"
@@ -4845,8 +4577,6 @@ func selectGenre(genre string) {
 	app.tab = "all"
 	app.genre = genre
 	app.scroll = 0
-	app.countryMenuOpen = false
-	app.genreMenuOpen = false
 	app.mu.Unlock()
 	app.stateMu.Lock()
 	app.state.Tab = "all"
@@ -5260,8 +4990,6 @@ func openStationDetails(idx int) {
 		return
 	}
 	app.detailKey = stationKey(app.stations[idx])
-	app.countryMenuOpen = false
-	app.genreMenuOpen = false
 	app.mu.Unlock()
 	invalidate()
 }
