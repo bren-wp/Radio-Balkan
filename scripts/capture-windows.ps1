@@ -7,6 +7,8 @@ $ErrorActionPreference = 'Stop'
 $resolvedExe = (Resolve-Path -LiteralPath $Exe).Path
 $outputPath = if ([IO.Path]::IsPathRooted($Output)) { $Output } else { Join-Path (Get-Location).Path $Output }
 $outputPath = [IO.Path]::GetFullPath($outputPath)
+$qualityScript = Join-Path $PSScriptRoot 'validate-screenshot.ps1'
+if (-not (Test-Path -LiteralPath $qualityScript)) { throw 'Screenshot quality validator was not found.' }
 
 if ($env:RADIO_BALKAN_CAPTURE_CHILD -ne '1') {
   $scriptPath = $MyInvocation.MyCommand.Path
@@ -25,8 +27,7 @@ if ($env:RADIO_BALKAN_CAPTURE_CHILD -ne '1') {
       '-Exe', "`"$resolvedExe`"",
       '-Output', "`"$outputPath`""
     )
-    $child = Start-Process -FilePath $shell -ArgumentList $arguments -PassThru -WindowStyle Hidden `
-      -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    $child = Start-Process -FilePath $shell -ArgumentList $arguments -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
   } finally {
     Remove-Item Env:RADIO_BALKAN_CAPTURE_CHILD -ErrorAction SilentlyContinue
   }
@@ -42,7 +43,7 @@ if ($env:RADIO_BALKAN_CAPTURE_CHILD -ne '1') {
       throw "Windows UI capture failed with exit code $($child.ExitCode). $details"
     }
     if (-not (Test-Path -LiteralPath $outputPath)) { throw 'Windows screenshot was not created.' }
-    if ((Get-Item -LiteralPath $outputPath).Length -lt 1024) { throw 'Windows screenshot is unexpectedly small.' }
+    & $qualityScript -Path @($outputPath) -Quiet
   } finally {
     if ($child -and -not $child.HasExited) { & taskkill.exe /PID $child.Id /T /F | Out-Null }
     Remove-Item $stdout,$stderr -Force -ErrorAction SilentlyContinue
@@ -59,8 +60,75 @@ public static class WindowCaptureNative {
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool UpdateWindow(IntPtr hWnd);
 }
 '@
+
+function Save-PrintWindowCapture {
+  param(
+    [Parameter(Mandatory=$true)][IntPtr]$Hwnd,
+    [Parameter(Mandatory=$true)][int]$Width,
+    [Parameter(Mandatory=$true)][int]$Height,
+    [Parameter(Mandatory=$true)][uint32]$Flags,
+    [Parameter(Mandatory=$true)][string]$Candidate
+  )
+  $bitmap = [Drawing.Bitmap]::new($Width, $Height)
+  try {
+    $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    try {
+      $hdc = $graphics.GetHdc()
+      try {
+        $ok = [WindowCaptureNative]::PrintWindow($Hwnd, $hdc, $Flags)
+      } finally {
+        $graphics.ReleaseHdc($hdc)
+      }
+    } finally {
+      $graphics.Dispose()
+    }
+    if (-not $ok) { return $false }
+    $bitmap.Save($Candidate, [Drawing.Imaging.ImageFormat]::Png)
+    return $true
+  } finally {
+    $bitmap.Dispose()
+  }
+}
+
+function Save-ScreenCopyCapture {
+  param(
+    [Parameter(Mandatory=$true)][int]$Left,
+    [Parameter(Mandatory=$true)][int]$Top,
+    [Parameter(Mandatory=$true)][int]$Width,
+    [Parameter(Mandatory=$true)][int]$Height,
+    [Parameter(Mandatory=$true)][string]$Candidate
+  )
+  $bitmap = [Drawing.Bitmap]::new($Width, $Height)
+  try {
+    $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    try {
+      $size = [Drawing.Size]::new($Width, $Height)
+      $graphics.CopyFromScreen($Left, $Top, 0, 0, $size, [Drawing.CopyPixelOperation]::SourceCopy)
+    } finally {
+      $graphics.Dispose()
+    }
+    $bitmap.Save($Candidate, [Drawing.Imaging.ImageFormat]::Png)
+    return $true
+  } finally {
+    $bitmap.Dispose()
+  }
+}
+
+function Test-CaptureCandidate {
+  param([Parameter(Mandatory=$true)][string]$Candidate, [Parameter(Mandatory=$true)][string]$Method)
+  try {
+    & $qualityScript -Path @($Candidate) -Quiet
+    Write-Host "Windows screenshot capture accepted: $Method"
+    return $true
+  } catch {
+    Write-Warning "Windows screenshot capture rejected ($Method): $($_.Exception.Message)"
+    return $false
+  }
+}
 
 $p = Start-Process -FilePath $resolvedExe -PassThru
 try {
@@ -69,32 +137,55 @@ try {
     $p.Refresh()
   }
   if ($p.MainWindowHandle -eq 0) { throw 'Radio Balkan window was not created.' }
-  [WindowCaptureNative]::ShowWindow($p.MainWindowHandle, 5) | Out-Null
+
+  [WindowCaptureNative]::ShowWindow($p.MainWindowHandle, 9) | Out-Null
+  [WindowCaptureNative]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+  [WindowCaptureNative]::UpdateWindow($p.MainWindowHandle) | Out-Null
   Start-Sleep -Seconds 3
+
   $r = New-Object WindowCaptureNative+RECT
   if (-not [WindowCaptureNative]::GetWindowRect($p.MainWindowHandle, [ref]$r)) { throw 'GetWindowRect failed.' }
   $w = [Math]::Max(1, $r.Right - $r.Left)
   $h = [Math]::Max(1, $r.Bottom - $r.Top)
-  $bmp = New-Object Drawing.Bitmap $w,$h
-  try {
-    $gfx = [Drawing.Graphics]::FromImage($bmp)
+  $dir = Split-Path -Parent $outputPath
+  New-Item -ItemType Directory -Force -Path $dir | Out-Null
+
+  $captured = $false
+  $attempts = @(
+    @{ Name = 'PrintWindow'; Flags = [uint32]0 },
+    @{ Name = 'PrintWindowFullContent'; Flags = [uint32]2 }
+  )
+  foreach ($attempt in $attempts) {
+    $candidate = "$outputPath.$($attempt.Name).tmp.png"
+    Remove-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue
     try {
-      $hdc = $gfx.GetHdc()
-      try {
-        if (-not [WindowCaptureNative]::PrintWindow($p.MainWindowHandle, $hdc, 2)) {
-          throw 'PrintWindow failed.'
-        }
-      } finally {
-        $gfx.ReleaseHdc($hdc)
+      if ((Save-PrintWindowCapture -Hwnd $p.MainWindowHandle -Width $w -Height $h -Flags $attempt.Flags -Candidate $candidate) -and (Test-CaptureCandidate -Candidate $candidate -Method $attempt.Name)) {
+        Move-Item -LiteralPath $candidate -Destination $outputPath -Force
+        $captured = $true
+        break
       }
     } finally {
-      $gfx.Dispose()
+      Remove-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue
     }
-    $dir = Split-Path -Parent $outputPath
-    New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    $bmp.Save($outputPath, [Drawing.Imaging.ImageFormat]::Png)
-  } finally {
-    if ($bmp) { $bmp.Dispose() }
+  }
+
+  if (-not $captured) {
+    [WindowCaptureNative]::SetForegroundWindow($p.MainWindowHandle) | Out-Null
+    Start-Sleep -Milliseconds 750
+    $candidate = "$outputPath.ScreenCopy.tmp.png"
+    Remove-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue
+    try {
+      if ((Save-ScreenCopyCapture -Left $r.Left -Top $r.Top -Width $w -Height $h -Candidate $candidate) -and (Test-CaptureCandidate -Candidate $candidate -Method 'ScreenCopy')) {
+        Move-Item -LiteralPath $candidate -Destination $outputPath -Force
+        $captured = $true
+      }
+    } finally {
+      Remove-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue
+    }
+  }
+
+  if (-not $captured) {
+    throw 'All Windows screenshot capture methods produced blank or invalid output.'
   }
 } finally {
   if ($p -and -not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
