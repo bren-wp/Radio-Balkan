@@ -986,6 +986,26 @@ func TestSelectableCatalogCodesIncludeSupplementalGroups(t *testing.T) {
 	}
 }
 
+func TestBuildBrowseCountsMatchesCountryAndGenreSemantics(t *testing.T) {
+	stations := []RadioStation{
+		{CountryCode: "HR", Tags: "folk,pop", TagsIndex: foldText("folk,pop")},
+		{CountryCode: "BA", Tags: "jazz,news", TagsIndex: foldText("jazz,news")},
+		{CountryCode: "HR", Tags: "oldies", TagsIndex: foldText("oldies")},
+	}
+	countries, genres := buildBrowseCounts(stations)
+	if countries[""] != 3 || countries["HR"] != 2 || countries["BA"] != 1 {
+		t.Fatalf("country counts = %#v; want total=3 HR=2 BA=1", countries)
+	}
+	if genres[""] != 3 {
+		t.Fatalf("all-genre count = %d; want 3", genres[""])
+	}
+	for genre, want := range map[string]int{"folk": 1, "pop": 1, "jazz": 1, "news": 1, "oldies": 1} {
+		if got := genres[genre]; got != want {
+			t.Fatalf("genre %q count = %d; want %d (all=%#v)", genre, got, want, genres)
+		}
+	}
+}
+
 func TestHomeDiscoverySnapshotScalesToFullCatalogWithoutDuplicates(t *testing.T) {
 	codes := []string{"HR", "BA", "RS", "SI", "MK", "AL", "ME", "BG"}
 	stations := make([]RadioStation, 0, 6000)
