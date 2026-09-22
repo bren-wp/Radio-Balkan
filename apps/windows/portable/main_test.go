@@ -3,10 +3,13 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -14,6 +17,91 @@ import (
 	"testing"
 	"time"
 )
+
+
+func newResolverTestClient(t *testing.T, server *httptest.Server) *http.Client {
+	t.Helper()
+	dialAddr := server.Listener.Addr().String()
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{}).DialContext(ctx, network, dialAddr)
+		},
+	}
+	t.Cleanup(transport.CloseIdleConnections)
+	return &http.Client{
+		Timeout:   3 * time.Second,
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) > 5 {
+				return errors.New("too many redirects")
+			}
+			return nil
+		},
+	}
+}
+
+func TestCheckStreamResolvesPlaylistThroughProductionPath(t *testing.T) {
+	const publicHost = "93.184.216.34"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/station.m3u":
+			w.Header().Set("Content-Type", "audio/x-mpegurl")
+			_, _ = fmt.Fprintf(w, "#EXTM3U\n#EXTINF:-1,CI station\nhttp://%s/live.mp3\n", publicHost)
+		case "/live.mp3":
+			w.Header().Set("Content-Type", "audio/mpeg")
+			_, _ = w.Write([]byte("ID3-realistic-stream-bytes"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	app = App{
+		http:      newResolverTestClient(t, server),
+		ctx:       context.Background(),
+		done:      make(chan struct{}),
+		streamSem: make(chan struct{}, 2),
+	}
+	resolved, ok := checkStream("http://" + publicHost + "/station.m3u")
+	if !ok {
+		t.Fatal("production stream resolver rejected a valid M3U -> MP3 path")
+	}
+	want := "http://" + publicHost + "/live.mp3"
+	if resolved != want {
+		t.Fatalf("resolved playlist URL = %q; want %q", resolved, want)
+	}
+}
+
+func TestCheckStreamFollowsHTTPRedirectThroughProductionPath(t *testing.T) {
+	const publicHost = "93.184.216.34"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/listen":
+			http.Redirect(w, r, "/stream.aac", http.StatusFound)
+		case "/stream.aac":
+			w.Header().Set("Content-Type", "audio/aac")
+			_, _ = w.Write([]byte("AAC-realistic-stream-bytes"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	app = App{
+		http:      newResolverTestClient(t, server),
+		ctx:       context.Background(),
+		done:      make(chan struct{}),
+		streamSem: make(chan struct{}, 2),
+	}
+	resolved, ok := checkStream("http://" + publicHost + "/listen")
+	if !ok {
+		t.Fatal("production stream checker rejected a valid HTTP redirect -> AAC path")
+	}
+	want := "http://" + publicHost + "/stream.aac"
+	if resolved != want {
+		t.Fatalf("redirect final URL = %q; want %q", resolved, want)
+	}
+}
 
 func TestAdminCredentialsAcceptOnlyConfiguredAdministrator(t *testing.T) {
 	password := fmt.Sprintf("%s%d", "brendigo", 2025)
