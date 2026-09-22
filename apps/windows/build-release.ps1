@@ -20,7 +20,7 @@ function Invoke-CodeSign([string]$Path) {
         if ($RequireSignature) {
             throw "Release signature is required, but RADIO_BALKAN_SIGNING_THUMBPRINT is not configured."
         }
-        Write-Warning "Building unsigned Windows artifact. Public releases should be Authenticode-signed."
+        Write-Host "Building unsigned Windows artifact."
         return
     }
 
