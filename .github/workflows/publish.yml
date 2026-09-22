@@ -61,9 +61,41 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.release_check.outputs.sha }}
-      - working-directory: apps/windows
+      - name: Prepare optional Windows signing
         shell: pwsh
-        run: ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
+        env:
+          PFX_B64: ${{ secrets.RADIO_BALKAN_WINDOWS_PFX_B64 }}
+          PFX_PASSWORD: ${{ secrets.RADIO_BALKAN_WINDOWS_PFX_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:PFX_B64) -and [string]::IsNullOrWhiteSpace($env:PFX_PASSWORD)) {
+            Write-Host "Windows signing is not configured; release will remain unsigned."
+            exit 0
+          }
+          if ([string]::IsNullOrWhiteSpace($env:PFX_B64) -or [string]::IsNullOrWhiteSpace($env:PFX_PASSWORD)) {
+            throw "Windows signing is partially configured. Configure both RADIO_BALKAN_WINDOWS_PFX_B64 and RADIO_BALKAN_WINDOWS_PFX_PASSWORD, or neither."
+          }
+
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'radio-balkan-signing.pfx'
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:PFX_B64))
+          $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+          $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password -Exportable:$false
+          if (-not $certificate -or [string]::IsNullOrWhiteSpace($certificate.Thumbprint)) {
+            throw "Windows signing certificate import failed."
+          }
+
+          "RADIO_BALKAN_SIGNING_THUMBPRINT=$($certificate.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RADIO_BALKAN_WINDOWS_PFX_PATH=$pfxPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RADIO_BALKAN_WINDOWS_CERT_THUMBPRINT=$($certificate.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Build signed-or-explicitly-unsigned Windows release
+        working-directory: apps/windows
+        shell: pwsh
+        run: |
+          $requireSignature = -not [string]::IsNullOrWhiteSpace($env:RADIO_BALKAN_SIGNING_THUMBPRINT)
+          if ($requireSignature) {
+            ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim() -RequireSignature
+          } else {
+            ./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()
+          }
       - name: Soak-test built Windows release
         shell: pwsh
         run: |
@@ -75,6 +107,16 @@ jobs:
         with:
           name: windows
           path: apps/windows/dist/*
+      - name: Remove Windows signing material
+        if: always()
+        shell: pwsh
+        run: |
+          if (-not [string]::IsNullOrWhiteSpace($env:RADIO_BALKAN_WINDOWS_CERT_THUMBPRINT)) {
+            Remove-Item "Cert:\CurrentUser\My\$env:RADIO_BALKAN_WINDOWS_CERT_THUMBPRINT" -Force -ErrorAction SilentlyContinue
+          }
+          if (-not [string]::IsNullOrWhiteSpace($env:RADIO_BALKAN_WINDOWS_PFX_PATH)) {
+            Remove-Item -LiteralPath $env:RADIO_BALKAN_WINDOWS_PFX_PATH -Force -ErrorAction SilentlyContinue
+          }
 
   browsers:
     needs: release_check
