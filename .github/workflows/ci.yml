@@ -25,6 +25,8 @@ jobs:
         run: python scripts/check_versions.py
       - name: Verify security contracts
         run: python scripts/verify_security_contracts.py
+      - name: Test live-radio pinned network boundary
+        run: python scripts/test_live_radio_security.py
       - name: Verify production UI contracts
         run: python scripts/verify_production_ui.py
       - name: Test release checksum manifest
