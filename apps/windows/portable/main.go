@@ -2244,7 +2244,6 @@ func paintClient(hdc syscall.Handle, cr RECT) {
 	drawHeader(hdc, cr)
 	drawStations(hdc, cr)
 	drawPlayer(hdc, cr)
-	drawDropdownOverlay(hdc, cr)
 }
 
 func drawSidebar(hdc syscall.Handle, cr RECT) {
@@ -4455,19 +4454,9 @@ func handleClick(x, y int32) {
 		}
 		switch h.Kind {
 		case hitCountryDropdown:
-			app.mu.Lock()
-			app.countryMenuOpen = !app.countryMenuOpen
-			app.genreMenuOpen = false
-			app.countryMenuIndex = countryIndexLocked(app.country)
-			app.mu.Unlock()
-			invalidate()
+			selectTabValue("countries")
 		case hitGenreDropdown:
-			app.mu.Lock()
-			app.genreMenuOpen = !app.genreMenuOpen
-			app.countryMenuOpen = false
-			app.genreMenuIndex = genreIndexLocked(app.genre)
-			app.mu.Unlock()
-			invalidate()
+			selectTabValue("genres")
 		case hitCountryChoice:
 			selectCountry(h.Value)
 		case hitGenreChoice:
@@ -4663,19 +4652,26 @@ func playStation(idx int) {
 			return
 		}
 		app.mu.RUnlock()
-		if err := audioPlay(final); err != nil {
+		if err := audioPlayRequest(final, reqSeq); err != nil {
+			if errors.Is(err, errPlayRequestSuperseded) {
+				app.playTransitionMu.Unlock()
+				return
+			}
 			logError("audio-play-primary", err)
-			setStatus("Prvi izvor nije uspio · pokušavam drugi…")
+			setStatus("Veza sa stanicom nije uspjela · pokušavam ponovno…")
 			postUI()
-			alternate, altErr := tryAlternatePlayback(idx, key, final)
+			alternate, altErr := tryAlternatePlayback(idx, key, final, reqSeq)
 			if altErr != nil {
 				app.playTransitionMu.Unlock()
+				if errors.Is(altErr, errPlayRequestSuperseded) {
+					return
+				}
 				logError("audio-play-alternate", altErr)
 				app.mu.RLock()
 				currentReq := app.playSeq == reqSeq
 				app.mu.RUnlock()
 				if currentReq {
-					setStatus("Reprodukcija trenutno nije dostupna · pokušaj drugu stanicu")
+					setStatus("Stanica trenutno nije dostupna")
 					postUI()
 				}
 				return
@@ -4718,7 +4714,6 @@ func playStation(idx int) {
 	})
 }
 func playbackWatchdog(idx int, stationID string) {
-	failures := 0
 	for {
 		timer := time.NewTimer(45 * time.Second)
 		select {
@@ -4732,43 +4727,43 @@ func playbackWatchdog(idx int, stationID string) {
 			}
 			return
 		}
+
 		app.mu.RLock()
 		actual := findStationIndexLocked(stationID, idx)
 		active := app.playing && actual >= 0 && app.currentKey == stationID
-		var currentStation RadioStation
-		if active {
+		backend := app.audioBackend
+		if actual >= 0 {
 			idx = actual
-			currentStation = app.stations[idx]
 		}
 		app.mu.RUnlock()
 		if !active {
 			return
 		}
-		u := effectiveURL(currentStation)
-		if _, ok := checkStream(u); ok {
-			failures = 0
+
+		// A live player is the source of truth. Do not issue a second HTTP GET
+		// against an already-playing Icecast/Shoutcast/HLS stream: many healthy
+		// stations reject or stall probes even while the media backend is fine.
+		if backend != audioBackendNone {
 			continue
 		}
-		failures++
-		if failures < 2 {
-			continue
-		}
-		setStatus("Veza je prekinuta · pokušavam ponovno…")
-		postUI()
-		if repaired, ok := ensureStreamKey(idx, stationID); ok {
-			if err := audioPlay(repaired); err == nil {
-				failures = 0
-				rebuildFilter()
-				setStatus("Veza je obnovljena · reprodukcija je nastavljena")
-				postUI()
-				continue
-			}
-		}
+
+		// Recover only from an internally inconsistent state: the UI still says
+		// playing, but there is no active backend. Re-check under the write lock so
+		// a concurrent Stop/new Play always wins.
 		app.mu.Lock()
+		actual = findStationIndexLocked(stationID, idx)
+		if !app.playing || actual < 0 || app.currentKey != stationID || app.audioBackend != audioBackendNone {
+			app.mu.Unlock()
+			continue
+		}
+		idx = actual
 		app.playing = false
+		app.metadataSeq++
 		app.mu.Unlock()
-		setStatus("Stanica trenutno nije dostupna")
+
+		setStatus("Veza je privremeno prekinuta · pokušavam ponovno povezivanje…")
 		postUI()
+		playStationByKey(stationID, idx)
 		return
 	}
 }
@@ -4868,7 +4863,10 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 	postUI()
 	return "", false
 }
-func tryAlternatePlayback(idx int, key, failedURL string) (string, error) {
+func tryAlternatePlayback(idx int, key, failedURL string, reqSeq uint64) (string, error) {
+	if !playRequestStillCurrent(reqSeq) {
+		return "", errPlayRequestSuperseded
+	}
 	app.mu.RLock()
 	actual := findStationIndexLocked(key, idx)
 	if actual < 0 || actual >= len(app.stations) {
@@ -4886,11 +4884,17 @@ func tryAlternatePlayback(idx int, key, failedURL string) (string, error) {
 	candidates = append(candidates, station.URLResolved, station.URL)
 
 	if station.StationUUID != "" {
+		if !playRequestStillCurrent(reqSeq) {
+			return "", errPlayRequestSuperseded
+		}
 		if refreshed, err := fetchStationByUUID(station.StationUUID, station.CountryCode, station.SourceCountryCode); err == nil && refreshed != nil {
 			candidates = append(candidates, refreshed.URLResolved, refreshed.URL)
 		}
 	}
 	if station.Name != "" {
+		if !playRequestStillCurrent(reqSeq) {
+			return "", errPlayRequestSuperseded
+		}
 		if alternatives, err := searchStationsByName(station.Name, station.CountryCode, station.SourceCountryCode); err == nil {
 			for _, alt := range alternatives {
 				if sameStation(station, alt) {
@@ -4906,6 +4910,9 @@ func tryAlternatePlayback(idx int, key, failedURL string) (string, error) {
 	var lastErr error
 	tried := 0
 	for _, candidate := range uniqueStrings(candidates) {
+		if !playRequestStillCurrent(reqSeq) {
+			return "", errPlayRequestSuperseded
+		}
 		if strings.EqualFold(strings.TrimSpace(candidate), strings.TrimSpace(failedURL)) {
 			continue
 		}
@@ -4914,10 +4921,13 @@ func tryAlternatePlayback(idx int, key, failedURL string) (string, error) {
 			continue
 		}
 		tried++
-		if err := audioPlay(resolved); err == nil {
+		if err := audioPlayRequest(resolved, reqSeq); err == nil {
 			rememberReplacement(idx, key, resolved)
 			return resolved, nil
 		} else {
+			if errors.Is(err, errPlayRequestSuperseded) {
+				return "", err
+			}
 			lastErr = err
 			logError("audio-play-candidate", err)
 		}
@@ -7236,43 +7246,94 @@ func audioCommandTimeout(line string) time.Duration {
 	return 3 * time.Second
 }
 
+var errPlayRequestSuperseded = errors.New("play request superseded")
+
+func playRequestStillCurrent(reqSeq uint64) bool {
+	if reqSeq == 0 {
+		return true
+	}
+	app.mu.RLock()
+	current := app.playSeq == reqSeq
+	app.mu.RUnlock()
+	return current
+}
+
+func audioAckResultLocked(reply string, ok bool) error {
+	if !ok {
+		resetAudioEngineLocked()
+		return errors.New("audio engine je prekinut")
+	}
+	if reply == "OK" {
+		return nil
+	}
+	if strings.HasPrefix(reply, "ERR ") {
+		if decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(strings.TrimPrefix(reply, "ERR "))); err == nil && len(decoded) > 0 {
+			return fmt.Errorf("audio engine: %s", strings.TrimSpace(string(decoded)))
+		}
+	}
+	return errors.New("audio engine nije prihvatio naredbu")
+}
+
 func waitAudioAckLocked(timeout time.Duration) error {
+	return waitAudioAckLockedForRequest(timeout, 0)
+}
+
+func waitAudioAckLockedForRequest(timeout time.Duration, reqSeq uint64) error {
 	if app.audioAck == nil {
 		return errors.New("audio engine nema kanal potvrde")
 	}
 	if timeout <= 0 {
 		timeout = 2 * time.Second
 	}
-	select {
-	case reply, ok := <-app.audioAck:
-		if !ok {
-			resetAudioEngineLocked()
-			return errors.New("audio engine je prekinut")
-		}
-		if reply != "OK" {
-			if strings.HasPrefix(reply, "ERR ") {
-				if decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(strings.TrimPrefix(reply, "ERR "))); err == nil && len(decoded) > 0 {
-					return fmt.Errorf("audio engine: %s", strings.TrimSpace(string(decoded)))
-				}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	var staleTick <-chan time.Time
+	var staleTicker *time.Ticker
+	if reqSeq != 0 {
+		staleTicker = time.NewTicker(50 * time.Millisecond)
+		staleTick = staleTicker.C
+		defer staleTicker.Stop()
+	}
+
+	for {
+		select {
+		case reply, ok := <-app.audioAck:
+			return audioAckResultLocked(reply, ok)
+		case <-staleTick:
+			if !playRequestStillCurrent(reqSeq) {
+				// Kill the helper/channel together so a late ACK can never satisfy
+				// the newer station request waiting behind this one.
+				resetAudioEngineLocked()
+				return errPlayRequestSuperseded
 			}
-			return errors.New("audio engine nije prihvatio naredbu")
+		case <-timer.C:
+			// A late ACK must never be consumed by the next command. Discard the
+			// entire helper process/channel before the caller falls back or retries.
+			resetAudioEngineLocked()
+			return errors.New("audio engine nije odgovorio na vrijeme")
+		case <-app.done:
+			return context.Canceled
 		}
-		return nil
-	case <-time.After(timeout):
-		// A late ACK must never be consumed by the next command. Discard the
-		// entire helper process/channel before the caller falls back or retries.
-		resetAudioEngineLocked()
-		return errors.New("audio engine nije odgovorio na vrijeme")
-	case <-app.done:
-		return context.Canceled
 	}
 }
 
 func audioSend(line string) error {
+	return audioSendForRequest(line, 0)
+}
+
+func audioSendForRequest(line string, reqSeq uint64) error {
 	app.audioMu.Lock()
 	defer app.audioMu.Unlock()
+	if !playRequestStillCurrent(reqSeq) {
+		return errPlayRequestSuperseded
+	}
 	if err := startAudioEngineLocked(); err != nil {
 		return err
+	}
+	if !playRequestStillCurrent(reqSeq) {
+		resetAudioEngineLocked()
+		return errPlayRequestSuperseded
 	}
 	if app.audioIn == nil {
 		return errors.New("audio engine nije dostupan")
@@ -7281,7 +7342,7 @@ func audioSend(line string) error {
 		resetAudioEngineLocked()
 		return err
 	}
-	return waitAudioAckLocked(audioCommandTimeout(line))
+	return waitAudioAckLockedForRequest(audioCommandTimeout(line), reqSeq)
 }
 func audioSendExisting(line string) error {
 	app.audioMu.Lock()
@@ -7328,6 +7389,13 @@ func audioShutdown() {
 }
 
 func audioPlay(raw string) error {
+	return audioPlayRequest(raw, 0)
+}
+
+func audioPlayRequest(raw string, reqSeq uint64) error {
+	if !playRequestStillCurrent(reqSeq) {
+		return errPlayRequestSuperseded
+	}
 	app.stateMu.RLock()
 	volume := app.state.Volume
 	app.stateMu.RUnlock()
@@ -7339,10 +7407,14 @@ func audioPlay(raw string) error {
 		vol = 1
 	}
 	enc := base64.StdEncoding.EncodeToString([]byte(raw))
-	if err := audioSend(fmt.Sprintf("PLAY %s %.2f", enc, vol)); err == nil {
+	if err := audioSendForRequest(fmt.Sprintf("PLAY %s %.2f", enc, vol), reqSeq); err == nil {
 		setAudioBackend(audioBackendWPF)
 		return nil
 	} else {
+		if errors.Is(err, errPlayRequestSuperseded) {
+			setAudioBackend(audioBackendNone)
+			return err
+		}
 		logError("audio-engine", err)
 		app.audioMu.Lock()
 		resetAudioEngineLocked()
@@ -7350,6 +7422,9 @@ func audioPlay(raw string) error {
 		setAudioBackend(audioBackendNone)
 	}
 
+	if !playRequestStillCurrent(reqSeq) {
+		return errPlayRequestSuperseded
+	}
 	audioStopMCI()
 	cleanURL := strings.ReplaceAll(raw, "\"", "")
 	openCommands := []string{
@@ -7358,6 +7433,11 @@ func audioPlay(raw string) error {
 	}
 	var openErr error
 	for _, command := range openCommands {
+		if !playRequestStillCurrent(reqSeq) {
+			audioStopMCI()
+			setAudioBackend(audioBackendNone)
+			return errPlayRequestSuperseded
+		}
 		if e := mci(command); e == nil {
 			openErr = nil
 			break
@@ -7365,6 +7445,11 @@ func audioPlay(raw string) error {
 			openErr = e
 			audioStopMCI()
 		}
+	}
+	if !playRequestStillCurrent(reqSeq) {
+		audioStopMCI()
+		setAudioBackend(audioBackendNone)
+		return errPlayRequestSuperseded
 	}
 	if openErr != nil {
 		setAudioBackend(audioBackendNone)
@@ -7374,6 +7459,11 @@ func audioPlay(raw string) error {
 		audioStopMCI()
 		setAudioBackend(audioBackendNone)
 		return e
+	}
+	if !playRequestStillCurrent(reqSeq) {
+		audioStopMCI()
+		setAudioBackend(audioBackendNone)
+		return errPlayRequestSuperseded
 	}
 	_ = mci(fmt.Sprintf("setaudio radio volume to %d", volume*10))
 	setAudioBackend(audioBackendMCI)
