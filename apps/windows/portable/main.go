@@ -8415,7 +8415,8 @@ func passwordDialog(parent syscall.Handle, title, prompt string) (string, bool) 
 func inputDialog(parent syscall.Handle, title, prompt, def string) (string, bool) {
 	if err := ensureInputDialogClass(); err != nil {
 		logError("input-dialog-class", err)
-		return inputDialogPowerShell(title, prompt, def)
+		queueAlert("Greška", "Nije moguće otvoriti ulazni dijalog.", MB_ICONERROR)
+		return "", false
 	}
 	if activeInputDialog != nil {
 		return "", false
@@ -8443,7 +8444,8 @@ func inputDialog(parent syscall.Handle, title, prompt, def string) (string, bool
 	)
 	if h == 0 {
 		logError("input-dialog-create", fmt.Errorf("CreateWindowExW: %v", e))
-		return inputDialogPowerShell(title, prompt, def)
+		queueAlert("Greška", "Nije moguće otvoriti ulazni dijalog.", MB_ICONERROR)
+		return "", false
 	}
 	st.hwnd = syscall.Handle(h)
 	enableImmersiveDark(st.hwnd)
@@ -8455,7 +8457,8 @@ func inputDialog(parent syscall.Handle, title, prompt, def string) (string, bool
 	if edit == 0 || label == 0 || cancelBtn == 0 || okBtn == 0 {
 		logError("input-dialog-controls", errors.New("nije moguće izraditi sve kontrole dijaloga"))
 		procDestroyWindow.Call(h)
-		return inputDialogPowerShell(title, prompt, def)
+		queueAlert("Greška", "Nije moguće otvoriti ulazni dijalog.", MB_ICONERROR)
+		return "", false
 	}
 	st.edit = syscall.Handle(edit)
 	for _, ch := range []uintptr{label, edit, cancelBtn, okBtn} {
@@ -8498,20 +8501,4 @@ func inputDialog(parent syscall.Handle, title, prompt, def string) (string, bool
 		procDispatchMessage.Call(uintptr(unsafe.Pointer(&m)))
 	}
 	return st.result, st.ok
-}
-
-func inputDialogPowerShell(title, prompt, def string) (string, bool) {
-	ps := `Add-Type -AssemblyName Microsoft.VisualBasic; $v=[Microsoft.VisualBasic.Interaction]::InputBox($args[0],$args[1],$args[2]); [Console]::OutputEncoding=[Text.Encoding]::UTF8; Write-Output $v`
-	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", ps, prompt, title, def)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	out, err := cmd.Output()
-	if err != nil {
-		logError("input-dialog-fallback", err)
-		return "", false
-	}
-	v := strings.TrimSpace(string(bytes.TrimSpace(out)))
-	if v == "" {
-		return "", false
-	}
-	return v, true
 }

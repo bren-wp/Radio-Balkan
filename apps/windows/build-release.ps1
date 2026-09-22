@@ -1,6 +1,9 @@
 param(
     [string]$Version = "0.0.40",
-    [string]$Output = (Join-Path $PSScriptRoot "dist")
+    [string]$Output = (Join-Path $PSScriptRoot "dist"),
+    [string]$SigningThumbprint = $env:RADIO_BALKAN_SIGNING_THUMBPRINT,
+    [string]$TimestampUrl = "http://timestamp.digicert.com",
+    [switch]$RequireSignature
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,6 +13,31 @@ $env:CGO_ENABLED = "0"
 
 if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
     throw "Go nije pronađen u PATH-u. Instaliraj aktualni Go SDK pa ponovno pokreni skriptu."
+}
+
+function Invoke-CodeSign([string]$Path) {
+    if ([string]::IsNullOrWhiteSpace($SigningThumbprint)) {
+        if ($RequireSignature) {
+            throw "Release signature is required, but RADIO_BALKAN_SIGNING_THUMBPRINT is not configured."
+        }
+        Write-Warning "Building unsigned Windows artifact. Public releases should be Authenticode-signed."
+        return
+    }
+
+    $signTool = Get-Command signtool.exe -ErrorAction SilentlyContinue
+    if (-not $signTool) {
+        throw "signtool.exe was not found in PATH."
+    }
+
+    & $signTool.Source sign /sha1 $SigningThumbprint /fd SHA256 /tr $TimestampUrl /td SHA256 /v $Path
+    if ($LASTEXITCODE -ne 0) {
+        throw "Authenticode signing failed for $Path"
+    }
+
+    $signature = Get-AuthenticodeSignature -FilePath $Path
+    if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
+        throw "Authenticode signature is not valid for $Path ($($signature.Status))"
+    }
 }
 
 function Test-GoFormatting([string]$Path) {
@@ -48,12 +76,13 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Windows Portable go vet nije uspio." }
     go test ./...
     if ($LASTEXITCODE -ne 0) { throw "Windows Portable go test nije uspio." }
-    go build -trimpath -buildvcs=false -ldflags "-s -w -H=windowsgui -X main.appVersion=$Version" -o $portable .
+    go build -trimpath -buildvcs=false -ldflags "-H=windowsgui -X main.appVersion=$Version" -o $portable .
     if ($LASTEXITCODE -ne 0) { throw "Windows Portable go build nije uspio." }
 } finally {
     Pop-Location
 }
 
+Invoke-CodeSign $portable
 Copy-Item -Force $portable $embeddedPortable
 
 Push-Location (Join-Path $PSScriptRoot "setup")
@@ -63,12 +92,14 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Windows Setup go vet nije uspio." }
     go test ./...
     if ($LASTEXITCODE -ne 0) { throw "Windows Setup go test nije uspio." }
-    go build -trimpath -buildvcs=false -ldflags "-s -w -H=windowsgui -X main.appVersion=$Version" -o $setup .
+    go build -trimpath -buildvcs=false -ldflags "-H=windowsgui -X main.appVersion=$Version" -o $setup .
     if ($LASTEXITCODE -ne 0) { throw "Windows Setup go build nije uspio." }
 } finally {
     Pop-Location
     Remove-Item -Force -ErrorAction SilentlyContinue $embeddedPortable
 }
+
+Invoke-CodeSign $setup
 
 $hashes = @(
     Get-FileHash -Algorithm SHA256 $portable

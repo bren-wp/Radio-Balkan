@@ -559,6 +559,20 @@ def main() -> None:
     )
     forbid(
         "apps/windows/portable/main.go",
+        "func inputDialogPowerShell(",
+    )
+    forbid(
+        "apps/windows/build-release.ps1",
+        '-ldflags "-s -w ',
+    )
+    require(
+        "apps/windows/build-release.ps1",
+        "Invoke-CodeSign $portable",
+        "Get-AuthenticodeSignature -FilePath $Path",
+    )
+
+    forbid(
+        "apps/windows/portable/main.go",
         "(*MINMAXINFO)(unsafe.Pointer(lParam))",
     )
     require(
