@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.42" src="assets/badges/version.svg">
+  <img alt="version 0.0.43" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -15,16 +15,15 @@
 
 Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrvatske i regije bez korisničkog računa, bez telemetry sustava i bez teškog web runtimea u Windows aplikaciji. Projekt objedinjuje nativni Windows klijent, nativni Android klijent i produkcijske ekstenzije za Chrome, Edge, Opera i Firefox.
 
-## Što donosi v0.0.42
+## Što donosi v0.0.43
 
-- **Pouzdaniji Play i recovery** — Windows player sada može probati do šest sigurnih recovery kandidata umjesto tri, uz bolji redoslijed primarnog resolved/raw URL-a, zadnjeg uspješnog backupa, zdravog UUID refresha i zdravih alternativnih kataloških zapisa.
-- **Poznato neispravni streamovi više se ne promoviraju u recoveryju** — name-search koristi `hidebroken=true`, zdravi rezultati i veći broj glasova imaju prednost, a UUID refresh s `LastCheckOK=0` se preskače.
-- **Bolja otpornost kada radio promijeni URL** — jedan zadnji uspješni spremljeni izvor namjerno ostaje blizu početka recovery reda, pa promjena ili privremeni kvar kataloškog URL-a ne znači odmah neuspjeli Play.
-- **Moderniji Windows 11 izgled** — glavni prozor i Setup koriste dark DWM shell, zaobljene kutove, Windows 11 backdrop/caption/border postavke i Segoe UI Variable tipografiju.
-- **Dijalozi više ne izgledaju kao stari Win32** — akcijske tipke su owner-drawn, input polja imaju pravilne margine, uklonjen je legacy `WS_BORDER` izgled iz produkcijskih input/password dijaloga.
-- **Početna ostaje pregledna i deterministična** — svaki novi launch ide na Početnu/HR, a kompaktne sekcije i dedicated Zemlje/Žanrovi ostaju pokriveni stvarnim click testovima.
-- **UI i screenshot QA su prošireni** — stvarni Windows build se snima i validira, a production verifier zaključava moderni shell i zabranjuje povratak legacy dijaloškog stila.
-- **Unsigned Windows release ostaje podržan** — Portable i Setup ne zahtijevaju Authenticode, ali i dalje moraju proći test/vet/build, runtime soak, real live-stream transport, clean-worktree i SHA-256 release provjere.
+- **Pouzdan prijelaz s jedne aktivne stanice na drugu** — klik na novu stanicu odmah prebacuje player target na nju i request-aware prekida prethodni backend prije otvaranja novog streama.
+- **Brzi A → B → C klikovi ostaju latest-click-wins** — zastarjeli Stop, recovery ili audio ACK više ne smiju preuzeti reprodukciju nakon novijeg korisničkog izbora.
+- **Pending Play je zasebno loading stanje** — tijekom otvaranja streama player jasno prikazuje učitavanje, ne šalje pogrešan Resume starom backendu, a Stop ostaje dostupan i stvarno prekida pending zahtjev.
+- **Pause/Resume više ne kvare media event lifecycle** — media generation ostaje stabilan za WPF `MediaFailed` događaje, dok zasebni control generation uređuje Pause/Resume naredbe i odbacuje zakašnjele kontrole.
+- **Windows runtime sada eksplicitno testira A → B switching** — built EXE klikće dvije različite stanice i production WPF put otvara lokalni WAV A pa WAV B u istom procesu; headless CI prihvaća samo poznati no-audio-device HRESULT.
+- **Playback recovery hardening iz v0.0.42 ostaje aktivan** — `hidebroken=true`, zdravi UUID/name-search kandidati, bounded fallback i spremljeni potvrđeni backup izvori ostaju dio recoveryja.
+- **Unsigned Windows release ostaje podržan** — Portable i Setup ne zahtijevaju Authenticode, ali moraju proći gofmt/vet/test/build, built-EXE runtime, real Balkan streamove, security/UI/version i clean-worktree gateove.
 
 Radio Balkan pokušava automatski oporaviti reprodukciju kada vanjski radio stream promijeni URL ili privremeno otkaže. Dostupnost svakog pojedinog third-party radija ipak ovisi o infrastrukturi same postaje i ne može se tehnički garantirati iz aplikacije.
 
@@ -66,7 +65,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.42 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.42):
+Gotovi v0.0.43 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.43):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -106,7 +105,7 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.43
+python scripts/bump_version.py 0.0.44
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.

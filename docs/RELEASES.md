@@ -1,5 +1,22 @@
 # Izdavanja
 
+## 0.0.43
+
+Izdanje 0.0.43 fokusira se na kritični Windows playback lifecycle kada korisnik tijekom aktivne reprodukcije odabere drugu radio stanicu.
+
+- klik na novu stanicu odmah postavlja novu stanicu kao current/visible target umjesto da stara ostane vlasnik player statea dok novi stream čeka
+- prethodni WPF ili MCI backend prekida se request-aware prije otvaranja novog streama, uz očuvanu latest-click-wins semantiku za A → B → C brze promjene
+- pending Play ima zaseban lifecycle i loading stanje; centralni Play ne šalje Resume starom backendu dok se nova stanica tek otvara
+- Stop radi i tijekom pending Playa, poništava playback generation i ne mora čekati da se novi stream uspješno otvori
+- Pause/Resume koriste zaseban `audioControlSeq`, dok `playSeq` ostaje media generation kako WPF `MediaFailed` događaji ne bi postali lažno zastarjeli
+- zakašnjeli Pause/Resume i Pause-fallback Stop ne mogu promijeniti noviji playback/control state
+- Go regresijski testovi pokrivaju pending Play, station switch, stale kontrole i tokenizirani runtime failure tijekom pauze
+- built Windows EXE runtime smoke klikće A pa B i zahtijeva da B odmah preuzme target; dodatni production WPF smoke otvara WAV A pa WAV B u istom procesu
+- feature PR i post-merge main provjere za playback fix prošle su Windows build/runtime/live-stream/clean-worktree, Android, browser, versions/security i Product screenshots prije version bumpa
+- Windows Portable i Setup ostaju unsigned po zahtjevu projekta; integritet se provjerava exact-SHA buildom i SHA-256 release manifestom
+
+Dostupnost pojedine third-party radio stanice i dalje ovisi o infrastrukturi same postaje. Aplikacija mora ostati responzivna, koristiti sigurne fallback izvore i jasno označiti stvarno nedostupan stream bez rušenja playera.
+
 ## 0.0.42
 
 Izdanje 0.0.42 fokusira se na pouzdaniji Windows playback recovery, moderniji Windows 11 vizualni sloj i dodatno uklanjanje legacy Win32 dojma iz produkcijskih dijaloga.
