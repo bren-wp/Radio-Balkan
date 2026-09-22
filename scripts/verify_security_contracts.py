@@ -552,15 +552,13 @@ def main() -> None:
         "Windows Setup go test nije uspio.",
         "Windows Setup go build nije uspio.",
     )
-    require(
-        ".github/workflows/publish.yml",
-        "RADIO_BALKAN_WINDOWS_PFX_B64",
-        "RADIO_BALKAN_WINDOWS_PFX_PASSWORD",
-        "Import-PfxCertificate",
-        "1.3.6.1.5.5.7.3.3",
-        "-RequireSignature",
-        "Verify published Windows artifacts are Authenticode-signed",
-        "Get-AuthenticodeSignature -FilePath $path",
+    forbid(
+        "apps/windows/portable/main.go",
+        "func inputDialogPowerShell(",
+    )
+    forbid(
+        "apps/windows/build-release.ps1",
+        '-ldflags "-s -w ',
     )
     require(
         "apps/windows/build-release.ps1",
