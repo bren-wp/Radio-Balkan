@@ -1,5 +1,21 @@
 # Izdavanja
 
+## 0.0.40
+
+Izdanje 0.0.40 ispravlja startup navigaciju tako da se aplikacija pri svježem pokretanju uvijek otvara na **Početnoj**, umjesto da vrati zadnju spremljenu kategoriju poput **Strano**, Dijaspora, žanr ili drugi browse prikaz.
+
+- Windows nakon učitavanja spremljenog statea resetira samo navigacijski dio na `Tab=all`, `CountryCode=HR` i prazan žanr
+- favorite, recent, glasnoća, health interval, replacement/backup izvori i spremljena veličina prozora ostaju sačuvani
+- dodan je Windows regression test koji kreće iz spremljenog Strano/genre/favorites statea i zahtijeva Početnu bez gubitka trajnih preferenci
+- stvarni Win32 runtime smoke prije prvog korisničkog klika provjerava da built EXE stvarno počinje na Početnoj
+- Android pri svježem `MainActivity` pokretanju također otvara Početnu / Hrvatska
+- Android recreation unutar aktivne sesije, primjerice nakon rotacije, zadržava trenutačni browse prikaz umjesto neočekivanog povratka na Početnu
+- production UI verifier zaključava Android startup-home/recreation ugovor
+- Windows, Android, browser, versions/security, real live-stream transport i clean-worktree gateovi ostaju obavezni prije objave
+- v0.0.39 playback hardening, latest-click-wins, WPF/MCI recovery i pinned public live-stream transport ostaju aktivni
+
+Ovo izdanje ne mijenja katalog ili playback algoritam samo radi verzije; cilj je predvidljiv landing ekran pri svakom svježem pokretanju uz očuvanje trajnih korisničkih postavki.
+
 ## 0.0.39
 
 Izdanje 0.0.39 završava kritični input/playback stability ciklus nakon regresije u kojoj je Windows aplikacija mogla izgledati aktivno, ali ne obrađivati klikove ili pouzdano reproducirati live radio.
