@@ -170,6 +170,32 @@ func TestSafeHTTPURLAcceptsPublicHTTPStreams(t *testing.T) {
 	}
 }
 
+func TestSidebarFallbackGeometryMatchesRenderedRows(t *testing.T) {
+	rows := []int32{
+		sidebarHomeY,
+		sidebarTopY,
+		sidebarCountriesY,
+		sidebarGenresY,
+		sidebarDiasporaY,
+		sidebarForeignY,
+		sidebarFavoritesY,
+		sidebarRecentY,
+		sidebarReplacedY,
+		sidebarBrokenY,
+	}
+	for _, y := range rows {
+		if !sidebarRowContains(y, y) || !sidebarRowContains(y+sidebarItemHeight, y) {
+			t.Fatalf("sidebar row %d does not include its rendered bounds", y)
+		}
+		if sidebarRowContains(y-1, y) || sidebarRowContains(y+sidebarItemHeight+1, y) {
+			t.Fatalf("sidebar row %d accepts coordinates outside rendered bounds", y)
+		}
+	}
+	if sidebarFavoritesY != 393 || sidebarRecentY != 435 {
+		t.Fatalf("library fallback rows drifted: favorites=%d recent=%d", sidebarFavoritesY, sidebarRecentY)
+	}
+}
+
 func TestNavigationTabsIncludeInAppCountryAndGenrePages(t *testing.T) {
 	for _, tab := range []string{"all", "croatia", "popular", "countries", "genres", "favorites", "recent"} {
 		if !isValidTab(tab) {
