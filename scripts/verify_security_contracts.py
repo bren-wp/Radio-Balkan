@@ -620,6 +620,8 @@ def main() -> None:
         'safeGo("ci-runtime-smoke-suite", func() {',
         "func runCIInputSmoke()",
         "input-smoke-ok token=",
+        "step=home-croatia-list",
+        "step=home-after-croatia-list",
         "step=volume-blocked",
         "step=navigation-blocked",
         "audioStopped",
