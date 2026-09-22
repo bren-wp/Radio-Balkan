@@ -77,6 +77,7 @@ const (
 	ES_AUTOHSCROLL      = 0x0080
 	ES_PASSWORD         = 0x0020
 	EM_SETCUEBANNER     = 0x1501
+	EM_SETSEL           = 0x00B1
 
 	SW_SHOW       = 5
 	SW_RESTORE    = 9
@@ -87,6 +88,7 @@ const (
 	WM_PAINT           = 0x000F
 	WM_ERASEBKGND      = 0x0014
 	WM_KEYDOWN         = 0x0100
+	WM_CHAR            = 0x0102
 	WM_CLOSE           = 0x0010
 	WM_ACTIVATEAPP     = 0x001C
 	WM_COMMAND         = 0x0111
@@ -1445,7 +1447,10 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=search-hwnd")
 		return
 	}
-	procSetWindowText.Call(uintptr(app.edit), uintptr(unsafe.Pointer(u16("CI Radio 00001"))))
+	procSetFocus.Call(uintptr(app.edit))
+	for _, ch := range "CI Radio 00001" {
+		procPostMessage.Call(uintptr(app.edit), WM_CHAR, uintptr(ch), 0)
+	}
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
 		ok := app.search == "CI Radio 00001"
@@ -1455,7 +1460,8 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=search-change")
 		return
 	}
-	procSetWindowText.Call(uintptr(app.edit), uintptr(unsafe.Pointer(u16(""))))
+	procSendMessage.Call(uintptr(app.edit), EM_SETSEL, 0, ^uintptr(0))
+	procPostMessage.Call(uintptr(app.edit), WM_CHAR, 0x08, 0) // Backspace
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
 		ok := app.search == ""
