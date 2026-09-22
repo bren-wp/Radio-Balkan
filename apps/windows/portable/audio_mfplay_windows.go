@@ -145,12 +145,6 @@ func mfplaySmokeOpen(rawURL string) error {
 			result <- err
 			return
 		}
-		volume := float32(0)
-		volumeBits := *(*uint32)(unsafe.Pointer(&volume))
-		if err := comCall(player, 20, uintptr(volumeBits)); err != nil { // SetVolume
-			result <- err
-			return
-		}
 		if err := comCall(player, 3); err != nil { // Play
 			result <- err
 			return
