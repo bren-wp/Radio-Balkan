@@ -763,6 +763,30 @@ func TestStopCurrentPlaybackAdvancesRequestGeneration(t *testing.T) {
 	}
 }
 
+func TestAudioEngineStartupWaitCancelsSupersededPlay(t *testing.T) {
+	app = App{
+		done:    make(chan struct{}),
+		playSeq: 101,
+	}
+	ack := make(chan string)
+
+	go func() {
+		time.Sleep(70 * time.Millisecond)
+		app.mu.Lock()
+		app.playSeq = 102
+		app.mu.Unlock()
+	}()
+
+	started := time.Now()
+	_, _, err := waitAudioEngineStartupSignal(ack, 101, 2*time.Second)
+	if !errors.Is(err, errPlayRequestSuperseded) {
+		t.Fatalf("startup wait returned %v; want errPlayRequestSuperseded", err)
+	}
+	if elapsed := time.Since(started); elapsed > 600*time.Millisecond {
+		t.Fatalf("superseded startup wait took %s; latest click should win promptly", elapsed)
+	}
+}
+
 func TestAudioEngineStartupTimeoutIsBounded(t *testing.T) {
 	if audioEngineStartupTimeout < 15*time.Second {
 		t.Fatalf("audio engine startup timeout %s is too short for cold PresentationCore/Add-Type initialization", audioEngineStartupTimeout)

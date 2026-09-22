@@ -13,6 +13,7 @@ tried for every required capability.
 
 from __future__ import annotations
 
+import http.client
 import ipaddress
 import json
 import socket
@@ -56,7 +57,7 @@ def _public_addresses(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.I
     return addresses
 
 
-def validate_public_url(value: str) -> str:
+def _resolved_public_target(value: str) -> tuple[urllib.parse.ParseResult, list[str]]:
     parsed = urllib.parse.urlparse(value)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise ValueError("URL must use http/https and contain a host")
@@ -75,7 +76,108 @@ def validate_public_url(value: str) -> str:
     unsafe = [str(address) for address in addresses if not address.is_global]
     if unsafe:
         raise ValueError("URL resolves to a non-public address: " + ",".join(unsafe))
+    # Preserve the complete validated public address set and pin actual
+    # connections to those numeric addresses only. DNS is never consulted again
+    # between validation and connect, while normal multi-address failover remains.
+    return parsed, [str(address) for address in addresses]
+
+
+def validate_public_url(value: str) -> str:
+    _resolved_public_target(value)
     return value
+
+
+def _connect_pinned(
+    addresses: list[str],
+    port: int,
+    timeout,
+    source_address,
+):
+    if not addresses:
+        raise OSError("no validated public addresses available")
+
+    errors: list[str] = []
+    for address in addresses:
+        try:
+            return socket.create_connection(
+                (address, port),
+                timeout,
+                source_address,
+            )
+        except OSError as exc:
+            errors.append(f"{address}: {exc}")
+    raise OSError("all validated public addresses failed: " + " | ".join(errors))
+
+
+class PinnedHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, host, *, pinned_addresses: list[str], timeout=socket._GLOBAL_DEFAULT_TIMEOUT):
+        super().__init__(host, timeout=timeout)
+        self._pinned_addresses = tuple(pinned_addresses)
+
+    def connect(self):
+        self.sock = _connect_pinned(
+            list(self._pinned_addresses),
+            self.port,
+            self.timeout,
+            self.source_address,
+        )
+        if self._tunnel_host:
+            self._tunnel()
+
+
+class PinnedHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(
+        self,
+        host,
+        *,
+        pinned_addresses: list[str],
+        timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
+        context: ssl.SSLContext,
+    ):
+        super().__init__(host, timeout=timeout, context=context)
+        self._pinned_addresses = tuple(pinned_addresses)
+
+    def connect(self):
+        sock = _connect_pinned(
+            list(self._pinned_addresses),
+            self.port,
+            self.timeout,
+            self.source_address,
+        )
+        server_hostname = self.host
+        if self._tunnel_host:
+            self.sock = sock
+            self._tunnel()
+            sock = self.sock
+            server_hostname = self._tunnel_host
+        self.sock = self._context.wrap_socket(sock, server_hostname=server_hostname)
+
+
+class PinnedHTTPHandler(urllib.request.HTTPHandler):
+    def http_open(self, req):
+        _, pinned_addresses = _resolved_public_target(req.full_url)
+        return self.do_open(
+            lambda host, timeout=socket._GLOBAL_DEFAULT_TIMEOUT: PinnedHTTPConnection(
+                host,
+                pinned_addresses=pinned_addresses,
+                timeout=timeout,
+            ),
+            req,
+        )
+
+
+class PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        _, pinned_addresses = _resolved_public_target(req.full_url)
+        return self.do_open(
+            lambda host, timeout=socket._GLOBAL_DEFAULT_TIMEOUT: PinnedHTTPSConnection(
+                host,
+                pinned_addresses=pinned_addresses,
+                timeout=timeout,
+                context=self._context,
+            ),
+            req,
+        )
 
 
 class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -87,7 +189,8 @@ class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
 
 SAFE_OPENER = urllib.request.build_opener(
     urllib.request.ProxyHandler({}),
-    urllib.request.HTTPSHandler(context=SSL_CONTEXT),
+    PinnedHTTPHandler(),
+    PinnedHTTPSHandler(context=SSL_CONTEXT),
     SafeRedirectHandler(),
 )
 

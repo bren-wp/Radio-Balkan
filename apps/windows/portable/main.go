@@ -7188,6 +7188,51 @@ func addRecentLocked(id string) {
 const audioEngineStartupTimeout = 20 * time.Second
 
 func startAudioEngineLocked() error {
+	return startAudioEngineLockedForRequest(0)
+}
+
+func waitAudioEngineStartupSignal(ack <-chan string, reqSeq uint64, timeout time.Duration) (string, bool, error) {
+	if timeout <= 0 {
+		timeout = audioEngineStartupTimeout
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	var supersedeTick <-chan time.Time
+	var supersedeTicker *time.Ticker
+	if reqSeq != 0 {
+		supersedeTicker = time.NewTicker(50 * time.Millisecond)
+		supersedeTick = supersedeTicker.C
+		defer supersedeTicker.Stop()
+	}
+
+	for {
+		select {
+		case ready, ok := <-ack:
+			return ready, ok, nil
+		case <-supersedeTick:
+			if !playRequestStillCurrent(reqSeq) {
+				return "", false, errPlayRequestSuperseded
+			}
+		case <-timer.C:
+			return "", false, errors.New("audio engine startup timeout")
+		case <-app.done:
+			return "", false, context.Canceled
+		}
+	}
+}
+
+func abortAudioEngineStartup(cmd *exec.Cmd, in io.Closer) {
+	if in != nil {
+		_ = in.Close()
+	}
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	}
+}
+
+func startAudioEngineLockedForRequest(reqSeq uint64) error {
 	if app.audioCmd != nil && app.audioCmd.Process != nil {
 		return nil
 	}
@@ -7523,36 +7568,23 @@ try { $p.Dispose() } catch {}`
 		}
 		close(ack)
 	}()
-	select {
-	case ready, ok := <-ack:
-		if !ok || ready != "READY" {
-			detail := strings.TrimSpace(audioStderr.String())
-			if strings.HasPrefix(ready, "BOOTERR ") {
-				if decoded, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(strings.TrimPrefix(ready, "BOOTERR "))); decodeErr == nil {
-					detail = strings.TrimSpace(string(decoded))
-				}
+	ready, ok, waitErr := waitAudioEngineStartupSignal(ack, reqSeq, audioEngineStartupTimeout)
+	if waitErr != nil {
+		abortAudioEngineStartup(cmd, in)
+		return waitErr
+	}
+	if !ok || ready != "READY" {
+		detail := strings.TrimSpace(audioStderr.String())
+		if strings.HasPrefix(ready, "BOOTERR ") {
+			if decoded, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(strings.TrimPrefix(ready, "BOOTERR "))); decodeErr == nil {
+				detail = strings.TrimSpace(string(decoded))
 			}
-			_ = in.Close()
-			if cmd.Process != nil {
-				_ = cmd.Process.Kill()
-			}
-			if detail != "" {
-				return fmt.Errorf("audio engine inicijalizacija: %s", detail)
-			}
-			return errors.New("audio engine se nije ispravno inicijalizirao")
 		}
-	case <-time.After(audioEngineStartupTimeout):
-		_ = in.Close()
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
+		abortAudioEngineStartup(cmd, in)
+		if detail != "" {
+			return fmt.Errorf("audio engine inicijalizacija: %s", detail)
 		}
-		return errors.New("audio engine startup timeout")
-	case <-app.done:
-		_ = in.Close()
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
-		return context.Canceled
+		return errors.New("audio engine se nije ispravno inicijalizirao")
 	}
 	app.audioCmd = cmd
 	app.audioIn = in
@@ -7897,7 +7929,7 @@ func audioSendForRequest(line string, reqSeq uint64) error {
 		audioStopMCI()
 		setAudioBackend(audioBackendNone)
 	}
-	if err := startAudioEngineLocked(); err != nil {
+	if err := startAudioEngineLockedForRequest(reqSeq); err != nil {
 		cleanupFailedPlayLocked()
 		return err
 	}
