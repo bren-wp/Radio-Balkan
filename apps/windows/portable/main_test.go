@@ -935,6 +935,7 @@ func TestPlaybackRecoveryCandidatesPreferFreshCatalogBeforePersistedBackups(t *t
 		CountryCode: "HR",
 		URLResolved: "https://fresh.example/live.aac",
 		URL:         "https://fresh.example/listen",
+		LastCheckOK: 1,
 	}
 	alternatives := []RadioStation{
 		{
@@ -960,11 +961,11 @@ func TestPlaybackRecoveryCandidatesPreferFreshCatalogBeforePersistedBackups(t *t
 	want := []string{
 		"https://current.example/live.mp3",
 		"https://current.example/listen",
+		"https://backup.example/live.mp3",
 		"https://fresh.example/live.aac",
 		"https://fresh.example/listen",
 		"https://alt.example/live.mp3",
 		"https://alt.example/listen",
-		"https://backup.example/live.mp3",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("recovery candidates = %#v; want %#v", got, want)
@@ -976,6 +977,36 @@ func TestPlaybackRecoveryCandidatesPreferFreshCatalogBeforePersistedBackups(t *t
 	}
 	if playbackRecoveryCandidateLimit < 5 {
 		t.Fatalf("recovery candidate limit = %d; must allow multiple mirrors", playbackRecoveryCandidateLimit)
+	}
+}
+
+func TestPlaybackRecoveryCandidatesRejectBrokenUUIDRefresh(t *testing.T) {
+	station := RadioStation{
+		StationUUID: "station-1",
+		Name:        "Radio Test",
+		CountryCode: "HR",
+		URLResolved: "https://current.example/live.mp3",
+	}
+	brokenRefresh := &RadioStation{
+		StationUUID: "station-1",
+		Name:        "Radio Test",
+		CountryCode: "HR",
+		URLResolved: "https://broken-refresh.example/live.mp3",
+		LastCheckOK: 0,
+	}
+	got := playbackRecoveryCandidates(
+		station,
+		brokenRefresh,
+		nil,
+		[]string{"https://backup.example/live.mp3"},
+	)
+	for _, candidate := range got {
+		if candidate == brokenRefresh.URLResolved {
+			t.Fatalf("known-broken UUID refresh leaked into playback recovery: %#v", got)
+		}
+	}
+	if len(got) < 2 || got[1] != "https://backup.example/live.mp3" {
+		t.Fatalf("persisted backup was not reserved near the front of recovery: %#v", got)
 	}
 }
 
