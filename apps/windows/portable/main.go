@@ -7725,7 +7725,7 @@ func handleAudioBackendFailureForRequest(expected audioBackendKind, reqSeq uint6
 	}
 
 	now := time.Now()
-	reqSeq := app.playSeq
+	recoverySeq := app.playSeq
 	allowRecover := !app.audioRecovering && (app.lastAudioFailure.IsZero() || now.Sub(app.lastAudioFailure) > 20*time.Second)
 	app.playing = false
 	app.audioBackend = audioBackendNone
@@ -7760,7 +7760,7 @@ func handleAudioBackendFailureForRequest(expected audioBackendKind, reqSeq uint6
 
 		app.mu.Lock()
 		// A Stop, Next or newer station click always wins over delayed recovery.
-		if app.playSeq != reqSeq || app.currentKey != key || app.audioStopped {
+		if app.playSeq != recoverySeq || app.currentKey != key || app.audioStopped {
 			app.audioRecovering = false
 			app.mu.Unlock()
 			return
