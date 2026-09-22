@@ -68,7 +68,7 @@ const (
 	SW_SHOW              = 5
 )
 
-var appVersion = "0.0.40"
+var appVersion = "0.0.41"
 
 type WNDCLASS struct {
 	Style                                    uint32
