@@ -1508,6 +1508,11 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
 
     private void setSearchVisible(boolean show) {
         if (searchBox == null || search == null) return;
+        if (show && isBrowsePageVisible()) {
+            hideBrowsePage();
+            applyFilterAsync();
+            if (list != null) list.smoothScrollToPosition(0);
+        }
         searchBox.setVisibility(show ? View.VISIBLE : View.GONE);
         InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
         if (show) {
