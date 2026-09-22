@@ -664,6 +664,15 @@ func TestBackendFailureWhilePausedForcesReconnectOnNextPlay(t *testing.T) {
 	}
 }
 
+func TestAudioEngineStartupTimeoutIsBounded(t *testing.T) {
+	if audioEngineStartupTimeout < 15*time.Second {
+		t.Fatalf("audio engine startup timeout %s is too short for cold PresentationCore/Add-Type initialization", audioEngineStartupTimeout)
+	}
+	if audioEngineStartupTimeout > 30*time.Second {
+		t.Fatalf("audio engine startup timeout %s is too long; startup must remain bounded", audioEngineStartupTimeout)
+	}
+}
+
 func TestAudioEngineCommandLifecycle(t *testing.T) {
 	app = App{done: make(chan struct{})}
 	defer audioShutdown()
