@@ -4710,7 +4710,7 @@ func handleClick(x, y int32) {
 				safeGo("manual-health", healthCheckAll)
 			}
 		case hitAbout:
-			messageBox(hwndOrZero(), "Radio Balkan", "Radio Balkan "+appVersion+"\n\nRadio iz Hrvatske i regije, posebna kategorija Dijaspora te odabrane strane postaje.\nFavoriti i povijest slušanja rade lokalno na tvojem računalu. Napredne kontrole izvora dostupne su samo u Admin načinu rada.", MB_ICONINFORMATION)
+			messageBox(hwndOrZero(), "Radio Balkan", "Radio Balkan "+appVersion+"\n\nRadio iz Hrvatske i regije, posebna kategorija Dijaspora te odabrane strane postaje.\nFavoriti i povijest slušanja rade lokalno na tvojem računalu. Napredne kontrole reprodukcije dostupne su samo u Admin načinu rada.", MB_ICONINFORMATION)
 		case hitAdmin:
 			toggleAdminSession()
 		case hitStationDetails:
@@ -5173,7 +5173,7 @@ func copyStationLink(idx int) {
 	app.mu.RUnlock()
 	u := effectiveURL(s)
 	if u == "" {
-		setStatus("Ova stanica nema dostupan izvor za reprodukciju")
+		setStatus("Stanica trenutno nije dostupna")
 		postUI()
 		return
 	}
@@ -5265,7 +5265,7 @@ func replaceStation(idx int) {
 	app.mu.RUnlock()
 	key := stationKey(s)
 	def := effectiveURL(s)
-	value, ok := inputDialog(app.hwnd, "Promijeni izvor", "Unesi novu http/https poveznicu za reprodukciju za:\n"+s.Name+"\n\nPrazno polje vraća automatski odabir.", def)
+	value, ok := inputDialog(app.hwnd, "Promijeni poveznicu", "Unesi novu http/https poveznicu za reprodukciju za:\n"+s.Name+"\n\nPrazno polje vraća automatski odabir.", def)
 	if !ok {
 		return
 	}
@@ -5280,12 +5280,12 @@ func replaceStation(idx int) {
 		postUI()
 		return
 	}
-	setStatus("Provjeravam novi izvor…")
+	setStatus("Provjeravam novu poveznicu…")
 	invalidate()
 	safeGo("manual-replace-"+key, func() {
 		resolved, valid := checkStream(value)
 		if !valid {
-			queueAlert("Neispravan URL", "Novi izvor nije dostupan.", MB_ICONWARNING)
+			queueAlert("Neispravan URL", "Nova poveznica nije dostupna.", MB_ICONWARNING)
 			setStatus("Zamjena nije spremljena")
 			postUI()
 			return
@@ -5293,9 +5293,9 @@ func replaceStation(idx int) {
 		rememberReplacement(idx, key, resolved)
 		rebuildFilter()
 		if restartCurrentStationIfPlaying(key, idx) {
-			setStatus("Izvor promijenjen · ponovno povezujem")
+			setStatus("Poveznica je promijenjena · ponovno povezujem")
 		} else {
-			setStatus("Izvor promijenjen · " + s.Name)
+			setStatus("Poveznica je promijenjena · " + s.Name)
 		}
 		postUI()
 	})
