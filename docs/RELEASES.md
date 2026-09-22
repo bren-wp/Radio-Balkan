@@ -1,5 +1,22 @@
 # Izdavanja
 
+## 0.0.39
+
+Izdanje 0.0.39 završava kritični input/playback stability ciklus nakon regresije u kojoj je Windows aplikacija mogla izgledati aktivno, ali ne obrađivati klikove ili pouzdano reproducirati live radio.
+
+- stvarni Win32 runtime smoke sada provjerava sidebar/header navigaciju, Search, Favorite, station details/back, Play, Stop, resize i input dok je audio backend pod opterećenjem
+- Windows playback koristi request-generation/latest-click-wins semantiku; zastarjeli PLAY/ACK i cold-start helper više ne mogu blokirati noviju stanicu
+- superseded PowerShell/WPF startup procesi se odmah gase i reapaju, bez curenja process/pipe handleova
+- WPF MediaFailed/MediaEnded događaji ostaju aktivni nakon MediaOpened, a MCI liveness se provjerava backend-native stanjem
+- playback watchdog više ne otvara agresivne paralelne HTTP probe konekcije prema već reproduciranom streamu
+- real-network CI provjerava aktualne Balkan MP3, AAC/AAC+, HTTPS i raw→resolved stream putanje
+- live-radio CI probe blokira privatne/lokalne ciljeve, pin-a stvarnu konekciju na prethodno validirani javni IP skup i zadržava multi-address failover bez ponovnog DNS lookup-a
+- Android zadržava odvojene Zemlje i Žanrove, direct resolved playback i stabilan search/browse lifecycle
+- browser player/session/network regression gateovi ostaju obavezni
+- versions/security/UI, browser, Android i Windows exact-head CI uključujući stvarni runtime soak i clean-worktree prošli su prije release bumpa
+
+Prioritet v0.0.39 je stvarna funkcionalnost: svaki glavni klik mora prolaziti kroz stvarni runtime input put, reprodukcija mora ostati responzivna na brze promjene stanice, a vanjski stream ili audio backend ne smiju blokirati UI thread.
+
 ## 0.0.37
 
 Izdanje 0.0.37 je stabilizacijski hotfix nakon regresije u kojoj Windows UI i playback mogu djelovati potpuno neaktivno kada audio backend zapne ili više nije isti backend koji stvarno reproducira zvuk.
