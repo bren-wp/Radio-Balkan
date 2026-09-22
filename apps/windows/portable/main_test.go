@@ -635,6 +635,35 @@ func TestMCIModeHealthUsesBackendStateNotHTTPProbe(t *testing.T) {
 	}
 }
 
+func TestBackendFailureWhilePausedForcesReconnectOnNextPlay(t *testing.T) {
+	st := RadioStation{StationUUID: "paused-station", Name: "Paused Station"}
+	key := stationKey(st)
+	app = App{
+		stations:     []RadioStation{st},
+		current:      0,
+		currentKey:   key,
+		playing:      false,
+		audioStopped: false,
+		audioBackend: audioBackendWPF,
+	}
+	handleAudioBackendFailure(audioBackendWPF, "")
+
+	app.mu.RLock()
+	backend := app.audioBackend
+	playing := app.playing
+	stopped := app.audioStopped
+	app.mu.RUnlock()
+	if backend != audioBackendNone {
+		t.Fatalf("paused failed backend = %v; want audioBackendNone so Resume reconnects", backend)
+	}
+	if playing {
+		t.Fatal("paused runtime failure unexpectedly marked playback active")
+	}
+	if stopped {
+		t.Fatal("paused runtime failure must preserve resume/reconnect semantics")
+	}
+}
+
 func TestAudioEngineCommandLifecycle(t *testing.T) {
 	app = App{done: make(chan struct{})}
 	defer audioShutdown()
