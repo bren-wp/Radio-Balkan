@@ -696,6 +696,16 @@ func TestStaleAsyncStopCannotClearNewPlaybackBackend(t *testing.T) {
 	}
 }
 
+func TestMCIControlRequiresActiveBackend(t *testing.T) {
+	app = App{
+		done:         make(chan struct{}),
+		audioBackend: audioBackendNone,
+	}
+	if _, err := mciQueryExisting("status radio mode"); err == nil {
+		t.Fatal("MCI command ran without MCI owning the audio backend")
+	}
+}
+
 func TestWPFPlayReplacesActiveMCIBackend(t *testing.T) {
 	if !shouldStopMCIForAudioCommand("PLAY Zm9v 0.50", audioBackendMCI) {
 		t.Fatal("WPF PLAY must close an older MCI fallback stream first")
