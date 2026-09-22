@@ -602,6 +602,11 @@ def main() -> None:
         "MediaOpened",
         "MediaFailed",
         "Dispatcher.Run()",
+        "Each Play owns a distinct MediaPlayer instance and request token.",
+        "Object.ReferenceEquals(player, sourcePlayer)",
+        'Console.Out.WriteLine("EVENT FAILED " + token + " " + encoded)',
+        "handleAudioBackendFailureForRequest(audioBackendWPF, eventSeq, detail)",
+        'fmt.Sprintf("PLAY %d %s %.2f", reqSeq, enc, vol)',
         "audio-smoke-ok token=",
         "audio-smoke-no-device token=",
         "'PING' { }",
@@ -681,6 +686,7 @@ def main() -> None:
         "TestStopCurrentPlaybackAdvancesRequestGeneration",
         "TestSupersededPlayCannotClearNewerBackend",
         "TestMCIControlRequiresActiveBackend",
+        "TestStaleWPFRuntimeFailureCannotAffectNewerPlay",
     )
     forbid(
         "apps/windows/portable/main_test.go",
@@ -740,10 +746,18 @@ def main() -> None:
         '"PING", "VOLUME 0.60", "STOP", "PING"',
         "TestAudioEnginePlayReportsActualMediaOpenOutcome",
         "open-outcome.wav",
-        "PLAY %s 0.00",
+        "PLAY 0 %s 0.00",
         "0XC00D11BA",
         "structured MediaFailed outcome confirmed",
         "silentWAV",
+    )
+
+    require(
+        "scripts/test_live_radio_streams.py",
+        "def probe_indirect(raw_url: str)",
+        "def playlist_targets(data: bytes)",
+        'indirect_ok, indirect_detail = probe_indirect(raw)',
+        'verified_caps.discard("indirect")',
     )
 
     require(
