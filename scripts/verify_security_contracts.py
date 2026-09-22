@@ -631,6 +631,8 @@ def main() -> None:
         "if !playRequestStillCurrent(reqSeq) {",
         'waitAudioAckLockedForRequest(audioCommandTimeout("STOP"), reqSeq)',
         "Commit backend ownership while audioMu is still held.",
+        "cleanupFailedPlayLocked := func()",
+        "caller must never tear down backend state after this function returns.",
         "Serialize the complete MCI fallback lifecycle with all WPF/backend commands.",
         "abortStaleMCI := func() bool",
         'safeGo("audio-pause-control", func() {',
@@ -658,6 +660,7 @@ def main() -> None:
     forbid(
         "apps/windows/portable/main.go",
         'safeGo("audio-warmup", warmAudioEngine)',
+        'logError("audio-engine", err)\n\t\tapp.audioMu.Lock()',
     )
     forbid(
         "apps/windows/portable/main.go",
