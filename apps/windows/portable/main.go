@@ -7191,6 +7191,37 @@ func startAudioEngineLocked() error {
 	return startAudioEngineLockedForRequest(0)
 }
 
+func waitAudioEngineStartupSignal(ack <-chan string, reqSeq uint64, timeout time.Duration) (string, bool, error) {
+	if timeout <= 0 {
+		timeout = audioEngineStartupTimeout
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	var supersedeTick <-chan time.Time
+	var supersedeTicker *time.Ticker
+	if reqSeq != 0 {
+		supersedeTicker = time.NewTicker(50 * time.Millisecond)
+		supersedeTick = supersedeTicker.C
+		defer supersedeTicker.Stop()
+	}
+
+	for {
+		select {
+		case ready, ok := <-ack:
+			return ready, ok, nil
+		case <-supersedeTick:
+			if !playRequestStillCurrent(reqSeq) {
+				return "", false, errPlayRequestSuperseded
+			}
+		case <-timer.C:
+			return "", false, errors.New("audio engine startup timeout")
+		case <-app.done:
+			return "", false, context.Canceled
+		}
+	}
+}
+
 func startAudioEngineLockedForRequest(reqSeq uint64) error {
 	if app.audioCmd != nil && app.audioCmd.Process != nil {
 		return nil
@@ -7527,58 +7558,29 @@ try { $p.Dispose() } catch {}`
 		}
 		close(ack)
 	}()
-	startupTimer := time.NewTimer(audioEngineStartupTimeout)
-	defer startupTimer.Stop()
-	var supersedeTick <-chan time.Time
-	var supersedeTicker *time.Ticker
-	if reqSeq != 0 {
-		supersedeTicker = time.NewTicker(50 * time.Millisecond)
-		supersedeTick = supersedeTicker.C
-		defer supersedeTicker.Stop()
-	}
-
-startupReady:
-	for {
-		select {
-		case ready, ok := <-ack:
-			if !ok || ready != "READY" {
-				detail := strings.TrimSpace(audioStderr.String())
-				if strings.HasPrefix(ready, "BOOTERR ") {
-					if decoded, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(strings.TrimPrefix(ready, "BOOTERR "))); decodeErr == nil {
-						detail = strings.TrimSpace(string(decoded))
-					}
-				}
-				_ = in.Close()
-				if cmd.Process != nil {
-					_ = cmd.Process.Kill()
-				}
-				if detail != "" {
-					return fmt.Errorf("audio engine inicijalizacija: %s", detail)
-				}
-				return errors.New("audio engine se nije ispravno inicijalizirao")
-			}
-			break startupReady
-		case <-supersedeTick:
-			if !playRequestStillCurrent(reqSeq) {
-				_ = in.Close()
-				if cmd.Process != nil {
-					_ = cmd.Process.Kill()
-				}
-				return errPlayRequestSuperseded
-			}
-		case <-startupTimer.C:
-			_ = in.Close()
-			if cmd.Process != nil {
-				_ = cmd.Process.Kill()
-			}
-			return errors.New("audio engine startup timeout")
-		case <-app.done:
-			_ = in.Close()
-			if cmd.Process != nil {
-				_ = cmd.Process.Kill()
-			}
-			return context.Canceled
+	ready, ok, waitErr := waitAudioEngineStartupSignal(ack, reqSeq, audioEngineStartupTimeout)
+	if waitErr != nil {
+		_ = in.Close()
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
 		}
+		return waitErr
+	}
+	if !ok || ready != "READY" {
+		detail := strings.TrimSpace(audioStderr.String())
+		if strings.HasPrefix(ready, "BOOTERR ") {
+			if decoded, decodeErr := base64.StdEncoding.DecodeString(strings.TrimSpace(strings.TrimPrefix(ready, "BOOTERR "))); decodeErr == nil {
+				detail = strings.TrimSpace(string(decoded))
+			}
+		}
+		_ = in.Close()
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		if detail != "" {
+			return fmt.Errorf("audio engine inicijalizacija: %s", detail)
+		}
+		return errors.New("audio engine se nije ispravno inicijalizirao")
 	}
 	app.audioCmd = cmd
 	app.audioIn = in
