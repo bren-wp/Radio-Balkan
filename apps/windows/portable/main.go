@@ -1023,6 +1023,17 @@ func validateState(st PersistedState, loaded bool) PersistedState {
 	return st
 }
 
+// startupHomeState keeps durable user preferences but deliberately treats the
+// browse location as session state. Every normal launch starts on Početna so a
+// previously selected category such as Strano/Dijaspora/Žanr cannot replace
+// the application's landing view.
+func startupHomeState(st PersistedState) PersistedState {
+	st.Tab = "all"
+	st.CountryCode = "HR"
+	st.Genre = ""
+	return st
+}
+
 func sessionMarkerPath() string { return filepath.Join(stateDir(), "session.lock") }
 
 func detectAndMarkUncleanStartup() bool {
@@ -1143,17 +1154,11 @@ func main() {
 	appCtx, appCancel := context.WithCancel(context.Background())
 	app = App{tab: "all", current: -1, loading: true, status: "Učitavanje radio stanica…", repairLocks: map[string]*repairGuard{}, http: client, ctx: appCtx, cancel: appCancel, streamSem: make(chan struct{}, 2), done: make(chan struct{})}
 	state, stateLoaded := loadState()
-	app.state = validateState(state, stateLoaded)
+	app.state = startupHomeState(validateState(state, stateLoaded))
 	app.safeMode = detectAndMarkUncleanStartup()
+	app.tab = app.state.Tab
 	app.country = app.state.CountryCode
 	app.genre = app.state.Genre
-	if isValidTab(app.state.Tab) {
-		app.tab = app.state.Tab
-	}
-	if app.tab == "replaced" || app.tab == "broken" {
-		app.tab = "all"
-		app.state.Tab = "all"
-	}
 	if app.safeMode {
 		// A previous launch did not finish cleanly. Start conservatively and avoid
 		// immediate full-network stress until the UI is responsive.
@@ -1324,6 +1329,13 @@ func runCIInputSmoke() {
 		return ready
 	}) {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=window-ready")
+		return
+	}
+	app.mu.RLock()
+	startsHome := app.tab == "all" && app.country == "HR" && app.genre == ""
+	app.mu.RUnlock()
+	if !startsHome {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=startup-home")
 		return
 	}
 
