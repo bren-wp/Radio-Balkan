@@ -387,6 +387,17 @@ def main() -> int:
         require(errors, windows_catalog, needle, "Windows supplemental catalog")
 
     windows = read("apps/windows/portable/main.go")
+    hit_enum = re.search(r"const \(\n\thitNone HitKind = iota(?P<body>.*?)\n\)", windows, re.S)
+    if hit_enum is None:
+        errors.append("Windows click contract: HitKind enum not found")
+    else:
+        hit_kinds = ["hitNone"] + re.findall(r"^\s*(hit[A-Za-z0-9]+)\s*$", hit_enum.group("body"), re.M)
+        click_body = method_body(windows, "func handleClick(x, y int32)")
+        for hit_kind in hit_kinds:
+            if hit_kind == "hitNone":
+                continue
+            if f"case {hit_kind}:" not in click_body:
+                errors.append(f"Windows click contract: {hit_kind} has no handleClick branch")
     require(errors, windows, 'st.CountryCode = "HR"', "Windows first-run country default")
     require(errors, windows, 'country == "HR"', "Windows home navigation")
     require(errors, windows, 'func homeGridColumns(width int32) int', "Windows responsive home cards")
