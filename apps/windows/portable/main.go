@@ -2998,34 +2998,6 @@ func cachedHomeDiscovery(columns int) HomeDiscoveryCache {
 	return HomeDiscoveryCache{Columns: columns}
 }
 
-, predicate func(RadioStation) bool) []int {
-	if limit <= 0 {
-		return nil
-	}
-	app.mu.RLock()
-	items := make([]int, 0, limit*3)
-	for idx, station := range app.stations {
-		if _, skip := excluded[idx]; skip {
-			continue
-		}
-		if predicate != nil && !predicate(station) {
-			continue
-		}
-		items = append(items, idx)
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		left, right := app.stations[items[i]], app.stations[items[j]]
-		if left.Votes != right.Votes {
-			return left.Votes > right.Votes
-		}
-		return strings.ToLower(left.Name) < strings.ToLower(right.Name)
-	})
-	app.mu.RUnlock()
-	if len(items) > limit {
-		items = items[:limit]
-	}
-	return items
-}
 
 func addExcluded(excluded map[int]struct{}, ids []int) {
 	for _, idx := range ids {
