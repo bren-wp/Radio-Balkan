@@ -118,7 +118,7 @@ try {
   $noDevice = $lines | Where-Object { $_.Contains($noDeviceMarker) } | Select-Object -First 1
   if (-not $inputOk) {
     $details = Get-CrashDetails
-    throw ("Radio Balkan did not complete the real mouse-click responsiveness smoke: full-catalog navigation, supplemental filters, rendered station Play, post-load repaint, and volume while the audio backend lock was held.`n{0}" -f $details)
+    throw ("Radio Balkan did not complete the real mouse-click responsiveness smoke: sidebar/header Countries+Genres, native search focus, favorite, station details/back, rendered Play, Stop, full-catalog repaint, supplemental filters, and volume/navigation while the audio backend lock was held.`n{0}" -f $details)
   }
   if (-not $audioOpened -and -not $noDevice) {
     $details = Get-CrashDetails
