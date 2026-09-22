@@ -4379,7 +4379,7 @@ func toggleCurrentPlayback() {
 					// playback so audible and visible state cannot diverge. Keep
 					// the same media generation token while the independent control
 					// generation prevents an older Pause from stopping a newer Resume.
-					audioStopForRequest(mediaSeq)
+					audioStopForControl(mediaSeq, controlSeq)
 					app.mu.Lock()
 					stillCurrent := app.playSeq == mediaSeq && app.audioControlSeq == controlSeq && app.currentKey == key
 					if stillCurrent {
@@ -5007,11 +5007,19 @@ func clearPendingPlayRequest(reqSeq uint64) {
 	if reqSeq == 0 {
 		return
 	}
+	changed := false
 	app.mu.Lock()
 	if app.pendingPlaySeq == reqSeq {
 		app.pendingPlaySeq = 0
+		changed = true
 	}
 	app.mu.Unlock()
+	if changed {
+		// Pending playback changes which controls are rendered/hit-testable.
+		// Always schedule a final repaint after clearing it so the deferred
+		// cleanup cannot leave the player visibly stuck in its loading state.
+		postUI()
+	}
 }
 
 func pendingPlayCurrentLocked() bool {
@@ -8299,6 +8307,22 @@ func audioStopForRequest(reqSeq uint64) {
 	if !playRequestStillCurrent(reqSeq) {
 		return
 	}
+	audioStopLocked(reqSeq)
+}
+
+func audioStopForControl(mediaSeq, controlSeq uint64) {
+	app.audioMu.Lock()
+	defer app.audioMu.Unlock()
+	// Pause fallback Stop must be ordered by both media and control generation.
+	// A Resume that wins before this fallback obtains audioMu invalidates the
+	// fallback so it cannot stop the resumed stream.
+	if !playRequestStillCurrent(mediaSeq) || !audioControlStillCurrent(mediaSeq, controlSeq) {
+		return
+	}
+	audioStopLocked(mediaSeq)
+}
+
+func audioStopLocked(reqSeq uint64) {
 	switch currentAudioBackend() {
 	case audioBackendWPF:
 		if app.audioIn != nil {
