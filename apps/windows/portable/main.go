@@ -1736,16 +1736,65 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-play-paint")
 		return
 	}
+	app.mu.RLock()
+	firstTargetKey := ""
+	if len(app.filtered) > 0 {
+		firstTargetIdx := app.filtered[0]
+		if firstTargetIdx >= 0 && firstTargetIdx < len(app.stations) {
+			firstTargetKey = stationKey(app.stations[firstTargetIdx])
+		}
+	}
+	app.mu.RUnlock()
 	postClick(firstPlayX, 200)
 	if !waitFor(700*time.Millisecond, func() bool {
 		app.mu.RLock()
-		advanced := app.playSeq > beforePlaySeq
+		advanced := app.playSeq > beforePlaySeq && firstTargetKey != "" && app.currentKey == firstTargetKey
 		app.mu.RUnlock()
 		return advanced
 	}) {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-play")
 		return
 	}
+
+	// Simulate A already playing, then use the real second card Play hit-region.
+	// B must become current immediately and supersede A even before network open.
+	app.mu.Lock()
+	app.playing = true
+	app.audioStopped = false
+	app.audioBackend = audioBackendNone
+	beforeSwitchSeq := app.playSeq
+	app.mu.Unlock()
+	secondPlayX := firstPlayX
+	secondPlayY := int32(200)
+	if columns > 1 {
+		secondPlayX = mainL + (cardW+8) + cardW - 22
+	} else {
+		secondPlayY = 200 + 82
+	}
+	app.mu.RLock()
+	secondTargetKey := ""
+	if len(app.filtered) > 1 {
+		secondTargetIdx := app.filtered[1]
+		if secondTargetIdx >= 0 && secondTargetIdx < len(app.stations) {
+			secondTargetKey = stationKey(app.stations[secondTargetIdx])
+		}
+	}
+	app.mu.RUnlock()
+	if secondTargetKey == "" {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-switch-target")
+		return
+	}
+	postClick(secondPlayX, secondPlayY)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		switched := app.playSeq > beforeSwitchSeq && app.currentKey == secondTargetKey && !app.playing
+		app.mu.RUnlock()
+		return switched
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-switch")
+		return
+	}
+
 	// Cancel the synthetic internet request before the independent local-WAV
 	// audio smoke starts; request-aware playback must observe this sequence bump.
 	app.mu.Lock()
@@ -4744,6 +4793,12 @@ func playStationByKey(key string, fallback int) {
 	}
 }
 
+func shouldStopAudioForStationSwitch(currentKey, nextKey string, backend audioBackendKind) bool {
+	currentKey = strings.TrimSpace(currentKey)
+	nextKey = strings.TrimSpace(nextKey)
+	return backend != audioBackendNone && currentKey != "" && nextKey != "" && currentKey != nextKey
+}
+
 func playStation(idx int) {
 	app.mu.Lock()
 	if idx < 0 || idx >= len(app.stations) {
@@ -4752,14 +4807,36 @@ func playStation(idx int) {
 	}
 	s := app.stations[idx]
 	key := stationKey(s)
+	stopExisting := shouldStopAudioForStationSwitch(app.currentKey, key, app.audioBackend)
 	app.playSeq++
 	reqSeq := app.playSeq
 	app.pendingPlaySeq = reqSeq
+	// A station click owns the visible selection immediately. Keeping the old
+	// station as current until the new network open completed made A remain the
+	// UI/backend owner while B was already requested, which broke rapid A -> B
+	// switching and made repeated clicks cancel the wrong generation.
+	app.current = idx
+	app.currentKey = key
+	app.playing = false
+	app.audioStopped = false
+	app.audioRecovering = false
+	app.nowPlaying = ""
+	app.nowPlayingStation = ""
+	app.metadataSeq++
 	app.mu.Unlock()
 	setStatus("Otvaram: " + s.Name)
 	invalidate()
 	safeGo("play-"+key, func() {
 		defer clearPendingPlayRequest(reqSeq)
+		if stopExisting {
+			// Stop the previous station before resolving/opening the new one. The
+			// request token prevents this delayed Stop from ever silencing C if the
+			// user clicks A -> B -> C rapidly.
+			audioStopForRequest(reqSeq)
+		}
+		if !playRequestStillCurrent(reqSeq) {
+			return
+		}
 		final, ok := ensureStreamKey(idx, key)
 		if !ok {
 			app.mu.RLock()
