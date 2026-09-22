@@ -1390,6 +1390,22 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=favorite")
 		return
 	}
+	browseCardCenter := func(index int, cardH int32) (int32, int32) {
+		app.mu.RLock()
+		clientWidth, scroll := app.clientWidth, app.scroll
+		app.mu.RUnlock()
+		mainL := sidebarWidth + mainPad
+		mainR := clientWidth - mainPad
+		width := mainR - mainL
+		columns := browseGridColumns(width)
+		gap := int32(12)
+		cardW := (width - gap*int32(columns-1)) / int32(columns)
+		row, col := index/columns, index%columns
+		l := mainL + int32(col)*(cardW+gap)
+		t := int32(164-scroll) + int32(row)*(cardH+gap)
+		return l + cardW/2, t + cardH/2
+	}
+
 	postClick(100, 197) // Zemlje
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
@@ -1400,6 +1416,22 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=countries")
 		return
 	}
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=country-choice-paint")
+		return
+	}
+	countryX, countryY := browseCardCenter(1, 82) // Bosna i Hercegovina
+	postClick(countryX, countryY)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "all" && app.country == "BA" && app.genre == ""
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=country-choice")
+		return
+	}
+
 	postClick(100, 241) // Žanrovi
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
@@ -1410,6 +1442,22 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=genres")
 		return
 	}
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=genre-choice-paint")
+		return
+	}
+	genreX, genreY := browseCardCenter(3, 78) // Narodna / Folk
+	postClick(genreX, genreY)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "all" && app.country == "" && app.genre == "folk"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=genre-choice")
+		return
+	}
+
 	postClick(100, 109) // Početna
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
