@@ -4901,7 +4901,7 @@ func playbackRecoveryCandidates(station RadioStation, refreshed *RadioStation, a
 		candidates = append(candidates, refreshed.URLResolved, refreshed.URL)
 	}
 	for _, alt := range alternatives {
-		if !sameStation(station, alt) || alt.LastCheckOK == 0 {
+		if !sameStation(station, alt) {
 			continue
 		}
 		candidates = append(candidates, alt.URLResolved, alt.URL)
