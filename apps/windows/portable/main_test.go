@@ -410,13 +410,13 @@ func TestTransportAvailabilityUsesVisibleStationCount(t *testing.T) {
 		})
 	}
 
-	if canStopPlayback(-1, false, false) {
+	if canStopPlayback(-1, false) {
 		t.Fatal("stop must be disabled without a current station")
 	}
-	if canStopPlayback(0, true, false) {
+	if canStopPlayback(0, true) {
 		t.Fatal("stop must be disabled after terminal stop")
 	}
-	if !canStopPlayback(0, false, false) {
+	if !canStopPlayback(0, false) {
 		t.Fatal("stop must be enabled for an active or paused current station")
 	}
 
@@ -759,12 +759,6 @@ func TestWPFPlayReplacesActiveMCIBackend(t *testing.T) {
 	}
 	if shouldStopMCIForAudioCommand("PLAY Zm9v 0.50", audioBackendWPF) {
 		t.Fatal("WPF-to-WPF PLAY should reuse the media host instead of forcing MCI cleanup")
-	}
-}
-
-func TestStopControlIsAvailableForPendingPlayWithoutCommittedCurrent(t *testing.T) {
-	if !canStopPlayback(-1, false, true) {
-		t.Fatal("stop must remain enabled while a Play request is pending")
 	}
 }
 
