@@ -4890,6 +4890,7 @@ func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 	postUI()
 	return "", false
 }
+
 const playbackRecoveryCandidateLimit = 6
 
 func playbackRecoveryCandidates(station RadioStation, refreshed *RadioStation, alternatives []RadioStation, backups []string) []string {
