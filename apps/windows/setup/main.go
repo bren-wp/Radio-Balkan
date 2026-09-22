@@ -77,7 +77,7 @@ const (
 	DWMSBT_MAINWINDOW              = 2
 )
 
-var appVersion = "0.0.41"
+var appVersion = "0.0.42"
 
 type WNDCLASS struct {
 	Style                                    uint32
