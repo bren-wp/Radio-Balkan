@@ -135,21 +135,29 @@ try {
   $inputMarker = "[runtime-test] input-smoke-ok token=$runtimeToken"
   $audioMarker = "[runtime-test] audio-smoke-ok token=$runtimeToken"
   $noDeviceMarker = "[runtime-test] audio-smoke-no-device token=$runtimeToken"
+  $switchMarker = "[runtime-test] production-audio-switch-ok token=$runtimeToken"
+  $switchNoDeviceMarker = "[runtime-test] production-audio-switch-no-device token=$runtimeToken"
   $inputOk = $lines | Where-Object { $_.Contains($inputMarker) } | Select-Object -First 1
   $audioOpened = $lines | Where-Object { $_.Contains($audioMarker) } | Select-Object -First 1
   $noDevice = $lines | Where-Object { $_.Contains($noDeviceMarker) } | Select-Object -First 1
+  $switchOpened = $lines | Where-Object { $_.Contains($switchMarker) } | Select-Object -First 1
+  $switchNoDevice = $lines | Where-Object { $_.Contains($switchNoDeviceMarker) } | Select-Object -First 1
   if (-not $inputOk) {
     $details = Get-CrashDetails
     throw ("Radio Balkan did not complete the real mouse-click responsiveness smoke: sidebar/header Countries+Genres, resize/repaint hit regions, native search focus, favorite, station details/back, rendered Play, Stop, single-window navigation, full-catalog repaint, supplemental filters, and volume/navigation while the audio backend lock was held.`n{0}" -f $details)
+  }
+  if (-not $switchOpened -and -not $switchNoDevice) {
+    $details = Get-CrashDetails
+    throw ("Radio Balkan production playback did not complete the A-to-B station-switch smoke or return the recognized headless audio-device result.`n{0}" -f $details)
   }
   if (-not $audioOpened -and -not $noDevice) {
     $details = Get-CrashDetails
     throw ("Radio Balkan audio engine neither opened HTTP media nor returned the recognized headless-runner audio-device result.`n{0}" -f $details)
   }
-  if ($noDevice) {
-    Write-Host ("Radio Balkan runtime smoke OK: real click/navigation responsiveness passed; media open reached Windows MediaPlayer and returned the expected no-audio-device result on this headless runner; shutdown remained healthy.")
+  if ($noDevice -or $switchNoDevice) {
+    Write-Host ("Radio Balkan runtime smoke OK: click/navigation and A-to-B production switch paths executed; Windows returned the expected no-audio-device result on this headless runner; shutdown remained healthy.")
   } else {
-    Write-Host ("Radio Balkan runtime smoke OK: real click/navigation responsiveness passed, UI stayed alive for {0} seconds, HTTP audio opened successfully, and WM_CLOSE shutdown completed." -f $SoakSeconds)
+    Write-Host ("Radio Balkan runtime smoke OK: real click/navigation responsiveness passed, production audio switched A-to-B in one app process, UI stayed alive for {0} seconds, HTTP audio opened successfully, and WM_CLOSE shutdown completed." -f $SoakSeconds)
   }
 } finally {
   if ($p -and -not $p.HasExited) {
