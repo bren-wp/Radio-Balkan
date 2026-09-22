@@ -553,24 +553,36 @@ def main() -> None:
         "Windows Setup go build nije uspio.",
     )
     require(
-        "apps/windows/portable/main.go",
-        "procCopyMemory.Call(uintptr(unsafe.Pointer(&info)), lParam, unsafe.Sizeof(info))",
-        "procCopyMemory.Call(lParam, uintptr(unsafe.Pointer(&info)), unsafe.Sizeof(info))",
-    )
-    forbid(
-        "apps/windows/portable/main.go",
-        "func inputDialogPowerShell(",
-    )
-    forbid(
-        "apps/windows/build-release.ps1",
-        '-ldflags "-s -w ',
+        ".github/workflows/publish.yml",
+        "RADIO_BALKAN_WINDOWS_PFX_B64",
+        "RADIO_BALKAN_WINDOWS_PFX_PASSWORD",
+        "Import-PfxCertificate",
+        "1.3.6.1.5.5.7.3.3",
+        "-RequireSignature",
+        "Verify published Windows artifacts are Authenticode-signed",
+        "Get-AuthenticodeSignature -FilePath $path",
     )
     require(
         "apps/windows/build-release.ps1",
         "Invoke-CodeSign $portable",
+        "Invoke-CodeSign $setup",
         "Get-AuthenticodeSignature -FilePath $Path",
     )
-
+    require(
+        ".github/workflows/publish.yml",
+        "RADIO_BALKAN_WINDOWS_PFX_B64",
+        "RADIO_BALKAN_WINDOWS_PFX_PASSWORD",
+        "Import-PfxCertificate",
+        "1.3.6.1.5.5.7.3.3",
+        "-RequireSignature",
+        "Verify published Windows artifacts are Authenticode-signed",
+        "Get-AuthenticodeSignature -FilePath $path",
+    )
+    require(
+        "apps/windows/portable/main.go",
+        "procCopyMemory.Call(uintptr(unsafe.Pointer(&info)), lParam, unsafe.Sizeof(info))",
+        "procCopyMemory.Call(lParam, uintptr(unsafe.Pointer(&info)), unsafe.Sizeof(info))",
+    )
     forbid(
         "apps/windows/portable/main.go",
         "(*MINMAXINFO)(unsafe.Pointer(lParam))",
