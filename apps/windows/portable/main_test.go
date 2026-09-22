@@ -895,6 +895,90 @@ func putLE32(dst []byte, v uint32) {
 }
 
 
+func TestStationNameSearchPathsExcludeKnownBrokenCatalogRows(t *testing.T) {
+	paths := stationNameSearchPaths("Radio Test", "HR", "")
+	if len(paths) != 2 {
+		t.Fatalf("search paths = %#v; want country-specific plus global fallback", paths)
+	}
+	for _, path := range paths {
+		if !strings.Contains(path, "hidebroken=true") {
+			t.Fatalf("recovery search must exclude known broken rows: %q", path)
+		}
+		if strings.Contains(path, "hidebroken=false") {
+			t.Fatalf("recovery search re-enabled broken catalog rows: %q", path)
+		}
+		if !strings.Contains(path, "order=votes") || !strings.Contains(path, "reverse=true") {
+			t.Fatalf("recovery search must prefer established catalog alternatives: %q", path)
+		}
+	}
+	if !strings.Contains(paths[0], "countrycode=HR") {
+		t.Fatalf("country-specific recovery path = %q; want HR filter", paths[0])
+	}
+
+	diaspora := stationNameSearchPaths("Radio Diaspora", diasporaCatalogCode, "DE")
+	if len(diaspora) != 2 || !strings.Contains(diaspora[0], "countrycode=DE") {
+		t.Fatalf("diaspora recovery paths = %#v; want source-country filter", diaspora)
+	}
+}
+
+func TestPlaybackRecoveryCandidatesPreferFreshCatalogBeforePersistedBackups(t *testing.T) {
+	station := RadioStation{
+		StationUUID: "station-1",
+		Name:        "Radio Test",
+		CountryCode: "HR",
+		URLResolved: "https://current.example/live.mp3",
+		URL:         "https://current.example/listen",
+	}
+	refreshed := &RadioStation{
+		StationUUID: "station-1",
+		Name:        "Radio Test",
+		CountryCode: "HR",
+		URLResolved: "https://fresh.example/live.aac",
+		URL:         "https://fresh.example/listen",
+	}
+	alternatives := []RadioStation{
+		{
+			StationUUID: "station-1",
+			Name:        "Radio Test",
+			CountryCode: "HR",
+			URLResolved: "https://alt.example/live.mp3",
+			URL:         "https://alt.example/listen",
+			LastCheckOK: 1,
+		},
+		{
+			StationUUID: "other",
+			Name:        "Different Radio",
+			CountryCode: "HR",
+			URLResolved: "https://wrong.example/live.mp3",
+		},
+	}
+	backups := []string{
+		"https://backup.example/live.mp3",
+		"https://current.example/live.mp3",
+	}
+	got := playbackRecoveryCandidates(station, refreshed, alternatives, backups)
+	want := []string{
+		"https://current.example/live.mp3",
+		"https://current.example/listen",
+		"https://fresh.example/live.aac",
+		"https://fresh.example/listen",
+		"https://alt.example/live.mp3",
+		"https://alt.example/listen",
+		"https://backup.example/live.mp3",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("recovery candidates = %#v; want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("candidate %d = %q; want %q (all=%#v)", i, got[i], want[i], got)
+		}
+	}
+	if playbackRecoveryCandidateLimit < 5 {
+		t.Fatalf("recovery candidate limit = %d; must allow multiple mirrors", playbackRecoveryCandidateLimit)
+	}
+}
+
 func TestHomeCatalogEnabledAtMinimumWindowHeight(t *testing.T) {
 	if !homeCatalogEnabled(600, "all", "", "", "HR") {
 		t.Fatal("dense home must remain enabled within the client area of the minimum outer window")
