@@ -943,7 +943,7 @@ func safeDialContext(ctx context.Context, network, address string) (net.Conn, er
 
 func isValidTab(tab string) bool {
 	switch tab {
-	case "all", "popular", "countries", "genres", "favorites", "recent", "replaced", "broken":
+	case "all", "croatia", "popular", "countries", "genres", "favorites", "recent", "replaced", "broken":
 		return true
 	default:
 		return false
@@ -3047,7 +3047,7 @@ func buildHomeDiscoverySnapshot(stations []RadioStation, columns int, revision u
 		return strings.EqualFold(strings.TrimSpace(st.CountryCode), "HR")
 	})
 	addExcluded(excluded, out.Popular)
-	out.Croatia = rankedStationIndices(stations, columns*3, excluded, func(st RadioStation) bool {
+	out.Croatia = rankedStationIndices(stations, columns*2, excluded, func(st RadioStation) bool {
 		return strings.EqualFold(strings.TrimSpace(st.CountryCode), "HR")
 	})
 	addExcluded(excluded, out.Croatia)
@@ -3059,7 +3059,7 @@ func buildHomeDiscoverySnapshot(stations []RadioStation, columns int, revision u
 		return strings.EqualFold(strings.TrimSpace(st.CountryCode), "RS")
 	})
 	addExcluded(excluded, out.Serbia)
-	out.Balkan = rankedStationIndices(stations, columns*2, excluded, func(st RadioStation) bool {
+	out.Balkan = rankedStationIndices(stations, columns, excluded, func(st RadioStation) bool {
 		code := strings.ToUpper(strings.TrimSpace(st.CountryCode))
 		return code != "HR" && code != "BA" && code != "RS" && isRegionalCatalogCode(code)
 	})
@@ -3156,10 +3156,9 @@ func addExcluded(excluded map[int]struct{}, ids []int) {
 }
 
 func homeCatalogContentHeight() int {
-	// Compact intro plus country-led discovery sections with ten dense card rows.
-	// Keep this in sync with drawStations so the final rows remain reachable
-	// even at the minimum supported client height.
-	return 980
+	// Compact intro plus eight dense discovery rows. Keep this in sync with
+	// drawStations so the final genre row remains reachable at minimum height.
+	return 842
 }
 
 func homeCatalogEnabled(clientHeight int32, tab, search, genre, country string) bool {
@@ -3325,13 +3324,13 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 		}
 
 		y := contentTop + 52
-		y = drawSection("Popularno u Hrvatskoj", "Top", hitTab, "popular", popular, y, 1)
-		y = drawSection("Hrvatska", "Sve hrvatske", hitTab, "all", croatia, y, 3)
-		y = drawSection("Bosna i Hercegovina", "Sve zemlje", hitTab, "country:BA", bosnia, y, 1)
-		y = drawSection("Srbija", "Sve zemlje", hitTab, "country:RS", serbia, y, 1)
-		y = drawSection("Ostatak Balkana", "Zemlje", hitTab, "countries", balkan, y, 2)
-		y = drawSection("Narodna / Folk", "Žanrovi", hitTab, "genre:folk", folk, y, 1)
-		_ = drawSection("Pop & Rock", "Žanrovi", hitTab, "genre:pop", popRock, y, 1)
+		y = drawSection("Popularno u Hrvatskoj", "Top kataloga", hitTab, "popular", popular, y, 1)
+		y = drawSection("Hrvatska", "Sve hrvatske", hitTab, "croatia", croatia, y, 2)
+		y = drawSection("Bosna i Hercegovina", "Sve iz BiH", hitTab, "country:BA", bosnia, y, 1)
+		y = drawSection("Srbija", "Sve iz Srbije", hitTab, "country:RS", serbia, y, 1)
+		y = drawSection("Ostatak Balkana", "Pregled zemalja", hitTab, "countries", balkan, y, 1)
+		y = drawSection("Narodna / Folk", "Sve Folk", hitTab, "genre:folk", folk, y, 1)
+		_ = drawSection("Pop & Rock", "Sve Pop & Rock", hitTab, "genre:pop", popRock, y, 1)
 		return
 	}
 	// Library/search/filter pages use the efficient virtualized two-column grid.
@@ -3345,6 +3344,8 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 	filteredCount := len(app.filtered)
 	app.mu.RUnlock()
 	switch tab {
+	case "croatia":
+		title = "Hrvatske stanice"
 	case "popular":
 		title = "Popularne stanice"
 	case "favorites":
@@ -4595,7 +4596,7 @@ func selectTabValue(value string) {
 	app.detailKey = ""
 	app.tab = value
 	app.country = ""
-	if value == "all" {
+	if value == "all" || value == "croatia" {
 		app.country = "HR"
 	}
 	app.genre = ""
@@ -4606,7 +4607,7 @@ func selectTabValue(value string) {
 	app.stateMu.Lock()
 	app.state.Tab = value
 	app.state.CountryCode = ""
-	if value == "all" {
+	if value == "all" || value == "croatia" {
 		app.state.CountryCode = "HR"
 	}
 	app.state.Genre = ""
