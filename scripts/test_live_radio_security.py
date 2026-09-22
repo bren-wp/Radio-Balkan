@@ -22,6 +22,9 @@ class FakeSocket:
 class FakeTLSContext:
     def __init__(self):
         self.calls = []
+        self.verify_mode = 2
+        self.check_hostname = True
+        self.post_handshake_auth = False
 
     def wrap_socket(self, sock, *, server_hostname=None):
         self.calls.append((sock, server_hostname))
@@ -80,11 +83,28 @@ def test_validation_rejects_non_global_literal():
     raise AssertionError("loopback URL passed public-target validation")
 
 
+def test_validation_rejects_mixed_public_private_dns_answers():
+    original = live._public_addresses
+    try:
+        live._public_addresses = lambda hostname: [
+            live.ipaddress.ip_address("93.184.216.34"),
+            live.ipaddress.ip_address("127.0.0.1"),
+        ]
+        try:
+            live.validate_public_url("https://radio.example/live")
+        except ValueError:
+            return
+        raise AssertionError("mixed public/private DNS answer passed validation")
+    finally:
+        live._public_addresses = original
+
+
 def main():
     tests = (
         test_http_connection_uses_pinned_address,
         test_https_connection_uses_pinned_address_and_original_sni,
         test_validation_rejects_non_global_literal,
+        test_validation_rejects_mixed_public_private_dns_answers,
     )
     for test in tests:
         test()
