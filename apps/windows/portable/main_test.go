@@ -630,15 +630,36 @@ func TestPlaybackWatchdogRecoveryPolicyTrustsActiveBackend(t *testing.T) {
 
 func TestAudioRuntimeFailureEventParsing(t *testing.T) {
 	encoded := base64.StdEncoding.EncodeToString([]byte("network stream failed"))
-	detail, ok := parseAudioRuntimeFailure("EVENT FAILED " + encoded)
+	reqSeq, detail, ok := parseAudioRuntimeFailure("EVENT FAILED 77 " + encoded)
 	if !ok {
 		t.Fatal("runtime MediaFailed event was not recognized")
+	}
+	if reqSeq != 77 {
+		t.Fatalf("runtime MediaFailed request = %d; want 77", reqSeq)
 	}
 	if detail != "network stream failed" {
 		t.Fatalf("runtime MediaFailed detail = %q", detail)
 	}
-	if _, ok := parseAudioRuntimeFailure("OK"); ok {
+	if _, _, ok := parseAudioRuntimeFailure("EVENT FAILED invalid " + encoded); ok {
+		t.Fatal("runtime failure with invalid playback generation was accepted")
+	}
+	if _, _, ok := parseAudioRuntimeFailure("OK"); ok {
 		t.Fatal("normal command ACK was misclassified as an async runtime event")
+	}
+}
+
+func TestStaleWPFRuntimeFailureCannotAffectNewerPlay(t *testing.T) {
+	app = App{
+		done:         make(chan struct{}),
+		playSeq:      82,
+		audioBackend: audioBackendWPF,
+		playing:      true,
+	}
+	handleAudioBackendFailureForRequest(audioBackendWPF, 81, "late failure from old stream")
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.playSeq != 82 || app.audioBackend != audioBackendWPF || !app.playing {
+		t.Fatalf("stale WPF event changed newer playback: seq=%d backend=%v playing=%v", app.playSeq, app.audioBackend, app.playing)
 	}
 }
 
@@ -772,7 +793,7 @@ func TestAudioEnginePlayReportsActualMediaOpenOutcome(t *testing.T) {
 	}
 	fileURL := (&url.URL{Scheme: "file", Path: "/" + filepath.ToSlash(wavPath)}).String()
 	encoded := base64.StdEncoding.EncodeToString([]byte(fileURL))
-	err := audioSend(fmt.Sprintf("PLAY %s 0.00", encoded))
+	err := audioSend(fmt.Sprintf("PLAY 0 %s 0.00", encoded))
 	if err != nil {
 		if os.Getenv("CI") != "" && strings.Contains(strings.ToUpper(err.Error()), "0XC00D11BA") {
 			t.Logf("headless CI has no usable Windows audio endpoint; structured MediaFailed outcome confirmed: %v", err)
