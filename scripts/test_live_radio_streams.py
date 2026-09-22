@@ -161,7 +161,7 @@ def probe_stream(url: str) -> tuple[bool, str]:
         return False, f"{type(exc).__name__}: {exc}"
 
 
-def playlist_targets(data: bytes) -> list[str]:
+def playlist_targets(data: bytes, base_url: str) -> list[str]:
     text = data.decode("utf-8", "replace")
     targets: list[str] = []
     for raw_line in text.splitlines():
@@ -170,58 +170,70 @@ def playlist_targets(data: bytes) -> list[str]:
             continue
         if "=" in line and line.lower().startswith("file"):
             line = line.split("=", 1)[1].strip()
-        if usable_url(line) and line not in targets:
-            targets.append(line)
+        candidate = urllib.parse.urljoin(base_url, line)
+        if usable_url(candidate) and candidate not in targets:
+            targets.append(candidate)
     return targets
 
 
 def probe_indirect(raw_url: str) -> tuple[bool, str]:
     if not usable_url(raw_url):
         return False, "invalid raw URL"
+
     started = time.monotonic()
-    try:
-        with request(
-            raw_url,
-            8.0,
-            "audio/*,application/ogg,application/vnd.apple.mpegurl,application/x-mpegurl,audio/x-scpls,*/*;q=0.3",
-        ) as response:
-            status = getattr(response, "status", 200) or 200
-            final_url = response.geturl()
-            content_type = (response.headers.get("Content-Type") or "").lower()
-            data = response.read(4096)
-        if status < 200 or status >= 400:
-            return False, f"raw HTTP {status}"
-        if "text/html" in content_type:
-            return False, f"raw unexpected {content_type}"
 
-        playlist = (
-            "mpegurl" in content_type
-            or "scpls" in content_type
-            or raw_url.lower().split("?", 1)[0].endswith((".m3u", ".m3u8", ".pls"))
-            or data.lstrip().startswith(b"#EXTM3U")
-            or b"[playlist]" in data[:128].lower()
-        )
-        if playlist:
-            targets = playlist_targets(data)
-            if not targets:
-                return False, "raw playlist had no usable stream URL"
-            failures: list[str] = []
-            for target in targets[:5]:
-                ok, detail = probe_stream(target)
-                if ok:
-                    elapsed = time.monotonic() - started
-                    return True, f"playlist -> {target} :: {detail} total={elapsed:.2f}s"
-                failures.append(detail)
-            return False, "raw playlist targets failed: " + " | ".join(failures[-3:])
+    def walk(url: str, depth: int, seen: set[str]) -> tuple[bool, str]:
+        if depth > 2:
+            return False, "playlist nesting limit exceeded"
+        if url in seen:
+            return False, "playlist loop detected"
+        seen.add(url)
+        try:
+            with request(
+                url,
+                8.0,
+                "audio/*,application/ogg,application/vnd.apple.mpegurl,application/x-mpegurl,audio/x-scpls,*/*;q=0.3",
+            ) as response:
+                status = getattr(response, "status", 200) or 200
+                final_url = response.geturl()
+                content_type = (response.headers.get("Content-Type") or "").lower()
+                data = response.read(4096)
+            if status < 200 or status >= 400:
+                return False, f"HTTP {status}"
+            if "text/html" in content_type:
+                return False, f"unexpected {content_type}"
 
-        if len(data) < 64:
-            return False, f"raw endpoint returned only {len(data)} bytes"
-        elapsed = time.monotonic() - started
-        if final_url != raw_url:
-            return True, f"redirect -> {final_url} {content_type or 'unknown'} {len(data)}B {elapsed:.2f}s"
-        return True, f"raw stream {content_type or 'unknown'} {len(data)}B {elapsed:.2f}s"
-    except Exception as exc:
-        return False, f"{type(exc).__name__}: {exc}"
+            lowered_path = urllib.parse.urlparse(final_url).path.lower()
+            playlist = (
+                "mpegurl" in content_type
+                or "scpls" in content_type
+                or lowered_path.endswith((".m3u", ".m3u8", ".pls"))
+                or data.lstrip().startswith(b"#EXTM3U")
+                or b"[playlist]" in data[:128].lower()
+            )
+            if playlist:
+                targets = playlist_targets(data, final_url)
+                if not targets:
+                    return False, "playlist had no usable stream URL"
+                failures: list[str] = []
+                for target in targets[:6]:
+                    ok, detail = walk(target, depth + 1, seen)
+                    if ok:
+                        return True, f"playlist -> {target} :: {detail}"
+                    failures.append(detail)
+                return False, "playlist targets failed: " + " | ".join(failures[-3:])
+
+            if len(data) < 64:
+                return False, f"only {len(data)} stream bytes"
+            if final_url != url:
+                return True, f"redirect -> {final_url} {content_type or 'unknown'} {len(data)}B"
+            return True, f"stream {content_type or 'unknown'} {len(data)}B"
+        except Exception as exc:
+            return False, f"{type(exc).__name__}: {exc}"
+
+    ok, detail = walk(raw_url, 0, set())
+    elapsed = time.monotonic() - started
+    return ok, f"{detail} total={elapsed:.2f}s"
 
 
 def main() -> int:
