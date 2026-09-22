@@ -266,6 +266,13 @@ def main() -> int:
         "setSearchVisible(",
         "@Override public void onBackPressed()",
         "hideSoftInputFromWindow",
+        "heroSection.setVisibility(View.GONE)",
+        "quickAreasSection.setVisibility(View.GONE)",
+        "stationsHeaderSection.setVisibility(View.GONE)",
+        "adapter.setSnapshot(new ArrayList<>(), currentKey, playing)",
+        "if (isBrowsePageVisible())",
+        "hideBrowsePage();",
+        'browsePanel.setContentDescription(countriesMode ? "Pregled zemalja" : "Pregled žanrova")',
     ):
         require(errors, android, needle, "Android MainActivity")
     for needle in (
@@ -278,6 +285,7 @@ def main() -> int:
         'navItem("◇", "Otkrij", "discover")',
         'navItem("◎", "Dijaspora", "diaspora")',
         'navItem("▥", "Radio", "radio")',
+        'setContentDescription("Pregled zemalja i žanrova")',
     ):
         forbid(errors, android, needle, "Android MainActivity")
 
