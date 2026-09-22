@@ -1979,7 +1979,8 @@ func runCIAudioSmoke() {
 		}
 	}
 
-	if err := mfplaySmokeOpen(streamA); err != nil {
+	streamURL := streamA
+	if err := mfplaySmokeOpen(streamURL); err != nil {
 		if isExpectedHeadlessAudioError(err) {
 			runtimeTestTrace("audio-smoke-no-device token=" + token)
 			return
