@@ -3458,6 +3458,7 @@ func drawRegionCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStatio
 	app.mu.RLock()
 	selected := app.currentKey != "" && app.currentKey == key
 	selectedPlaying := selected && app.playing
+	selectedPending := selected && pendingPlayCurrentLocked()
 	app.mu.RUnlock()
 	border := color(49, 57, 68)
 	fill := color(20, 25, 33)
@@ -3480,10 +3481,14 @@ func drawRegionCard(hdc syscall.Handle, l, t, r, b int32, idx int, s RadioStatio
 	playLabel := "▶"
 	if selectedPlaying {
 		playLabel = "Ⅱ"
+	} else if selectedPending {
+		playLabel = "…"
 	}
 	text(hdc, playLabel, r-32, t+18, r-12, t+42, rgb(246, 248, 250), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 	app.hits = append(app.hits, HitRegion{R: RECT{l, t, r, b}, Kind: hitStationDetails, Index: idx, Value: key})
-	app.hits = append(app.hits, HitRegion{R: RECT{r - 38, t + 14, r - 6, t + 46}, Kind: hitPlay, Index: idx, Value: key})
+	if !selectedPending {
+		app.hits = append(app.hits, HitRegion{R: RECT{r - 38, t + 14, r - 6, t + 46}, Kind: hitPlay, Index: idx, Value: key})
+	}
 }
 
 func drawStationScrollBar(hdc syscall.Handle, cr RECT, top, bottom int32, count, scroll, step int) {
@@ -3916,11 +3921,15 @@ func drawPlayer(hdc syscall.Handle, cr RECT) {
 	label := "▶"
 	if playing {
 		label = "Ⅱ"
+	} else if pending {
+		label = "…"
 	}
 	drawCircle(hdc, cx-31, t+10, cx+31, t+72, color(255, 174, 52), color(255, 197, 95))
 	selectFont(hdc, app.hFontTitle)
 	text(hdc, label, cx-28, t+10, cx+28, t+72, rgb(20, 21, 24), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-	app.hits = append(app.hits, HitRegion{R: RECT{cx - 35, t + 7, cx + 35, t + 76}, Kind: hitPlayerPlay, Index: -1})
+	if !pending {
+		app.hits = append(app.hits, HitRegion{R: RECT{cx - 35, t + 7, cx + 35, t + 76}, Kind: hitPlayerPlay, Index: -1})
+	}
 	if canStop {
 		drawIconButton(hdc, cx+48, t+25, cx+88, t+65, "■", false)
 		app.hits = append(app.hits, HitRegion{R: RECT{cx + 44, t + 21, cx + 92, t + 69}, Kind: hitPlayerStop, Index: -1})
@@ -4309,12 +4318,18 @@ func defaultPlaybackIndexLocked() int {
 func toggleCurrentPlayback() {
 	app.mu.RLock()
 	current, playing, stopped := currentStationIndexLocked(), app.playing, app.audioStopped
+	pending := pendingPlayCurrentLocked()
 	currentKey := app.currentKey
 	defaultIndex := defaultPlaybackIndexLocked()
 	if currentKey == "" && current >= 0 && current < len(app.stations) {
 		currentKey = stationKey(app.stations[current])
 	}
 	app.mu.RUnlock()
+	if pending {
+		// A pending PLAY already owns the latest generation. Do not translate a
+		// second click into Resume against the still-stopping previous backend.
+		return
+	}
 	action := decidePlaybackToggle(current, playing, stopped)
 	if action == playbackToggleNone {
 		if defaultIndex >= 0 {
@@ -4672,8 +4687,9 @@ func handleCoreClickFallback(x, y int32) bool {
 	if y >= playerTop && y <= height {
 		app.mu.RLock()
 		currentIdx := currentStationIndexLocked()
+		pending := pendingPlayCurrentLocked()
 		canNavigate := canNavigateStations(currentIdx, len(app.stations), len(app.filtered))
-		canStop := canStopPlayback(currentIdx, app.audioStopped) || pendingPlayCurrentLocked()
+		canStop := canStopPlayback(currentIdx, app.audioStopped) || pending
 		app.mu.RUnlock()
 		app.stateMu.RLock()
 		volume := app.state.Volume
@@ -4684,7 +4700,7 @@ func handleCoreClickFallback(x, y int32) bool {
 		case canNavigate && x >= cx-116 && x <= cx-70 && y >= playerTop+17 && y <= playerTop+63:
 			playAdjacent(-1)
 			return true
-		case x >= cx-35 && x <= cx+35 && y >= playerTop+7 && y <= playerTop+76:
+		case !pending && x >= cx-35 && x <= cx+35 && y >= playerTop+7 && y <= playerTop+76:
 			toggleCurrentPlayback()
 			return true
 		case canStop && x >= cx+44 && x <= cx+92 && y >= playerTop+21 && y <= playerTop+69:
