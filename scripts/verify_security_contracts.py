@@ -630,6 +630,9 @@ def main() -> None:
         "func audioStopForRequest(reqSeq uint64)",
         "if !playRequestStillCurrent(reqSeq) {",
         'waitAudioAckLockedForRequest(audioCommandTimeout("STOP"), reqSeq)',
+        "Commit backend ownership while audioMu is still held.",
+        "Serialize the complete MCI fallback lifecycle with all WPF/backend commands.",
+        "abortStaleMCI := func() bool",
         'safeGo("audio-pause-control", func() {',
         'safeGo("audio-resume-control", func() {',
         "if shuttingDown() {",
@@ -669,6 +672,7 @@ def main() -> None:
         "TestStaleAsyncStopCannotClearNewPlaybackBackend",
         "TestWPFPlayReplacesActiveMCIBackend",
         "TestStopCurrentPlaybackAdvancesRequestGeneration",
+        "TestSupersededPlayCannotClearNewerBackend",
     )
     forbid(
         "apps/windows/portable/main_test.go",
