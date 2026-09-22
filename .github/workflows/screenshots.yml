@@ -9,6 +9,7 @@ on:
       - extensions/shared/**
       - assets/brand/**
       - scripts/capture-windows.ps1
+      - scripts/validate-screenshot.ps1
       - scripts/browser-screenshot-runtime.js
       - scripts/check_clean_worktree.py
       - .github/workflows/screenshots.yml
@@ -103,6 +104,14 @@ jobs:
             Get-Process msedge,chrome -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
             if (Test-Path $preview) { Remove-Item $preview -Recurse -Force -ErrorAction SilentlyContinue }
           }
+      - name: Validate screenshot visual content
+        shell: pwsh
+        run: |
+          $screenshots = @(
+            'assets/screenshots/windows.png',
+            'assets/screenshots/browser-extension.png'
+          )
+          ./scripts/validate-screenshot.ps1 -Path $screenshots
       - name: Commit screenshots
         shell: pwsh
         run: |
