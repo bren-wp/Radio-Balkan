@@ -12,7 +12,24 @@ Add-Type @'
 using System;
 using System.Runtime.InteropServices;
 public static class RadioBalkanSmokeNative {
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
   [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+  public static int CountVisibleTopLevelWindowsForProcess(int processId) {
+    int count = 0;
+    EnumWindows((hWnd, lParam) => {
+      uint pid;
+      GetWindowThreadProcessId(hWnd, out pid);
+      if (pid == (uint)processId && IsWindowVisible(hWnd)) {
+        count++;
+      }
+      return true;
+    }, IntPtr.Zero);
+    return count;
+  }
 }
 '@
 
@@ -96,6 +113,11 @@ try {
       $details = Get-CrashDetails
       throw ("Radio Balkan lost its main window during startup soak.`n{0}" -f $details)
     }
+    $visibleWindows = [RadioBalkanSmokeNative]::CountVisibleTopLevelWindowsForProcess($p.Id)
+    if ($visibleWindows -ne 1) {
+      $details = Get-CrashDetails
+      throw ("Radio Balkan opened {0} visible top-level windows during normal navigation; expected exactly one main window.`n{1}" -f $visibleWindows, $details)
+    }
   }
 
   if (-not $p.WaitForExit(12000)) {
@@ -118,7 +140,7 @@ try {
   $noDevice = $lines | Where-Object { $_.Contains($noDeviceMarker) } | Select-Object -First 1
   if (-not $inputOk) {
     $details = Get-CrashDetails
-    throw ("Radio Balkan did not complete the real mouse-click responsiveness smoke: sidebar/header Countries+Genres, native search focus, favorite, station details/back, rendered Play, Stop, full-catalog repaint, supplemental filters, and volume/navigation while the audio backend lock was held.`n{0}" -f $details)
+    throw ("Radio Balkan did not complete the real mouse-click responsiveness smoke: sidebar/header Countries+Genres, resize/repaint hit regions, native search focus, favorite, station details/back, rendered Play, Stop, single-window navigation, full-catalog repaint, supplemental filters, and volume/navigation while the audio backend lock was held.`n{0}" -f $details)
   }
   if (-not $audioOpened -and -not $noDevice) {
     $details = Get-CrashDetails
