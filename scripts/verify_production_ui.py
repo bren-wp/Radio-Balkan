@@ -425,6 +425,26 @@ def main() -> int:
     require(errors, windows, 'func handleCoreClickFallback(x, y int32) bool', "Windows core click fallback")
     require(errors, windows, 'func isSelectableCatalogCode(code string) bool', "Windows supplemental selectors")
     for needle in (
+        "DWMWA_WINDOW_CORNER_PREFERENCE",
+        "DWMWA_SYSTEMBACKDROP_TYPE",
+        "DWMWCP_ROUND",
+        "DWMSBT_MAINWINDOW",
+        "func setDwmInt32(",
+        "func setDwmColor(",
+        '"Segoe UI Variable Text"',
+        '"Segoe UI Variable Display"',
+        "BS_OWNERDRAW",
+        "case WM_DRAWITEM:",
+        "func drawDialogActionButton(dis DRAWITEMSTRUCT)",
+        "EM_SETMARGINS",
+    ):
+        require(errors, windows, needle, "Windows 11 visual shell")
+    for needle in (
+        "WS_BORDER|ES_AUTOHSCROLL|ES_PASSWORD",
+        "WS_BORDER|ES_AUTOHSCROLL,",
+    ):
+        forbid(errors, windows, needle, "Windows legacy dialog styling")
+    for needle in (
         "case WM_GETMINMAXINFO:",
         "info.PtMinTrackSize.X = 1024",
         "info.PtMinTrackSize.Y = 680",
