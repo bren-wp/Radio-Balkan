@@ -772,6 +772,13 @@ func TestAudioEngineStartupTimeoutIsBounded(t *testing.T) {
 	}
 }
 
+func TestAudioPlayCommandIncludesRequestGeneration(t *testing.T) {
+	got := audioPlayCommand(77, "Zm9v", 0.5)
+	if got != "PLAY 77 Zm9v 0.50" {
+		t.Fatalf("audio PLAY command = %q; want tokenized protocol", got)
+	}
+}
+
 func TestAudioEngineCommandLifecycle(t *testing.T) {
 	app = App{done: make(chan struct{})}
 	defer audioShutdown()
@@ -793,7 +800,7 @@ func TestAudioEnginePlayReportsActualMediaOpenOutcome(t *testing.T) {
 	}
 	fileURL := (&url.URL{Scheme: "file", Path: "/" + filepath.ToSlash(wavPath)}).String()
 	encoded := base64.StdEncoding.EncodeToString([]byte(fileURL))
-	err := audioSend(fmt.Sprintf("PLAY 0 %s 0.00", encoded))
+	err := audioSend(audioPlayCommand(0, encoded, 0.00))
 	if err != nil {
 		if os.Getenv("CI") != "" && strings.Contains(strings.ToUpper(err.Error()), "0XC00D11BA") {
 			t.Logf("headless CI has no usable Windows audio endpoint; structured MediaFailed outcome confirmed: %v", err)
