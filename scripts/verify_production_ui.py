@@ -154,6 +154,8 @@ def main() -> int:
     require(errors, popup_css, "grid-template-columns: minmax(0, 1fr) 42px minmax(168px, auto)", "extensions/shared/popup.css")
     require(errors, popup_js, "$('playerDetails').addEventListener('click'", "extensions/shared/popup.js")
     require(errors, popup_js, "playerDetails.disabled = !station;", "extensions/shared/popup.js")
+    forbid(errors, popup_js, "ograničenim timeoutom", "extensions/shared/popup.js public UI")
+    forbid(errors, popup_js, "fallback i recovery", "extensions/shared/popup.js public UI")
 
     chromium_worker = read("extensions/platform/chromium/service_worker.js")
     firefox_background = read("extensions/platform/firefox/background-firefox.js")
@@ -195,6 +197,8 @@ def main() -> int:
     require(errors, station_presentation, "public static String description(RadioStation s)", "Android StationPresentation")
     require(errors, station_presentation, "public static String publicDetails(RadioStation s)", "Android StationPresentation")
     require(errors, station_presentation, "public static List<RadioStation> similarStations(", "Android StationPresentation")
+    forbid(errors, station_presentation, "ograničenim timeoutom", "Android StationPresentation public UI")
+    forbid(errors, station_presentation, "fallback i recovery", "Android StationPresentation public UI")
     for needle in (
         '"Rezervni izvori"',
         'itemList.add("Zemlje")',
