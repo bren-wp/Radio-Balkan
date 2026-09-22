@@ -159,6 +159,8 @@ def main() -> int:
 
     chromium_worker = read("extensions/platform/chromium/service_worker.js")
     firefox_background = read("extensions/platform/firefox/background-firefox.js")
+    forbid(errors, chromium_worker, "String(error?.message || error)", "Chromium background public errors")
+    require(errors, chromium_worker, "Reprodukcija trenutačno nije dostupna", "Chromium background public errors")
     for needle in (
         "async function recordRecentKey(rawKey)",
         "slice(0, 50)",
