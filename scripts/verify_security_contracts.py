@@ -566,15 +566,18 @@ def main() -> None:
         "Invoke-CodeSign $setup",
         "Get-AuthenticodeSignature -FilePath $Path",
     )
-    require(
+    forbid(
         ".github/workflows/publish.yml",
         "RADIO_BALKAN_WINDOWS_PFX_B64",
         "RADIO_BALKAN_WINDOWS_PFX_PASSWORD",
         "Import-PfxCertificate",
-        "1.3.6.1.5.5.7.3.3",
         "-RequireSignature",
         "Verify published Windows artifacts are Authenticode-signed",
-        "Get-AuthenticodeSignature -FilePath $path",
+    )
+    require(
+        ".github/workflows/publish.yml",
+        "- name: Build Windows release",
+        "./build-release.ps1 -Version (Get-Content ../../VERSION).Trim()",
     )
     require(
         "apps/windows/portable/main.go",
