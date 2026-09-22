@@ -34,39 +34,42 @@ func hresultError(name string, hr uintptr) error {
 	return fmt.Errorf("%s failed: HRESULT 0x%08X", name, uint32(hr))
 }
 
-func comMethod(object uintptr, index uintptr) (uintptr, error) {
-	if object == 0 {
+func comMethod(object unsafe.Pointer, index int) (uintptr, error) {
+	if object == nil {
 		return 0, errors.New("COM object is nil")
 	}
-	vtable := *(*uintptr)(unsafe.Pointer(object))
-	if vtable == 0 {
+	vtable := *(**[64]uintptr)(object)
+	if vtable == nil {
 		return 0, errors.New("COM vtable is nil")
 	}
-	method := *(*uintptr)(unsafe.Pointer(vtable + index*unsafe.Sizeof(uintptr(0))))
+	if index < 0 || index >= len(vtable) {
+		return 0, fmt.Errorf("COM method index %d is out of range", index)
+	}
+	method := vtable[index]
 	if method == 0 {
 		return 0, fmt.Errorf("COM method %d is nil", index)
 	}
 	return method, nil
 }
 
-func comCall(object uintptr, index uintptr, args ...uintptr) error {
+func comCall(object unsafe.Pointer, index int, args ...uintptr) error {
 	method, err := comMethod(object, index)
 	if err != nil {
 		return err
 	}
 	callArgs := make([]uintptr, 0, len(args)+1)
-	callArgs = append(callArgs, object)
+	callArgs = append(callArgs, uintptr(object))
 	callArgs = append(callArgs, args...)
 	hr, _, _ := syscall.SyscallN(method, callArgs...)
 	return hresultError(fmt.Sprintf("COM method %d", index), hr)
 }
 
-func comRelease(object uintptr) {
-	if object == 0 {
+func comRelease(object unsafe.Pointer) {
+	if object == nil {
 		return
 	}
 	if method, err := comMethod(object, 2); err == nil {
-		_, _, _ = syscall.SyscallN(method, object)
+		_, _, _ = syscall.SyscallN(method, uintptr(object))
 	}
 }
 
@@ -96,13 +99,13 @@ func mfplaySmokeOpen(rawURL string) error {
 		}
 		defer procMFShutdown.Call()
 
-		var player uintptr
+		var player unsafe.Pointer
 		hr, _, _ = procMFPCreateMediaPlayer.Call(0, 0, 0, 0, 0, uintptr(unsafe.Pointer(&player)))
 		if err := hresultError("MFPCreateMediaPlayer", hr); err != nil {
 			result <- err
 			return
 		}
-		if player == 0 {
+		if player == nil {
 			result <- errors.New("MFPCreateMediaPlayer returned nil player")
 			return
 		}
@@ -117,7 +120,7 @@ func mfplaySmokeOpen(rawURL string) error {
 			return
 		}
 
-		var item uintptr
+		var item unsafe.Pointer
 		createMethod, err := comMethod(player, 14) // CreateMediaItemFromURL
 		if err != nil {
 			result <- err
@@ -125,7 +128,7 @@ func mfplaySmokeOpen(rawURL string) error {
 		}
 		hr, _, _ = syscall.SyscallN(
 			createMethod,
-			player,
+			uintptr(player),
 			uintptr(unsafe.Pointer(urlPtr)),
 			1, // synchronous
 			0,
@@ -135,13 +138,13 @@ func mfplaySmokeOpen(rawURL string) error {
 			result <- err
 			return
 		}
-		if item == 0 {
+		if item == nil {
 			result <- errors.New("CreateMediaItemFromURL returned nil item")
 			return
 		}
 		defer comRelease(item)
 
-		if err := comCall(player, 16, item); err != nil { // SetMediaItem
+		if err := comCall(player, 16, uintptr(item)); err != nil { // SetMediaItem
 			result <- err
 			return
 		}
