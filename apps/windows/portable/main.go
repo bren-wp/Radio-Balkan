@@ -322,6 +322,10 @@ type App struct {
 	catalogRevision                          uint64
 	homeCacheMu                              sync.Mutex
 	homeCache                                HomeDiscoveryCache
+	browseCountsMu                           sync.Mutex
+	browseCountsRevision                     uint64
+	browseCountryCounts                      map[string]int
+	browseGenreCounts                        map[string]int
 	hoverToken                               string
 	detailKey                                string
 	mu                                       sync.RWMutex
@@ -1253,6 +1257,7 @@ func seedCIRuntimeCatalog() {
 	app.scroll = 0
 	app.catalogRevision++
 	app.mu.Unlock()
+	prewarmBrowseCounts()
 	rebuildGenres()
 	rebuildFilter()
 	setStatus(fmt.Sprintf("CI katalog spreman · %d stanica", len(list)))
@@ -2809,21 +2814,7 @@ func regionalCountryDefs() []CountryDef {
 }
 
 func genreCountsSnapshot() map[string]int {
-	app.mu.RLock()
-	defer app.mu.RUnlock()
-	counts := make(map[string]int, len(browseGenres))
-	counts[""] = len(app.stations)
-	for _, station := range app.stations {
-		tags := station.TagsIndex
-		if tags == "" {
-			tags = foldText(station.Tags)
-		}
-		for _, item := range browseGenres {
-			if item.Value != "" && matchesGenre(tags, item.Value) {
-				counts[item.Value]++
-			}
-		}
-	}
+	_, counts := cachedBrowseCounts()
 	return counts
 }
 
@@ -3836,18 +3827,71 @@ func drawEqualizerBars(hdc syscall.Handle, l, t, r, b int32, active bool) {
 	}
 }
 
-func countryCountsSnapshot() map[string]int {
-	counts := map[string]int{"": 0}
-	app.mu.RLock()
-	defer app.mu.RUnlock()
-	for _, st := range app.stations {
+func buildBrowseCounts(stations []RadioStation) (map[string]int, map[string]int) {
+	countryCounts := map[string]int{"": 0}
+	genreCounts := make(map[string]int, len(browseGenres))
+	genreCounts[""] = len(stations)
+	for _, st := range stations {
 		code := strings.ToUpper(strings.TrimSpace(st.CountryCode))
-		if code == "" {
+		if code != "" {
+			countryCounts[code]++
+			countryCounts[""]++
+		}
+		tags := st.TagsIndex
+		if tags == "" {
+			tags = foldText(st.Tags)
+		}
+		for _, item := range browseGenres {
+			if item.Value != "" && matchesGenre(tags, item.Value) {
+				genreCounts[item.Value]++
+			}
+		}
+	}
+	return countryCounts, genreCounts
+}
+
+func cachedBrowseCounts() (map[string]int, map[string]int) {
+	for attempt := 0; attempt < 2; attempt++ {
+		app.mu.RLock()
+		revision := app.catalogRevision
+		app.mu.RUnlock()
+
+		app.browseCountsMu.Lock()
+		if app.browseCountsRevision == revision && app.browseCountryCounts != nil && app.browseGenreCounts != nil {
+			countries, genres := app.browseCountryCounts, app.browseGenreCounts
+			app.browseCountsMu.Unlock()
+			return countries, genres
+		}
+		app.browseCountsMu.Unlock()
+
+		app.mu.RLock()
+		revision = app.catalogRevision
+		stations := append([]RadioStation(nil), app.stations...)
+		app.mu.RUnlock()
+		countries, genres := buildBrowseCounts(stations)
+
+		app.mu.RLock()
+		stillCurrent := app.catalogRevision == revision
+		app.mu.RUnlock()
+		if !stillCurrent {
 			continue
 		}
-		counts[code]++
-		counts[""]++
+		app.browseCountsMu.Lock()
+		app.browseCountsRevision = revision
+		app.browseCountryCounts = countries
+		app.browseGenreCounts = genres
+		app.browseCountsMu.Unlock()
+		return countries, genres
 	}
+	return map[string]int{"": 0}, map[string]int{"": 0}
+}
+
+func prewarmBrowseCounts() {
+	_, _ = cachedBrowseCounts()
+}
+
+func countryCountsSnapshot() map[string]int {
+	counts, _ := cachedBrowseCounts()
 	return counts
 }
 
@@ -5420,6 +5464,7 @@ func refreshAll() {
 		app.nowPlayingStation = ""
 	}
 	app.mu.Unlock()
+	prewarmBrowseCounts()
 	if stopBackend != audioBackendNone {
 		safeGo("audio-stop-refresh", func() { audioStopForRequest(stopSeq) })
 	}
@@ -5439,6 +5484,7 @@ func loadStations() {
 		app.catalogRevision++
 		app.loading = false
 		app.mu.Unlock()
+		prewarmBrowseCounts()
 		postGenres()
 		rebuildFilter()
 		setStatus(fmt.Sprintf("Prikazan spremljeni popis · osvježavam %d stanica…", len(cached)))
@@ -5472,6 +5518,7 @@ func loadStations() {
 	app.loading = false
 	app.scroll = 0
 	app.mu.Unlock()
+	prewarmBrowseCounts()
 	saveCache(list)
 	postGenres()
 	rebuildFilter()
