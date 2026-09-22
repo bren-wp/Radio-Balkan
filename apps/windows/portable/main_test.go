@@ -468,6 +468,21 @@ func TestDefaultPlaybackIndexLocked(t *testing.T) {
 	}
 }
 
+func TestStationSwitchStopsOnlyDifferentActiveBackend(t *testing.T) {
+	if !shouldStopAudioForStationSwitch("station-a", "station-b", audioBackendWPF) {
+		t.Fatal("different station must stop the active WPF backend before opening the replacement")
+	}
+	if !shouldStopAudioForStationSwitch("station-a", "station-b", audioBackendMCI) {
+		t.Fatal("different station must stop the active MCI backend before opening the replacement")
+	}
+	if shouldStopAudioForStationSwitch("station-a", "station-a", audioBackendWPF) {
+		t.Fatal("same-station reconnect must not be treated as a station switch")
+	}
+	if shouldStopAudioForStationSwitch("station-a", "station-b", audioBackendNone) {
+		t.Fatal("station switch without an active backend must not schedule a redundant Stop")
+	}
+}
+
 func TestPlaybackToggleDecisionLifecycle(t *testing.T) {
 	tests := []struct {
 		name     string
