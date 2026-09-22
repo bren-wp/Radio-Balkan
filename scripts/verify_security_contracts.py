@@ -755,7 +755,9 @@ def main() -> None:
     require(
         "scripts/test_live_radio_streams.py",
         "def probe_indirect(raw_url: str)",
-        "def playlist_targets(data: bytes)",
+        "def playlist_targets(data: bytes, base_url: str)",
+        "urllib.parse.urljoin(base_url, line)",
+        "playlist nesting limit exceeded",
         'indirect_ok, indirect_detail = probe_indirect(raw)',
         'verified_caps.discard("indirect")',
     )
