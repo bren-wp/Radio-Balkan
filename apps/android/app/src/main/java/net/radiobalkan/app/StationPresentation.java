@@ -40,7 +40,7 @@ public final class StationPresentation {
         String genre = firstUsefulTag(s.tags);
         if (!genre.isEmpty()) out.append("Istaknuta kategorija: ").append(genre).append(". ");
         if (!safe(s.language).isEmpty()) out.append("Jezik programa: ").append(safe(s.language)).append(". ");
-        out.append("Slušanje koristi sigurni Radio Balkan player s ograničenim timeoutom te fallback i recovery postupkom kada je dostupan.");
+        out.append("Slušanje koristi Radio Balkan player s automatskim pokušajem ponovnog povezivanja ako je stanica privremeno nedostupna.");
         return out.toString();
     }
 
