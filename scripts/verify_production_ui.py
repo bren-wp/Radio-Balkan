@@ -356,6 +356,14 @@ def main() -> int:
         "nextInstallerFocus",
         "activateInstallerControl",
         "focus == 4",
+        "DWMWA_WINDOW_CORNER_PREFERENCE",
+        "DWMWA_SYSTEMBACKDROP_TYPE",
+        "DWMWCP_ROUND",
+        "DWMSBT_MAINWINDOW",
+        '"Segoe UI Variable Text"',
+        '"Segoe UI Variable Display"',
+        "setupDwmInt32(",
+        "setupDwmColor(",
     ):
         require(errors, setup, needle, "Windows Setup UI")
 
