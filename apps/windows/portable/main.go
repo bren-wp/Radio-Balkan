@@ -4938,31 +4938,26 @@ func playbackWatchdog(idx int, stationID string) {
 			return
 		}
 
-		// A live player is the source of truth. Do not issue a second HTTP GET
+		// The player backend is the source of truth. Never issue a second HTTP GET
 		// against an already-playing Icecast/Shoutcast/HLS stream: many healthy
-		// stations reject or stall probes even while the media backend is fine.
-		if !playbackBackendNeedsRecovery(active, backend) {
+		// stations reject probes or limit concurrent listeners.
+		switch backend {
+		case audioBackendWPF:
+			// WPF forwards MediaFailed/MediaEnded asynchronously from MediaPlayer.
 			continue
+		case audioBackendMCI:
+			mode, err := mciQuery("status radio mode")
+			if err == nil && mciModeHealthy(mode) {
+				continue
+			}
+			handleAudioBackendFailure(audioBackendMCI, "MCI playback stopped")
+			return
+		case audioBackendNone:
+			if playbackBackendNeedsRecovery(active, backend) {
+				handleAudioBackendFailure(audioBackendNone, "playback backend missing")
+				return
+			}
 		}
-
-		// Recover only from an internally inconsistent state: the UI still says
-		// playing, but there is no active backend. Re-check under the write lock so
-		// a concurrent Stop/new Play always wins.
-		app.mu.Lock()
-		actual = findStationIndexLocked(stationID, idx)
-		if !app.playing || actual < 0 || app.currentKey != stationID || app.audioBackend != audioBackendNone {
-			app.mu.Unlock()
-			continue
-		}
-		idx = actual
-		app.playing = false
-		app.metadataSeq++
-		app.mu.Unlock()
-
-		setStatus("Veza je privremeno prekinuta · pokušavam ponovno povezivanje…")
-		postUI()
-		playStationByKey(stationID, idx)
-		return
 	}
 }
 func ensureStream(idx int) (string, bool) {
@@ -7143,6 +7138,7 @@ public sealed class RadioBalkanMediaHost : IDisposable
     private MediaPlayer player;
     private readonly ManualResetEventSlim ready = new ManualResetEventSlim(false);
     private bool disposed;
+    private bool currentOpened;
 
     public RadioBalkanMediaHost()
     {
@@ -7158,9 +7154,31 @@ public sealed class RadioBalkanMediaHost : IDisposable
     private void ThreadMain()
     {
         player = new MediaPlayer();
+        player.MediaFailed += (sender, args) =>
+        {
+            var message = args != null && args.ErrorException != null ? args.ErrorException.Message : "media failed";
+            NotifyRuntimeFailure(message);
+        };
+        player.MediaEnded += (sender, args) => NotifyRuntimeFailure("media ended");
         dispatcher = Dispatcher.CurrentDispatcher;
         ready.Set();
         Dispatcher.Run();
+    }
+
+    private void NotifyRuntimeFailure(string message)
+    {
+        // Opening failures are returned synchronously by Play(). Only emit an
+        // asynchronous event after MediaOpened confirmed the current stream.
+        if (!currentOpened || disposed) return;
+        currentOpened = false;
+        try
+        {
+            var text = String.IsNullOrWhiteSpace(message) ? "media failed" : message;
+            var encoded = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(text));
+            Console.Out.WriteLine("EVENT FAILED " + encoded);
+            Console.Out.Flush();
+        }
+        catch { }
     }
 
     public bool Play(string uri, double volume, int timeoutMs, out string error)
@@ -7182,6 +7200,7 @@ public sealed class RadioBalkanMediaHost : IDisposable
         {
             onOpened = (sender, args) =>
             {
+                currentOpened = true;
                 opened = true;
                 done.Set();
             };
@@ -7194,6 +7213,7 @@ public sealed class RadioBalkanMediaHost : IDisposable
             player.MediaFailed += onFailed;
             try
             {
+                currentOpened = false;
                 player.Stop();
                 player.Close();
                 player.Volume = Math.Max(0.0, Math.Min(1.0, volume));
@@ -7230,7 +7250,7 @@ public sealed class RadioBalkanMediaHost : IDisposable
 
     public void Pause() { Invoke(() => player.Pause()); }
     public void Resume() { Invoke(() => player.Play()); }
-    public void Stop() { Invoke(() => { player.Stop(); player.Close(); }); }
+    public void Stop() { Invoke(() => { currentOpened = false; player.Stop(); player.Close(); }); }
     public void SetVolume(double value) { Invoke(() => player.Volume = Math.Max(0.0, Math.Min(1.0, value))); }
 
     private void Invoke(Action action)
@@ -7245,7 +7265,7 @@ public sealed class RadioBalkanMediaHost : IDisposable
         disposed = true;
         if (dispatcher != null)
         {
-            try { dispatcher.Invoke(new Action(() => { player.Stop(); player.Close(); }), DispatcherPriority.Send); } catch { }
+            try { dispatcher.Invoke(new Action(() => { currentOpened = false; player.Stop(); player.Close(); }), DispatcherPriority.Send); } catch { }
             try { dispatcher.BeginInvokeShutdown(DispatcherPriority.Send); } catch { }
         }
         if (thread != null && thread.IsAlive) thread.Join(2000);
@@ -7317,8 +7337,15 @@ try { $p.Dispose() } catch {}`
 	go func() {
 		scanner := bufio.NewScanner(out)
 		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if detail, ok := parseAudioRuntimeFailure(line); ok {
+				safeGo("audio-runtime-failure", func() {
+					handleAudioBackendFailure(audioBackendWPF, detail)
+				})
+				continue
+			}
 			select {
-			case ack <- strings.TrimSpace(scanner.Text()):
+			case ack <- line:
 			case <-app.done:
 				close(ack)
 				return
@@ -7421,6 +7448,101 @@ try { $p.Dispose() } catch {}`
 		})
 	}(cmd)
 	return nil
+}
+
+func parseAudioRuntimeFailure(line string) (string, bool) {
+	const prefix = "EVENT FAILED "
+	if !strings.HasPrefix(line, prefix) {
+		return "", false
+	}
+	encoded := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+	if encoded == "" {
+		return "media failed", true
+	}
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		return "media failed", true
+	}
+	detail := strings.TrimSpace(string(decoded))
+	if detail == "" {
+		detail = "media failed"
+	}
+	return detail, true
+}
+
+func handleAudioBackendFailure(expected audioBackendKind, detail string) {
+	if shuttingDown() {
+		return
+	}
+	if strings.TrimSpace(detail) != "" {
+		logError("audio-runtime-failure", errors.New(detail))
+	}
+
+	app.mu.Lock()
+	if !app.playing || app.audioBackend != expected {
+		app.mu.Unlock()
+		return
+	}
+	idx := currentStationIndexLocked()
+	key := app.currentKey
+	if key == "" && idx >= 0 && idx < len(app.stations) {
+		key = stationKey(app.stations[idx])
+	}
+	if idx < 0 || key == "" {
+		app.playing = false
+		app.audioBackend = audioBackendNone
+		app.metadataSeq++
+		app.mu.Unlock()
+		setStatus("Stanica trenutno nije dostupna")
+		postUI()
+		return
+	}
+
+	now := time.Now()
+	reqSeq := app.playSeq
+	allowRecover := !app.audioRecovering && (app.lastAudioFailure.IsZero() || now.Sub(app.lastAudioFailure) > 20*time.Second)
+	app.playing = false
+	app.audioBackend = audioBackendNone
+	app.metadataSeq++
+	if allowRecover {
+		app.audioRecovering = true
+		app.lastAudioFailure = now
+	}
+	app.mu.Unlock()
+
+	if !allowRecover {
+		setStatus("Veza je privremeno prekinuta · klikni Play za ponovni pokušaj")
+		postUI()
+		return
+	}
+
+	setStatus("Veza je privremeno prekinuta · pokušavam ponovno povezivanje…")
+	postUI()
+	safeGo("audio-recovery", func() {
+		timer := time.NewTimer(1200 * time.Millisecond)
+		select {
+		case <-timer.C:
+		case <-app.done:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			return
+		}
+
+		app.mu.Lock()
+		// A Stop, Next or newer station click always wins over delayed recovery.
+		if app.playSeq != reqSeq || app.currentKey != key || app.audioStopped {
+			app.audioRecovering = false
+			app.mu.Unlock()
+			return
+		}
+		app.audioRecovering = false
+		app.mu.Unlock()
+		playStationByKey(key, idx)
+	})
 }
 
 func resetAudioEngineLocked() {
@@ -7721,6 +7843,11 @@ func audioStopMCI() {
 }
 
 func mci(cmd string) error {
+	_, err := mciQuery(cmd)
+	return err
+}
+
+func mciQuery(cmd string) (string, error) {
 	buf := make([]uint16, 256)
 	r, _, _ := procMciSendString.Call(uintptr(unsafe.Pointer(u16(cmd))), uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)), 0)
 	if r != 0 {
@@ -7728,11 +7855,20 @@ func mci(cmd string) error {
 		ok, _, _ := procMciGetErrorString.Call(r, uintptr(unsafe.Pointer(&detail[0])), uintptr(len(detail)))
 		message := strings.TrimSpace(syscall.UTF16ToString(detail))
 		if ok != 0 && message != "" {
-			return fmt.Errorf("MCI greška %d: %s", r, message)
+			return "", fmt.Errorf("MCI greška %d: %s", r, message)
 		}
-		return fmt.Errorf("MCI greška %d", r)
+		return "", fmt.Errorf("MCI greška %d", r)
 	}
-	return nil
+	return strings.TrimSpace(syscall.UTF16ToString(buf)), nil
+}
+
+func mciModeHealthy(mode string) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "playing", "paused", "seeking":
+		return true
+	default:
+		return false
+	}
 }
 
 func shellOpen(target string) {
