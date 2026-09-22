@@ -7939,7 +7939,7 @@ func audioStopForRequest(reqSeq uint64) {
 			if _, err := io.WriteString(app.audioIn, "STOP\n"); err != nil {
 				resetAudioEngineLocked()
 			} else {
-				_ = waitAudioAckLocked(audioCommandTimeout("STOP"))
+				_ = waitAudioAckLockedForRequest(audioCommandTimeout("STOP"), reqSeq)
 			}
 		}
 	case audioBackendMCI:
