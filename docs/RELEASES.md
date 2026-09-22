@@ -1,5 +1,24 @@
 # Izdavanja
 
+## 0.0.42
+
+Izdanje 0.0.42 fokusira se na pouzdaniji Windows playback recovery, moderniji Windows 11 vizualni sloj i dodatno uklanjanje legacy Win32 dojma iz produkcijskih dijaloga.
+
+- playback recovery sada dopušta do šest bounded kandidata umjesto tri
+- redoslijed recovery izvora preferira aktualni resolved/raw URL, zatim zadnji uspješni backup, zdrav UUID refresh, zdrave alternativne katalog zapise i dodatne backupe
+- name-search za recovery koristi `hidebroken=true`, sortira zdrave rezultate i popularnije izvore ispred slabijih te više ne vraća poznato neispravne zapise kao preferirane kandidate
+- UUID refresh označen s `LastCheckOK=0` ne ulazi u recovery listu
+- spremljeni zadnji uspješni stream ostaje u bounded recovery prozoru kako bi radio nastavio raditi i kada katalog privremeno oglašava pokvaren ili promijenjen URL
+- glavni Windows prozor i Setup dobivaju Windows 11 DWM dark-mode/corner/backdrop/caption/border integraciju
+- Windows koristi `Segoe UI Variable Text` i `Segoe UI Variable Display` gdje su dostupni
+- input/password dijalozi uklanjaju legacy `WS_BORDER` stil, dobivaju unutarnje margine i owner-drawn akcijske tipke usklađene s aplikacijom
+- production UI verifier zaključava moderni shell contract i odbija povratak legacy dialog stylinga
+- Početna, dedicated Zemlje/Žanrovi, click-routing, startup-home i screenshot visual-content gateovi ostaju aktivni
+- prije release bumpa prošli su puni Windows build, stvarni runtime soak, real Balkan live-stream transport, Android unit/lint/release build, browser player/network suite, security/UI/version provjere i Product screenshots
+- Windows Portable i Setup ostaju unsigned po projektu; release integritet se oslanja na exact-main build, runtime gateove i verificirani SHA-256 manifest
+
+Aplikacija sada agresivnije i pametnije traži zdrav alternativni stream kada Play ne uspije. Ipak, dostupnost svake pojedine third-party radio stanice ovisi o vanjskoj infrastrukturi i ne može biti apsolutno garantirana.
+
 ## 0.0.41
 
 Izdanje 0.0.41 je quality/UI/runtime hardening release nakon v0.0.40 startup popravka.
