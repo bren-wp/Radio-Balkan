@@ -635,17 +635,6 @@ func setAudioBackend(backend audioBackendKind) {
 	app.mu.Unlock()
 }
 
-func currentStationSnapshot() (RadioStation, string, int, bool) {
-	app.mu.RLock()
-	defer app.mu.RUnlock()
-	idx := currentStationIndexLocked()
-	if idx < 0 || idx >= len(app.stations) {
-		return RadioStation{}, "", -1, false
-	}
-	st := app.stations[idx]
-	return st, stationKey(st), idx, true
-}
-
 var (
 	user32   = syscall.NewLazyDLL("user32.dll")
 	gdi32    = syscall.NewLazyDLL("gdi32.dll")
@@ -749,12 +738,6 @@ func setStatus(v string) {
 	app.mu.Lock()
 	app.status = v
 	app.mu.Unlock()
-}
-func getStatus() string {
-	app.mu.RLock()
-	v := app.status
-	app.mu.RUnlock()
-	return v
 }
 func safeGo(name string, fn func()) {
 	if shuttingDown() {
@@ -3015,7 +2998,7 @@ func cachedHomeDiscovery(columns int) HomeDiscoveryCache {
 	return HomeDiscoveryCache{Columns: columns}
 }
 
-func discoveryStations(limit int, excluded map[int]struct{}, predicate func(RadioStation) bool) []int {
+, predicate func(RadioStation) bool) []int {
 	if limit <= 0 {
 		return nil
 	}
@@ -3084,38 +3067,6 @@ func homeGridColumns(width int32) int {
 	default:
 		return 3
 	}
-}
-
-func popularStations(limit int) []int {
-	if limit <= 0 {
-		return nil
-	}
-	app.mu.RLock()
-	defer app.mu.RUnlock()
-	country := strings.ToUpper(strings.TrimSpace(app.country))
-	best := make([]int, 0, limit)
-	for i, st := range app.stations {
-		if country != "" && strings.ToUpper(st.CountryCode) != country {
-			continue
-		}
-		insert := len(best)
-		for j, idx := range best {
-			if st.Votes > app.stations[idx].Votes {
-				insert = j
-				break
-			}
-		}
-		if insert >= limit {
-			continue
-		}
-		best = append(best, 0)
-		copy(best[insert+1:], best[insert:])
-		best[insert] = i
-		if len(best) > limit {
-			best = best[:limit]
-		}
-	}
-	return best
 }
 
 func drawStations(hdc syscall.Handle, cr RECT) {
@@ -4035,23 +3986,6 @@ func drawButton(hdc syscall.Handle, l, t, r, b int32, label string, primary bool
 	selectFont(hdc, app.hFontSmall)
 	text(hdc, label, l+8, t, r-8, b, tc, DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
 }
-func drawSmallButton(hdc syscall.Handle, l, t, r, b int32, label string, accent bool) {
-	drawButton(hdc, l, t, r, b, label, accent)
-}
-func drawPill(hdc syscall.Handle, l, t, r, b int32, label string, selected bool) {
-	fill := uint32(0x211a16)
-	border := uint32(0x3d2f27)
-	tc := rgb(181, 170, 162)
-	if selected {
-		fill = 0x39251a
-		border = 0x75411f
-		tc = rgb(255, 165, 94)
-	}
-	drawRounded(hdc, l, t, r, b, 18, fill, border)
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, label, l+12, t, r-12, b, tc, DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-}
-func textButtonWidth(s string) int { return 34 + len([]rune(s))*8 }
 func selectFont(hdc syscall.Handle, h syscall.Handle) {
 	procSelectObject.Call(uintptr(hdc), uintptr(h))
 }
@@ -4061,10 +3995,6 @@ func text(hdc syscall.Handle, s string, l, t, r, b int32, color uintptr, flags u
 	procSetTextColor.Call(uintptr(hdc), color)
 	procDrawText.Call(uintptr(hdc), uintptr(unsafe.Pointer(u16(s))), ^uintptr(0), uintptr(unsafe.Pointer(&rc)), uintptr(flags))
 }
-func textRect(hdc syscall.Handle, s string, rc RECT, color uintptr, flags uint32) {
-	text(hdc, s, rc.Left, rc.Top, rc.Right, rc.Bottom, color, flags)
-}
-
 func stationIndexFromHit(h HitRegion) int {
 	app.mu.RLock()
 	defer app.mu.RUnlock()
@@ -4600,23 +4530,6 @@ func selectCountry(code string) {
 	invalidate()
 }
 
-func selectGenre(genre string) {
-	genre = strings.TrimSpace(genre)
-	app.mu.Lock()
-	app.detailKey = ""
-	app.tab = "all"
-	app.genre = genre
-	app.scroll = 0
-	app.mu.Unlock()
-	app.stateMu.Lock()
-	app.state.Tab = "all"
-	app.state.Genre = genre
-	app.stateMu.Unlock()
-	scheduleStateSave()
-	rebuildFilter()
-	invalidate()
-}
-
 func activateStation(idx int) {
 	app.mu.RLock()
 	if idx < 0 || idx >= len(app.stations) {
@@ -4789,10 +4702,6 @@ func playbackWatchdog(idx int, stationID string) {
 		}
 	}
 }
-func ensureStream(idx int) (string, bool) {
-	return ensureStreamKey(idx, "")
-}
-
 func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 	app.mu.RLock()
 	if expectedKey != "" {
@@ -6749,7 +6658,6 @@ func rebuildGenres() {
 	}
 }
 
-func clampScroll() { app.mu.Lock(); defer app.mu.Unlock(); clampScrollLocked() }
 func clampScrollLocked() {
 	if homeCatalogEnabled(app.clientHeight, app.tab, app.search, app.genre, app.country) {
 		viewport := int(app.clientHeight) - int(playerHeight) - 16 - 92
@@ -7746,18 +7654,6 @@ func audioSendExisting(line string) error {
 	}
 	return waitAudioAckLocked(audioCommandTimeout(line))
 }
-func warmAudioEngine() {
-	if shuttingDown() {
-		return
-	}
-	app.audioMu.Lock()
-	err := startAudioEngineLocked()
-	app.audioMu.Unlock()
-	if err != nil && !shuttingDown() {
-		logError("audio-warmup", err)
-	}
-}
-
 func audioShutdown() {
 	deadline := time.Now().Add(750 * time.Millisecond)
 	for !app.audioMu.TryLock() {
@@ -7776,10 +7672,6 @@ func audioShutdown() {
 	audioStopMCI()
 	setAudioBackend(audioBackendNone)
 	app.audioMu.Unlock()
-}
-
-func audioPlay(raw string) error {
-	return audioPlayRequest(raw, 0)
 }
 
 func audioPlayRequest(raw string, reqSeq uint64) error {
@@ -8052,11 +7944,6 @@ func postUI() {
 func postGenres() {
 	if app.hwnd != 0 && !shuttingDown() {
 		procPostMessage.Call(uintptr(app.hwnd), WM_APP+2, 0, 0)
-	}
-}
-func postFilterUI() {
-	if app.hwnd != 0 && !shuttingDown() {
-		procPostMessage.Call(uintptr(app.hwnd), WM_APP+3, 0, 0)
 	}
 }
 func messageBox(hwnd syscall.Handle, title, msg string, flags uintptr) int {
