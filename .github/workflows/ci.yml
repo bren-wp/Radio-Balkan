@@ -83,7 +83,7 @@ jobs:
       - name: Validate Windows PowerShell tooling
         shell: pwsh
         run: |
-          foreach ($path in @('scripts/capture-windows.ps1', 'scripts/test-windows-runtime.ps1')) {
+          foreach ($path in @('scripts/capture-windows.ps1', 'scripts/validate-screenshot.ps1', 'scripts/test-windows-runtime.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(
@@ -96,6 +96,48 @@ jobs:
               throw "$path contains PowerShell syntax errors."
             }
           }
+      - name: Test screenshot visual-content validator
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $blank = Join-Path $env:RUNNER_TEMP 'radio-balkan-blank.png'
+          $valid = Join-Path $env:RUNNER_TEMP 'radio-balkan-valid.png'
+          $blankBitmap = [Drawing.Bitmap]::new(640, 360)
+          try {
+            $blankBitmap.Save($blank, [Drawing.Imaging.ImageFormat]::Png)
+          } finally {
+            $blankBitmap.Dispose()
+          }
+          $validBitmap = [Drawing.Bitmap]::new(640, 360)
+          try {
+            $graphics = [Drawing.Graphics]::FromImage($validBitmap)
+            try {
+              $graphics.Clear([Drawing.Color]::FromArgb(16, 23, 31))
+              $orange = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(235, 83, 35))
+              $white = [Drawing.SolidBrush]::new([Drawing.Color]::White)
+              try {
+                $graphics.FillRectangle($orange, 40, 40, 260, 120)
+                $graphics.FillRectangle($white, 340, 190, 220, 80)
+              } finally {
+                $orange.Dispose()
+                $white.Dispose()
+              }
+            } finally {
+              $graphics.Dispose()
+            }
+            $validBitmap.Save($valid, [Drawing.Imaging.ImageFormat]::Png)
+          } finally {
+            $validBitmap.Dispose()
+          }
+          $blankRejected = $false
+          try {
+            ./scripts/validate-screenshot.ps1 -Path @($blank) -Quiet
+          } catch {
+            $blankRejected = $true
+          }
+          if (-not $blankRejected) { throw 'Blank screenshot unexpectedly passed validation.' }
+          ./scripts/validate-screenshot.ps1 -Path @($valid) -Quiet
+          Remove-Item $blank,$valid -Force -ErrorAction SilentlyContinue
       - name: Test and build Windows release
         working-directory: apps/windows
         shell: pwsh
