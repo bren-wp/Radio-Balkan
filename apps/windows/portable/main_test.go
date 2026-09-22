@@ -664,6 +664,54 @@ func TestBackendFailureWhilePausedForcesReconnectOnNextPlay(t *testing.T) {
 	}
 }
 
+func TestStaleAsyncStopCannotClearNewPlaybackBackend(t *testing.T) {
+	app = App{
+		done:         make(chan struct{}),
+		playSeq:      22,
+		audioBackend: audioBackendWPF,
+	}
+	audioStopForRequest(21)
+	if got := currentAudioBackend(); got != audioBackendWPF {
+		t.Fatalf("stale Stop changed newer playback backend to %v; want WPF", got)
+	}
+}
+
+func TestWPFPlayReplacesActiveMCIBackend(t *testing.T) {
+	if !shouldStopMCIForAudioCommand("PLAY Zm9v 0.50", audioBackendMCI) {
+		t.Fatal("WPF PLAY must close an older MCI fallback stream first")
+	}
+	if shouldStopMCIForAudioCommand("VOLUME 0.50", audioBackendMCI) {
+		t.Fatal("non-PLAY commands must not tear down MCI")
+	}
+	if shouldStopMCIForAudioCommand("PLAY Zm9v 0.50", audioBackendWPF) {
+		t.Fatal("WPF-to-WPF PLAY should reuse the media host instead of forcing MCI cleanup")
+	}
+}
+
+func TestStopCurrentPlaybackAdvancesRequestGeneration(t *testing.T) {
+	st := RadioStation{StationUUID: "stop-seq", Name: "Stop Sequence"}
+	app = App{
+		done:         make(chan struct{}),
+		stations:     []RadioStation{st},
+		filtered:     []int{0},
+		current:      0,
+		currentKey:   stationKey(st),
+		playing:      true,
+		audioStopped: false,
+		audioBackend: audioBackendNone,
+		playSeq:      9,
+	}
+	stopCurrentPlayback()
+	app.mu.RLock()
+	defer app.mu.RUnlock()
+	if app.playSeq != 10 {
+		t.Fatalf("Stop playSeq = %d; want 10 so older async audio work becomes stale", app.playSeq)
+	}
+	if app.playing || !app.audioStopped {
+		t.Fatalf("Stop state playing=%v stopped=%v; want false/true", app.playing, app.audioStopped)
+	}
+}
+
 func TestAudioEngineStartupTimeoutIsBounded(t *testing.T) {
 	if audioEngineStartupTimeout < 15*time.Second {
 		t.Fatalf("audio engine startup timeout %s is too short for cold PresentationCore/Add-Type initialization", audioEngineStartupTimeout)
