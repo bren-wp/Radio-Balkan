@@ -1329,6 +1329,36 @@ func runCIInputSmoke() {
 		return
 	}
 
+	// Exercise a real Home section action before sidebar navigation. This
+	// specifically guards the former "Sve hrvatske" no-op that re-entered Home.
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-croatia-paint")
+		return
+	}
+	app.mu.RLock()
+	homeWidth := app.clientWidth
+	app.mu.RUnlock()
+	postClick(homeWidth-mainPad-72, 260)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "croatia" && app.country == "HR" && app.genre == ""
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-croatia-list")
+		return
+	}
+	postClick(100, 109)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "all" && app.country == "HR" && app.genre == ""
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-after-croatia-list")
+		return
+	}
+
 	// Exercise the real Win32 mouse-message -> hit-region -> state path.
 	postClick(100, 153) // Top
 	if !waitFor(time.Second, func() bool {
