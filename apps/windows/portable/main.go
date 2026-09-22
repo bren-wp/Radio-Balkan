@@ -7712,6 +7712,7 @@ func waitAudioAckLockedForRequest(timeout time.Duration, reqSeq uint64) error {
 				// Kill the helper/channel together so a late ACK can never satisfy
 				// the newer station request waiting behind this one.
 				resetAudioEngineLocked()
+				setAudioBackend(audioBackendNone)
 				return errPlayRequestSuperseded
 			}
 		case <-timer.C:
@@ -7759,7 +7760,21 @@ func audioSendForRequest(line string, reqSeq uint64) error {
 		resetAudioEngineLocked()
 		return err
 	}
-	return waitAudioAckLockedForRequest(audioCommandTimeout(line), reqSeq)
+	if err := waitAudioAckLockedForRequest(audioCommandTimeout(line), reqSeq); err != nil {
+		return err
+	}
+	if strings.HasPrefix(strings.TrimSpace(line), "PLAY ") {
+		// Commit backend ownership while audioMu is still held. A newer request can
+		// advance playSeq concurrently, but it cannot enter another backend command
+		// until this lock is released.
+		if !playRequestStillCurrent(reqSeq) {
+			resetAudioEngineLocked()
+			setAudioBackend(audioBackendNone)
+			return errPlayRequestSuperseded
+		}
+		setAudioBackend(audioBackendWPF)
+	}
+	return nil
 }
 func audioSendExisting(line string) error {
 	app.audioMu.Lock()
@@ -7825,24 +7840,42 @@ func audioPlayRequest(raw string, reqSeq uint64) error {
 	}
 	enc := base64.StdEncoding.EncodeToString([]byte(raw))
 	if err := audioSendForRequest(fmt.Sprintf("PLAY %s %.2f", enc, vol), reqSeq); err == nil {
-		setAudioBackend(audioBackendWPF)
 		return nil
 	} else {
 		if errors.Is(err, errPlayRequestSuperseded) {
-			setAudioBackend(audioBackendNone)
+			// The stale request must not mutate backend state after audioMu was
+			// released; a newer request may already be waiting to take ownership.
 			return err
 		}
 		logError("audio-engine", err)
 		app.audioMu.Lock()
 		resetAudioEngineLocked()
-		app.audioMu.Unlock()
 		setAudioBackend(audioBackendNone)
+		app.audioMu.Unlock()
 	}
 
 	if !playRequestStillCurrent(reqSeq) {
 		return errPlayRequestSuperseded
 	}
+
+	// Serialize the complete MCI fallback lifecycle with all WPF/backend commands.
+	// This prevents a superseded MCI request from closing the shared "radio" alias
+	// after a newer request has already started.
+	app.audioMu.Lock()
+	defer app.audioMu.Unlock()
+	abortStaleMCI := func() bool {
+		if playRequestStillCurrent(reqSeq) {
+			return false
+		}
+		audioStopMCI()
+		setAudioBackend(audioBackendNone)
+		return true
+	}
+	if abortStaleMCI() {
+		return errPlayRequestSuperseded
+	}
 	audioStopMCI()
+	setAudioBackend(audioBackendNone)
 	cleanURL := strings.ReplaceAll(raw, "\"", "")
 	openCommands := []string{
 		fmt.Sprintf("open \"%s\" alias radio", cleanURL),
@@ -7850,9 +7883,7 @@ func audioPlayRequest(raw string, reqSeq uint64) error {
 	}
 	var openErr error
 	for _, command := range openCommands {
-		if !playRequestStillCurrent(reqSeq) {
-			audioStopMCI()
-			setAudioBackend(audioBackendNone)
+		if abortStaleMCI() {
 			return errPlayRequestSuperseded
 		}
 		if e := mci(command); e == nil {
@@ -7863,9 +7894,7 @@ func audioPlayRequest(raw string, reqSeq uint64) error {
 			audioStopMCI()
 		}
 	}
-	if !playRequestStillCurrent(reqSeq) {
-		audioStopMCI()
-		setAudioBackend(audioBackendNone)
+	if abortStaleMCI() {
 		return errPlayRequestSuperseded
 	}
 	if openErr != nil {
@@ -7877,12 +7906,13 @@ func audioPlayRequest(raw string, reqSeq uint64) error {
 		setAudioBackend(audioBackendNone)
 		return e
 	}
-	if !playRequestStillCurrent(reqSeq) {
-		audioStopMCI()
-		setAudioBackend(audioBackendNone)
+	if abortStaleMCI() {
 		return errPlayRequestSuperseded
 	}
 	_ = mci(fmt.Sprintf("setaudio radio volume to %d", volume*10))
+	if abortStaleMCI() {
+		return errPlayRequestSuperseded
+	}
 	setAudioBackend(audioBackendMCI)
 	return nil
 }
