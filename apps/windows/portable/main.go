@@ -4434,13 +4434,15 @@ func stopCurrentPlayback() {
 	app.audioStopped = true
 	app.metadataSeq++
 	app.playSeq++
+	stopSeq := app.playSeq
+	backend := app.audioBackend
 	app.nowPlaying = ""
 	app.nowPlayingStation = ""
 	app.mu.Unlock()
 	setStatus("Zaustavljeno")
 	invalidate()
-	if currentAudioBackend() != audioBackendNone {
-		safeGo("audio-stop-control", audioStop)
+	if backend != audioBackendNone {
+		safeGo("audio-stop-control", func() { audioStopForRequest(stopSeq) })
 	}
 }
 
@@ -5594,13 +5596,6 @@ func refreshAll() {
 	setStatus("Osvježavam popis stanica…")
 	postUI()
 	app.mu.RLock()
-	currentKey := app.currentKey
-	wasPlaying := app.playing
-	if currentKey == "" {
-		if idx := currentStationIndexLocked(); idx >= 0 {
-			currentKey = stationKey(app.stations[idx])
-		}
-	}
 	oldStations := append([]RadioStation(nil), app.stations...)
 	app.mu.RUnlock()
 	list, err := fetchBalkanStations()
@@ -5612,8 +5607,20 @@ func refreshAll() {
 	}
 	prepareStations(list)
 	mergeRuntimeStationState(oldStations, list)
-	keepPlaying := false
+	keepCurrent := false
+	stopSeq := uint64(0)
+	stopBackend := audioBackendNone
 	app.mu.Lock()
+	// Re-read the active selection after the network refresh. A station click,
+	// Stop, Next or Play that happened while the catalog request was in flight
+	// must win over the stale pre-refresh snapshot.
+	currentKey := app.currentKey
+	if currentKey == "" {
+		if idx := currentStationIndexLocked(); idx >= 0 {
+			currentKey = stationKey(app.stations[idx])
+		}
+	}
+	wasPlaying := app.playing
 	app.stations = list
 	app.catalogRevision++
 	app.loading = false
@@ -5625,15 +5632,22 @@ func refreshAll() {
 			app.current = i
 			app.currentKey = currentKey
 			app.playing = wasPlaying
-			keepPlaying = wasPlaying
+			keepCurrent = true
 		}
 	}
+	if currentKey != "" && !keepCurrent {
+		app.playing = false
+		app.audioStopped = true
+		app.metadataSeq++
+		app.playSeq++
+		stopSeq = app.playSeq
+		stopBackend = app.audioBackend
+		app.nowPlaying = ""
+		app.nowPlayingStation = ""
+	}
 	app.mu.Unlock()
-	if wasPlaying && !keepPlaying {
-		audioStop()
-		app.mu.Lock()
-		app.currentKey = ""
-		app.mu.Unlock()
+	if stopBackend != audioBackendNone {
+		safeGo("audio-stop-refresh", func() { audioStopForRequest(stopSeq) })
 	}
 	saveCache(list)
 	postGenres()
@@ -7672,11 +7686,21 @@ func audioSend(line string) error {
 	return audioSendForRequest(line, 0)
 }
 
+func shouldStopMCIForAudioCommand(line string, backend audioBackendKind) bool {
+	return backend == audioBackendMCI && strings.HasPrefix(strings.TrimSpace(line), "PLAY ")
+}
+
 func audioSendForRequest(line string, reqSeq uint64) error {
 	app.audioMu.Lock()
 	defer app.audioMu.Unlock()
 	if !playRequestStillCurrent(reqSeq) {
 		return errPlayRequestSuperseded
+	}
+	// A newer WPF PLAY must replace an older MCI fallback stream. Otherwise the
+	// two backends can remain audible at the same time after rapid station changes.
+	if shouldStopMCIForAudioCommand(line, currentAudioBackend()) {
+		audioStopMCI()
+		setAudioBackend(audioBackendNone)
 	}
 	if err := startAudioEngineLocked(); err != nil {
 		return err
@@ -7855,6 +7879,32 @@ func audioSetVolume(v int) {
 	case audioBackendMCI:
 		_ = mci(fmt.Sprintf("setaudio radio volume to %d", v*10))
 	}
+}
+
+func audioStopForRequest(reqSeq uint64) {
+	app.audioMu.Lock()
+	defer app.audioMu.Unlock()
+	// Stop is dispatched asynchronously from the UI thread. If a newer Play/Next
+	// already advanced playSeq before this goroutine obtained the backend lock,
+	// the old Stop must not silence the newer stream.
+	if !playRequestStillCurrent(reqSeq) {
+		return
+	}
+	switch currentAudioBackend() {
+	case audioBackendWPF:
+		if app.audioIn != nil {
+			if _, err := io.WriteString(app.audioIn, "STOP\n"); err != nil {
+				resetAudioEngineLocked()
+			} else {
+				_ = waitAudioAckLocked(audioCommandTimeout("STOP"))
+			}
+		}
+	case audioBackendMCI:
+		audioStopMCI()
+	default:
+		return
+	}
+	setAudioBackend(audioBackendNone)
 }
 
 func audioStop() {
