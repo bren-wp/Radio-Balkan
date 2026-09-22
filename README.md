@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.37" src="assets/badges/version.svg">
+  <img alt="version 0.0.38" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -15,20 +15,21 @@
 
 Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrvatske i regije bez korisničkog računa, bez telemetry sustava i bez teškog web runtimea u Windows aplikaciji. Projekt objedinjuje nativni Windows klijent, nativni Android klijent i produkcijske ekstenzije za Chrome, Edge, Opera i Firefox.
 
-## Što donosi v0.0.37
+## Što donosi v0.0.38
 
-- **Stabilnost interakcije je release blocker** — Windows kontrole više ne ovise o nejasnom stanju audio helpera; aktivni backend se eksplicitno prati kao WPF, MCI ili neaktivan.
-- **Pause / Resume / Stop / Volume upravljaju samo aktivnim backendom** — aplikacija više ne šalje komande mrtvom WPF helperu dok stvarni zvuk ide kroz MCI niti obrnuto.
-- **Resume bez aktivnog backenda radi čisti reconnect** — umjesto čekanja nepostojećeg playera ponovno se pokreće kontrolirani playback iste stanice.
-- **Audio shutdown je strogo ograničen** — cleanup više ne može beskonačno čekati audio mutex; regression test zahtijeva završetak unutar dvije sekunde čak i pod namjerno zaključanim backendom.
-- **Stvarni click smoke ostaje obavezan** — izgrađeni Windows EXE prima stvarne Win32 klikove na Top, Zemlje, Početnu i Volume+, uključujući navigaciju dok je audio lock namjerno zauzet.
-- **HTTP media-open smoke ostaje obavezan** — release gate i dalje razlikuje stvarni decoder kvar od poznatog headless CI okruženja bez audio endpointa.
-- **Release se više ne objavljuje prije CI-ja** — Publish workflow pokreće se tek nakon uspješnog main CI-ja i gradi artefakte iz točno onog SHA-a koji je prošao provjere.
-- **Windows release build se testira još jednom prije objave** — Publish ponovno pokreće runtime click/audio soak nad gotovim Portable EXE-om.
-- **v0.0.36 je superseded** — naknadni post-merge CI otkrio je audio-shutdown deadlock nakon što je v0.0.36 već bio objavljen; v0.0.37 zatvara i kvar i tu rupu u release procesu.
-- **UI, veliki Balkan katalog i zasebni prikazi Zemlje / Žanrovi ostaju** — stabilizacija ne vraća prethodna UX poboljšanja.
+- **Play klik je stvarno testiran** — Windows runtime smoke nakon učitavanja velikog kataloga fizički šalje Win32 klik na renderiranu Play ikonicu stanice i zahtijeva da playback request stvarno krene.
+- **Uklonjen je glavni UI freeze nakon učitavanja kataloga** — početna više ne skenira i sortira tisuće stanica pri svakom WM_PAINT i hover događaju.
+- **Home discovery je cacheiran po revisionu kataloga** — skupi ranking radi se kontrolirano, a refresh, cache i supplemental katalog pravilno invalidiraju snapshot.
+- **6000-station post-load test** — CI puni aplikaciju determinističkim katalogom od 6000 stanica, prisilno dovršava stvarni repaint i tek tada provjerava klikove.
+- **Core gumbi imaju neovisni fallback hit-test** — Početna, Top, Zemlje, Žanrovi, Dijaspora, Strano, refresh i player transport više ne ovise isključivo o zadnjem paint hit-listu.
+- **Donji player ostaje responzivan i kad je audio backend zauzet** — input smoke namjerno drži audio lock i provjerava da UI thread i dalje prima navigaciju i volume klikove.
+- **Dijaspora i Strano su ispravni selector kodovi** — stanje se može spremiti i vratiti nakon restarta, a odabir zemlje čisti zastarjeli genre filter.
+- **Startup health provjera je odgođena** — prvi korisnički klik više se ne natječe s početnim health-check burstom.
+- **Stvarni post-load repaint je sinkroniziran u CI-ju** — test ne može lažno proći prije nego što UI thread doista dovrši render velike početne.
+- **Playback i UI release gate ostaju povezani** — Windows build, stvarni click/input smoke, HTTP audio-open smoke, Android, browser i versions moraju svi biti zeleni prije objave.
+- **v0.0.37 playback hardening ostaje aktivan** — WPF/MCI backend tracking, bounded shutdown i direktni stream playback nisu vraćeni unatrag.
 
-Dostupnost pojedine third-party radio stanice i dalje ovisi o infrastrukturi same postaje. v0.0.37 uklanja potvrđene aplikacijske blokade i uvodi stroži release gate, ali ne tvrdi da svaki vanjski stream mora uvijek biti online.
+Dostupnost pojedine third-party radio stanice i dalje ovisi o infrastrukturi same postaje. v0.0.38 uklanja potvrđeni aplikacijski uzrok zbog kojeg su nakon učitavanja kataloga Play i ostali gumbi mogli izgledati potpuno mrtvi.
 
 ## Zašto Radio Balkan
 
@@ -68,7 +69,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.37 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.37):
+Gotovi v0.0.38 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.38):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -108,7 +109,7 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.38
+python scripts/bump_version.py 0.0.39
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.
