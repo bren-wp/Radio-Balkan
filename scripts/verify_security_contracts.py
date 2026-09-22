@@ -571,6 +571,22 @@ def main() -> None:
         "Get-AuthenticodeSignature -FilePath $Path",
     )
 
+    require(
+        "apps/windows/portable/audio_mfplay_windows.go",
+        'syscall.NewLazyDLL("mfplat.dll")',
+        'syscall.NewLazyDLL("mfplay.dll")',
+        'syscall.NewLazyDLL("ole32.dll")',
+        'NewProc("MFStartup")',
+        'NewProc("MFShutdown")',
+        'NewProc("MFPCreateMediaPlayer")',
+        'NewProc("CoInitializeEx")',
+        "runtime.LockOSThread()",
+        "CreateMediaItemFromURL",
+        "comCall(player, 16",
+        "comCall(player, 3)",
+        "comCall(player, 5)",
+        "comCall(player, 38)",
+    )
     forbid(
         "apps/windows/portable/main.go",
         "(*MINMAXINFO)(unsafe.Pointer(lParam))",
@@ -625,7 +641,7 @@ def main() -> None:
         "handleAudioBackendFailureForRequest(audioBackendWPF, eventSeq, detail)",
         "func audioPlayCommand(reqSeq uint64, encoded string, volume float64) string",
         'return fmt.Sprintf("PLAY %d %s %.2f", reqSeq, encoded, volume)',
-        "audioPlayCommand(0, encoded, 0.0)",
+        "mfplaySmokeOpen(streamURL)",
         "audioPlayCommand(reqSeq, enc, vol)",
         "audio-smoke-ok token=",
         "audio-smoke-no-device token=",
