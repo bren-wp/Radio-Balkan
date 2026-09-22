@@ -7222,6 +7222,16 @@ func waitAudioEngineStartupSignal(ack <-chan string, reqSeq uint64, timeout time
 	}
 }
 
+func abortAudioEngineStartup(cmd *exec.Cmd, in io.Closer) {
+	if in != nil {
+		_ = in.Close()
+	}
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	}
+}
+
 func startAudioEngineLockedForRequest(reqSeq uint64) error {
 	if app.audioCmd != nil && app.audioCmd.Process != nil {
 		return nil
@@ -7560,10 +7570,7 @@ try { $p.Dispose() } catch {}`
 	}()
 	ready, ok, waitErr := waitAudioEngineStartupSignal(ack, reqSeq, audioEngineStartupTimeout)
 	if waitErr != nil {
-		_ = in.Close()
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
+		abortAudioEngineStartup(cmd, in)
 		return waitErr
 	}
 	if !ok || ready != "READY" {
@@ -7573,10 +7580,7 @@ try { $p.Dispose() } catch {}`
 				detail = strings.TrimSpace(string(decoded))
 			}
 		}
-		_ = in.Close()
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
+		abortAudioEngineStartup(cmd, in)
 		if detail != "" {
 			return fmt.Errorf("audio engine inicijalizacija: %s", detail)
 		}
