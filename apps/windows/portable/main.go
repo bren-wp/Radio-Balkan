@@ -5002,7 +5002,7 @@ func playbackWatchdog(idx int, stationID string) {
 			// WPF forwards MediaFailed/MediaEnded asynchronously from MediaPlayer.
 			continue
 		case audioBackendMCI:
-			mode, err := mciQuery("status radio mode")
+			mode, err := mciQueryExisting("status radio mode")
 			if err == nil && mciModeHealthy(mode) {
 				continue
 			}
@@ -7827,9 +7827,9 @@ func audioShutdown() {
 		_, _ = io.WriteString(app.audioIn, "STOP\n")
 	}
 	resetAudioEngineLocked()
-	app.audioMu.Unlock()
-	setAudioBackend(audioBackendNone)
 	audioStopMCI()
+	setAudioBackend(audioBackendNone)
+	app.audioMu.Unlock()
 }
 
 func audioPlay(raw string) error {
@@ -7927,12 +7927,22 @@ func audioPlayRequest(raw string, reqSeq uint64) error {
 	return nil
 }
 
+func mciQueryExisting(cmd string) (string, error) {
+	app.audioMu.Lock()
+	defer app.audioMu.Unlock()
+	if currentAudioBackend() != audioBackendMCI {
+		return "", errors.New("MCI backend nije aktivan")
+	}
+	return mciQuery(cmd)
+}
+
 func audioPause() error {
 	switch currentAudioBackend() {
 	case audioBackendWPF:
 		return audioSendExisting("PAUSE")
 	case audioBackendMCI:
-		return mci("pause radio")
+		_, err := mciQueryExisting("pause radio")
+		return err
 	default:
 		return errors.New("audio backend nije aktivan")
 	}
@@ -7943,7 +7953,8 @@ func audioResume() error {
 	case audioBackendWPF:
 		return audioSendExisting("RESUME")
 	case audioBackendMCI:
-		return mci("resume radio")
+		_, err := mciQueryExisting("resume radio")
+		return err
 	default:
 		return errors.New("audio backend nije aktivan")
 	}
@@ -7960,7 +7971,7 @@ func audioSetVolume(v int) {
 	case audioBackendWPF:
 		_ = audioSendExisting(fmt.Sprintf("VOLUME %.2f", float64(v)/100.0))
 	case audioBackendMCI:
-		_ = mci(fmt.Sprintf("setaudio radio volume to %d", v*10))
+		_, _ = mciQueryExisting(fmt.Sprintf("setaudio radio volume to %d", v*10))
 	}
 }
 
@@ -7991,13 +8002,7 @@ func audioStopForRequest(reqSeq uint64) {
 }
 
 func audioStop() {
-	switch currentAudioBackend() {
-	case audioBackendWPF:
-		_ = audioSendExisting("STOP")
-	case audioBackendMCI:
-		audioStopMCI()
-	}
-	setAudioBackend(audioBackendNone)
+	audioStopForRequest(0)
 }
 
 func audioStopMCI() {
