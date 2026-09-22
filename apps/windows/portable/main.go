@@ -1542,9 +1542,9 @@ func runCIInputSmoke() {
 	postClick(100, 109)
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
-		ok := app.tab == "all" && app.country == "HR"
+		ok := app.tab == "all" && app.country == "HR" && app.search == ""
 		app.mu.RUnlock()
-		return ok
+		return ok && getWindowText(app.edit) == ""
 	}) {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-after-search")
 		return
@@ -2482,6 +2482,25 @@ func paintClient(hdc syscall.Handle, cr RECT) {
 	drawPlayer(hdc, cr)
 }
 
+const (
+	sidebarHomeY      int32 = 91
+	sidebarTopY       int32 = 135
+	sidebarCountriesY int32 = 179
+	sidebarGenresY    int32 = 223
+	sidebarDiasporaY  int32 = 267
+	sidebarForeignY   int32 = 311
+	sidebarFavoritesY int32 = 393
+	sidebarRecentY    int32 = 435
+	sidebarToolsLabelY int32 = 495
+	sidebarReplacedY  int32 = 523
+	sidebarBrokenY    int32 = 565
+	sidebarItemHeight int32 = 36
+)
+
+func sidebarRowContains(y, rowY int32) bool {
+	return y >= rowY && y <= rowY+sidebarItemHeight
+}
+
 func drawSidebar(hdc syscall.Handle, cr RECT) {
 	r := RECT{0, 0, sidebarWidth, cr.Bottom - playerHeight}
 	br := createBrush(color(11, 16, 23))
@@ -2517,38 +2536,26 @@ func drawSidebar(hdc syscall.Handle, cr RECT) {
 	app.mu.RLock()
 	tab, genre, country := app.tab, strings.ToLower(strings.TrimSpace(app.genre)), strings.ToUpper(strings.TrimSpace(app.country))
 	app.mu.RUnlock()
-	y := int32(91)
-	drawSidebarItem(hdc, y, "⌂", "Početna", tab == "all" && genre == "" && country == "HR", hitTab, "all")
-	y += 44
-	drawSidebarItem(hdc, y, "★", "Top", tab == "popular", hitTab, "popular")
-	y += 44
-	drawSidebarItem(hdc, y, "◉", "Zemlje", tab == "countries", hitTab, "countries")
-	y += 44
-	drawSidebarItem(hdc, y, "♫", "Žanrovi", tab == "genres", hitTab, "genres")
-	y += 44
-	drawSidebarItem(hdc, y, "◎", "Dijaspora", country == diasporaCatalogCode, hitCountryChoice, diasporaCatalogCode)
-	y += 44
-	drawSidebarItem(hdc, y, "◌", "Strano", country == foreignCatalogCode, hitCountryChoice, foreignCatalogCode)
+	drawSidebarItem(hdc, sidebarHomeY, "⌂", "Početna", tab == "all" && genre == "" && country == "HR", hitTab, "all")
+	drawSidebarItem(hdc, sidebarTopY, "★", "Top", tab == "popular", hitTab, "popular")
+	drawSidebarItem(hdc, sidebarCountriesY, "◉", "Zemlje", tab == "countries", hitTab, "countries")
+	drawSidebarItem(hdc, sidebarGenresY, "♫", "Žanrovi", tab == "genres", hitTab, "genres")
+	drawSidebarItem(hdc, sidebarDiasporaY, "◎", "Dijaspora", country == diasporaCatalogCode, hitCountryChoice, diasporaCatalogCode)
+	drawSidebarItem(hdc, sidebarForeignY, "◌", "Strano", country == foreignCatalogCode, hitCountryChoice, foreignCatalogCode)
 
-	y += 54
-	drawSidebarLabel(hdc, "BIBLIOTEKA", y)
-	y += 28
-	drawSidebarItem(hdc, y, "♡", "Omiljene", tab == "favorites", hitTab, "favorites")
-	y += 42
-	drawSidebarItem(hdc, y, "◷", "Nedavno", tab == "recent", hitTab, "recent")
+	drawSidebarLabel(hdc, "BIBLIOTEKA", 365)
+	drawSidebarItem(hdc, sidebarFavoritesY, "♡", "Omiljene", tab == "favorites", hitTab, "favorites")
+	drawSidebarItem(hdc, sidebarRecentY, "◷", "Nedavno", tab == "recent", hitTab, "recent")
 
-	toolsY := y + 60
-	if admin && cr.Bottom-playerHeight > toolsY+110 {
-		drawSidebarLabel(hdc, "UPRAVLJANJE", toolsY)
-		toolsY += 28
-		drawSidebarItem(hdc, toolsY, "⇄", "Rezervni izvori", tab == "replaced", hitTab, "replaced")
-		toolsY += 42
-		drawSidebarItem(hdc, toolsY, "!", "Nedostupne", tab == "broken", hitTab, "broken")
+	if admin && cr.Bottom-playerHeight > sidebarBrokenY+sidebarItemHeight+14 {
+		drawSidebarLabel(hdc, "UPRAVLJANJE", sidebarToolsLabelY)
+		drawSidebarItem(hdc, sidebarReplacedY, "⇄", "Rezervni izvori", tab == "replaced", hitTab, "replaced")
+		drawSidebarItem(hdc, sidebarBrokenY, "!", "Nedostupne", tab == "broken", hitTab, "broken")
 	}
 
 	// Warm footer quote remains decorative and may collapse on compact heights.
 	quoteTop := cr.Bottom - playerHeight - 118
-	if quoteTop > y+28 {
+	if quoteTop > sidebarRecentY+28 {
 		drawRounded(hdc, 14, quoteTop, sidebarWidth-14, quoteTop+92, 16, color(28, 24, 22), color(54, 43, 37))
 		selectFont(hdc, app.hFontSmall)
 		text(hdc, "Isti ljudi. Ista glazba.\nBliži nego ikad.", 28, quoteTop+18, sidebarWidth-28, quoteTop+68, rgb(235, 171, 91), DT_LEFT|DT_WORDBREAK)
@@ -3131,9 +3138,15 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 				selectFont(hdc, app.hFontBold)
 				text(hdc, title, mainL, y, mainR-150, y+24, rgb(245, 247, 249), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 				if action != "" {
+					actionRect := RECT{mainR - 164, y - 2, mainR, y + 26}
+					actionColor := rgb(157, 165, 176)
+					if hovered(actionKind, -1, actionValue) {
+						drawRounded(hdc, actionRect.Left, actionRect.Top, actionRect.Right, actionRect.Bottom, 9, color(45, 34, 24), color(104, 67, 29))
+						actionColor = rgb(255, 190, 92)
+					}
 					selectFont(hdc, app.hFontSmall)
-					text(hdc, action+"  →", mainR-150, y, mainR, y+24, rgb(157, 165, 176), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
-					app.hits = append(app.hits, HitRegion{R: RECT{mainR - 160, y - 2, mainR, y + 26}, Kind: actionKind, Index: -1, Value: actionValue})
+					text(hdc, action+"  →", actionRect.Left+8, y, actionRect.Right-6, y+24, actionColor, DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
+					app.hits = append(app.hits, HitRegion{R: actionRect, Kind: actionKind, Index: -1, Value: actionValue})
 				}
 			}
 			next := drawRows(ids, y+26, rows)
@@ -3438,7 +3451,7 @@ func drawStationDetailPage(hdc syscall.Handle, cr RECT) {
 
 	drawRounded(hdc, mainL, 92, mainL+148, 128, 10, color(17, 24, 33), color(52, 65, 79))
 	selectFont(hdc, app.hFontSmall)
-	text(hdc, "←  Sve stanice", mainL+10, 92, mainL+138, 128, rgb(221, 226, 232), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
+	text(hdc, "←  Natrag na popis", mainL+10, 92, mainL+138, 128, rgb(221, 226, 232), DT_LEFT|DT_VCENTER|DT_SINGLELINE)
 	app.hits = append(app.hits, HitRegion{R: RECT{mainL, 92, mainL + 148, 128}, Kind: hitStationBack, Index: -1})
 
 	heroTop := int32(142)
@@ -4232,7 +4245,24 @@ func playAdjacent(delta int) {
 	playStation(next)
 }
 
+func clearSearchForNavigation() {
+	app.mu.Lock()
+	app.search = ""
+	app.searchSeq++
+	if app.searchTimer != nil {
+		app.searchTimer.Stop()
+		app.searchTimer = nil
+	}
+	edit := app.edit
+	app.mu.Unlock()
+
+	if edit != 0 {
+		procSetWindowText.Call(uintptr(edit), uintptr(unsafe.Pointer(u16(""))))
+	}
+}
+
 func selectTabValue(value string) {
+	clearSearchForNavigation()
 	if strings.HasPrefix(value, "country:") {
 		code := strings.ToUpper(strings.TrimSpace(strings.TrimPrefix(value, "country:")))
 		if !isRegionalCatalogCode(code) {
@@ -4310,29 +4340,35 @@ func handleCoreClickFallback(x, y int32) bool {
 
 	if x >= 16 && x <= sidebarWidth-14 {
 		switch {
-		case y >= 91 && y <= 127:
+		case sidebarRowContains(y, sidebarHomeY):
 			selectTabValue("all")
 			return true
-		case y >= 135 && y <= 171:
+		case sidebarRowContains(y, sidebarTopY):
 			selectTabValue("popular")
 			return true
-		case y >= 179 && y <= 215:
+		case sidebarRowContains(y, sidebarCountriesY):
 			selectTabValue("countries")
 			return true
-		case y >= 223 && y <= 259:
+		case sidebarRowContains(y, sidebarGenresY):
 			selectTabValue("genres")
 			return true
-		case y >= 267 && y <= 303:
+		case sidebarRowContains(y, sidebarDiasporaY):
 			selectCountry(diasporaCatalogCode)
 			return true
-		case y >= 311 && y <= 347:
+		case sidebarRowContains(y, sidebarForeignY):
 			selectCountry(foreignCatalogCode)
 			return true
-		case y >= 437 && y <= 473:
+		case sidebarRowContains(y, sidebarFavoritesY):
 			selectTabValue("favorites")
 			return true
-		case y >= 479 && y <= 515:
+		case sidebarRowContains(y, sidebarRecentY):
 			selectTabValue("recent")
+			return true
+		case adminModeEnabled() && height-playerHeight > sidebarBrokenY+sidebarItemHeight+14 && sidebarRowContains(y, sidebarReplacedY):
+			selectTabValue("replaced")
+			return true
+		case adminModeEnabled() && height-playerHeight > sidebarBrokenY+sidebarItemHeight+14 && sidebarRowContains(y, sidebarBrokenY):
+			selectTabValue("broken")
 			return true
 		}
 	}
@@ -4354,18 +4390,24 @@ func handleCoreClickFallback(x, y int32) bool {
 
 	playerTop := height - playerHeight
 	if y >= playerTop && y <= height {
+		app.mu.RLock()
+		currentIdx := currentStationIndexLocked()
+		canNavigate := canNavigateStations(currentIdx, len(app.stations), len(app.filtered))
+		canStop := canStopPlayback(currentIdx, app.audioStopped)
+		app.mu.RUnlock()
+
 		cx := playerTransportCenter(width)
 		switch {
-		case x >= cx-116 && x <= cx-70 && y >= playerTop+17 && y <= playerTop+63:
+		case canNavigate && x >= cx-116 && x <= cx-70 && y >= playerTop+17 && y <= playerTop+63:
 			playAdjacent(-1)
 			return true
 		case x >= cx-35 && x <= cx+35 && y >= playerTop+7 && y <= playerTop+76:
 			toggleCurrentPlayback()
 			return true
-		case x >= cx+44 && x <= cx+92 && y >= playerTop+21 && y <= playerTop+69:
+		case canStop && x >= cx+44 && x <= cx+92 && y >= playerTop+21 && y <= playerTop+69:
 			stopCurrentPlayback()
 			return true
-		case x >= cx+108 && x <= cx+154 && y >= playerTop+17 && y <= playerTop+63:
+		case canNavigate && x >= cx+108 && x <= cx+154 && y >= playerTop+17 && y <= playerTop+63:
 			playAdjacent(1)
 			return true
 		case x >= width-200 && x <= width-168 && y >= playerTop+27 && y <= playerTop+59:
@@ -4467,6 +4509,7 @@ func handleClick(x, y int32) {
 func hwndOrZero() syscall.Handle { return app.hwnd }
 
 func selectCountry(code string) {
+	clearSearchForNavigation()
 	code = strings.ToUpper(strings.TrimSpace(code))
 	if !isSelectableCatalogCode(code) {
 		code = ""
@@ -8415,8 +8458,7 @@ func passwordDialog(parent syscall.Handle, title, prompt string) (string, bool) 
 func inputDialog(parent syscall.Handle, title, prompt, def string) (string, bool) {
 	if err := ensureInputDialogClass(); err != nil {
 		logError("input-dialog-class", err)
-		queueAlert("Greška", "Nije moguće otvoriti ulazni dijalog.", MB_ICONERROR)
-		return "", false
+		return inputDialogPowerShell(title, prompt, def)
 	}
 	if activeInputDialog != nil {
 		return "", false
@@ -8444,8 +8486,7 @@ func inputDialog(parent syscall.Handle, title, prompt, def string) (string, bool
 	)
 	if h == 0 {
 		logError("input-dialog-create", fmt.Errorf("CreateWindowExW: %v", e))
-		queueAlert("Greška", "Nije moguće otvoriti ulazni dijalog.", MB_ICONERROR)
-		return "", false
+		return inputDialogPowerShell(title, prompt, def)
 	}
 	st.hwnd = syscall.Handle(h)
 	enableImmersiveDark(st.hwnd)
@@ -8457,8 +8498,7 @@ func inputDialog(parent syscall.Handle, title, prompt, def string) (string, bool
 	if edit == 0 || label == 0 || cancelBtn == 0 || okBtn == 0 {
 		logError("input-dialog-controls", errors.New("nije moguće izraditi sve kontrole dijaloga"))
 		procDestroyWindow.Call(h)
-		queueAlert("Greška", "Nije moguće otvoriti ulazni dijalog.", MB_ICONERROR)
-		return "", false
+		return inputDialogPowerShell(title, prompt, def)
 	}
 	st.edit = syscall.Handle(edit)
 	for _, ch := range []uintptr{label, edit, cancelBtn, okBtn} {
@@ -8501,4 +8541,20 @@ func inputDialog(parent syscall.Handle, title, prompt, def string) (string, bool
 		procDispatchMessage.Call(uintptr(unsafe.Pointer(&m)))
 	}
 	return st.result, st.ok
+}
+
+func inputDialogPowerShell(title, prompt, def string) (string, bool) {
+	ps := `Add-Type -AssemblyName Microsoft.VisualBasic; $v=[Microsoft.VisualBasic.Interaction]::InputBox($args[0],$args[1],$args[2]); [Console]::OutputEncoding=[Text.Encoding]::UTF8; Write-Output $v`
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", ps, prompt, title, def)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	out, err := cmd.Output()
+	if err != nil {
+		logError("input-dialog-fallback", err)
+		return "", false
+	}
+	v := strings.TrimSpace(string(bytes.TrimSpace(out)))
+	if v == "" {
+		return "", false
+	}
+	return v, true
 }
