@@ -8,6 +8,7 @@ import (
 	"math"
 	"runtime"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
@@ -83,6 +84,41 @@ const (
 	vtR4      = 4
 	ccStdcall = 4
 )
+
+func comCallOutUint32(object unsafe.Pointer, index int) (uint32, error) {
+	method, err := comMethod(object, index)
+	if err != nil {
+		return 0, err
+	}
+	var value uint32
+	hr, _, _ := syscall.SyscallN(method, uintptr(object), uintptr(unsafe.Pointer(&value)))
+	if err := hresultError(fmt.Sprintf("COM uint32 method %d", index), hr); err != nil {
+		return 0, err
+	}
+	return value, nil
+}
+
+func waitMFPlayState(player unsafe.Pointer, want uint32, timeout time.Duration) error {
+	if timeout <= 0 {
+		timeout = 3 * time.Second
+	}
+	deadline := time.Now().Add(timeout)
+	var last uint32
+	for {
+		state, err := comCallOutUint32(player, 13) // IMFPMediaPlayer::GetState
+		if err != nil {
+			return err
+		}
+		last = state
+		if state == want {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("MFPlay state timeout: got %d want %d", last, want)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+}
 
 func comCallFloat32(object unsafe.Pointer, index int, value float32) error {
 	if object == nil {
@@ -201,7 +237,15 @@ func mfplaySmokeOpen(rawURL string) error {
 			result <- err
 			return
 		}
+		if err := waitMFPlayState(player, 2, 4*time.Second); err != nil { // Playing
+			result <- err
+			return
+		}
 		if err := comCall(player, 4); err != nil { // Pause
+			result <- err
+			return
+		}
+		if err := waitMFPlayState(player, 3, 4*time.Second); err != nil { // Paused
 			result <- err
 			return
 		}
@@ -209,7 +253,15 @@ func mfplaySmokeOpen(rawURL string) error {
 			result <- err
 			return
 		}
+		if err := waitMFPlayState(player, 2, 4*time.Second); err != nil { // Playing
+			result <- err
+			return
+		}
 		if err := comCall(player, 5); err != nil { // Stop
+			result <- err
+			return
+		}
+		if err := waitMFPlayState(player, 1, 4*time.Second); err != nil { // Stopped
 			result <- err
 			return
 		}
