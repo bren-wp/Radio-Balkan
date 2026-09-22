@@ -13,7 +13,9 @@ tried for every required capability.
 
 from __future__ import annotations
 
+import ipaddress
 import json
+import socket
 import ssl
 import sys
 import time
@@ -33,7 +35,65 @@ REQUIRED = {"mp3", "aac", "https", "indirect"}
 SSL_CONTEXT = ssl.create_default_context()
 
 
+def _public_addresses(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    host = (hostname or "").strip().rstrip(".")
+    if not host:
+        return []
+    try:
+        return [ipaddress.ip_address(host.split("%", 1)[0])]
+    except ValueError:
+        pass
+
+    addresses: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    for info in socket.getaddrinfo(host, None, type=socket.SOCK_STREAM):
+        raw = str(info[4][0]).split("%", 1)[0]
+        try:
+            address = ipaddress.ip_address(raw)
+        except ValueError:
+            continue
+        if address not in addresses:
+            addresses.append(address)
+    return addresses
+
+
+def validate_public_url(value: str) -> str:
+    parsed = urllib.parse.urlparse(value)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError("URL must use http/https and contain a host")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("credential-bearing URLs are not allowed")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("invalid URL port") from exc
+    if port is not None and not (1 <= port <= 65535):
+        raise ValueError("invalid URL port")
+
+    addresses = _public_addresses(parsed.hostname)
+    if not addresses:
+        raise ValueError("URL host did not resolve")
+    unsafe = [str(address) for address in addresses if not address.is_global]
+    if unsafe:
+        raise ValueError("URL resolves to a non-public address: " + ",".join(unsafe))
+    return value
+
+
+class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        target = urllib.parse.urljoin(req.full_url, newurl)
+        validate_public_url(target)
+        return super().redirect_request(req, fp, code, msg, headers, target)
+
+
+SAFE_OPENER = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}),
+    urllib.request.HTTPSHandler(context=SSL_CONTEXT),
+    SafeRedirectHandler(),
+)
+
+
 def request(url: str, timeout: float = 8.0, accept: str = "*/*"):
+    validate_public_url(url)
     req = urllib.request.Request(
         url,
         headers={
@@ -44,7 +104,7 @@ def request(url: str, timeout: float = 8.0, accept: str = "*/*"):
             "Connection": "close",
         },
     )
-    return urllib.request.urlopen(req, timeout=timeout, context=SSL_CONTEXT)
+    return SAFE_OPENER.open(req, timeout=timeout)
 
 
 def get_json(url: str, timeout: float = 8.0):
@@ -237,6 +297,22 @@ def probe_indirect(raw_url: str) -> tuple[bool, str]:
 
 
 def main() -> int:
+    # Fail closed if the probe safety contract ever regresses. These checks are
+    # deterministic and require no external network access.
+    for unsafe_url in (
+        "http://127.0.0.1/",
+        "http://10.0.0.1/",
+        "http://169.254.169.254/latest/meta-data/",
+        "http://[::1]/",
+    ):
+        try:
+            validate_public_url(unsafe_url)
+        except ValueError:
+            pass
+        else:
+            print(f"[live-radio] FAIL: unsafe probe URL accepted: {unsafe_url}", file=sys.stderr)
+            return 1
+
     try:
         server, stations = collect_catalog()
     except Exception as exc:
