@@ -4355,10 +4355,14 @@ func toggleCurrentPlayback() {
 					if errors.Is(err, errPlayRequestSuperseded) || errors.Is(err, errAudioControlSuperseded) {
 						return
 					}
+					if !audioControlStillCurrent(mediaSeq, controlSeq) {
+						return
+					}
 					logError("audio-pause", err)
 					// If pause cannot be delivered to the active backend, stop
 					// playback so audible and visible state cannot diverge. Keep
-					// the same generation token so a newer Play/Next always wins.
+					// the same media generation token while the independent control
+					// generation prevents an older Pause from stopping a newer Resume.
 					audioStopForRequest(mediaSeq)
 					app.mu.Lock()
 					stillCurrent := app.playSeq == mediaSeq && app.audioControlSeq == controlSeq && app.currentKey == key
