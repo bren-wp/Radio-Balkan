@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.41" src="assets/badges/version.svg">
+  <img alt="version 0.0.42" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -15,19 +15,18 @@
 
 Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrvatske i regije bez korisničkog računa, bez telemetry sustava i bez teškog web runtimea u Windows aplikaciji. Projekt objedinjuje nativni Windows klijent, nativni Android klijent i produkcijske ekstenzije za Chrome, Edge, Opera i Firefox.
 
-## Što donosi v0.0.41
+## Što donosi v0.0.42
 
-- **Početna je preglednija i gušća bez zatrpavanja** — kompaktni uvod odmah vodi u Popularno u Hrvatskoj, Hrvatsku, BiH, Srbiju, ostatak Balkana, Narodnu/Folk i Pop & Rock.
-- **“Sve hrvatske” sada otvara stvarnu punu listu hrvatskih stanica** kroz zaseban `croatia` prikaz umjesto ponovnog ulaska u Početnu.
-- **Zemlje i Žanrovi imaju zasebne browse stranice i stvarne Win32 click testove**; CI klikće konkretne country/genre kartice, ne samo interne funkcije.
-- **Klikovi su usklađeni s onim što je nacrtano** — sidebar, header, player fallback zone, hover stanja i granice glasnoće koriste zajedničku geometriju i regression ugovore.
-- **Windows paint put je lakši** — brojila zemalja/žanrova cacheiraju se izvan paint petlje, a uklonjeni su stari dropdown state, mrtvi helperi i zastarjele UI putanje.
-- **Screenshot QA je stroži** — stvarni Windows screenshot capture ima visual-content validator koji odbija prazne/nekorisne snimke i provjerava minimalnu vizualnu raznolikost.
-- **Dodana je in-process MFPlay provjera kao temelj za buduću native audio migraciju**, ali produkcijski playback u v0.0.41 nije prebačen na nedokazani MFPlay control layer.
-- **Windows public release ne zahtijeva Authenticode** — Portable i Setup mogu biti unsigned, ali i dalje moraju proći puni CI, stvarni runtime soak, live-stream transport, clean-worktree i SHA-256 provjere.
-- **AV/reputation hardening ostaje transparentan** — nema packera, obfuscatora ni `-s -w` strippinga; cilj je smanjivati heuristički rizične obrasce u kodu, a ne skrivati ih.
+- **Pouzdaniji Play i recovery** — Windows player sada može probati do šest sigurnih recovery kandidata umjesto tri, uz bolji redoslijed primarnog resolved/raw URL-a, zadnjeg uspješnog backupa, zdravog UUID refresha i zdravih alternativnih kataloških zapisa.
+- **Poznato neispravni streamovi više se ne promoviraju u recoveryju** — name-search koristi `hidebroken=true`, zdravi rezultati i veći broj glasova imaju prednost, a UUID refresh s `LastCheckOK=0` se preskače.
+- **Bolja otpornost kada radio promijeni URL** — jedan zadnji uspješni spremljeni izvor namjerno ostaje blizu početka recovery reda, pa promjena ili privremeni kvar kataloškog URL-a ne znači odmah neuspjeli Play.
+- **Moderniji Windows 11 izgled** — glavni prozor i Setup koriste dark DWM shell, zaobljene kutove, Windows 11 backdrop/caption/border postavke i Segoe UI Variable tipografiju.
+- **Dijalozi više ne izgledaju kao stari Win32** — akcijske tipke su owner-drawn, input polja imaju pravilne margine, uklonjen je legacy `WS_BORDER` izgled iz produkcijskih input/password dijaloga.
+- **Početna ostaje pregledna i deterministična** — svaki novi launch ide na Početnu/HR, a kompaktne sekcije i dedicated Zemlje/Žanrovi ostaju pokriveni stvarnim click testovima.
+- **UI i screenshot QA su prošireni** — stvarni Windows build se snima i validira, a production verifier zaključava moderni shell i zabranjuje povratak legacy dijaloškog stila.
+- **Unsigned Windows release ostaje podržan** — Portable i Setup ne zahtijevaju Authenticode, ali i dalje moraju proći test/vet/build, runtime soak, real live-stream transport, clean-worktree i SHA-256 release provjere.
 
-v0.0.41 je prvenstveno quality release: jasnija Početna, provjereniji klikovi, manje mrtvog Windows koda, jači vizualni QA i reproducibilan unsigned release pipeline.
+Radio Balkan pokušava automatski oporaviti reprodukciju kada vanjski radio stream promijeni URL ili privremeno otkaže. Dostupnost svakog pojedinog third-party radija ipak ovisi o infrastrukturi same postaje i ne može se tehnički garantirati iz aplikacije.
 
 ## Zašto Radio Balkan
 
@@ -67,7 +66,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.41 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.41):
+Gotovi v0.0.42 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.42):
 
 - Windows Portable x64
 - Windows Setup x64
