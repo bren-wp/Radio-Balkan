@@ -638,6 +638,7 @@ def main() -> None:
         "func mciQueryExisting(cmd string) (string, error)",
         'mode, err := mciQueryExisting("status radio mode")',
         "audioStopForRequest(0)",
+        'handleAudioBackendFailure(audioBackendWPF, "volume control failed")',
         'safeGo("audio-pause-control", func() {',
         'safeGo("audio-resume-control", func() {',
         "if shuttingDown() {",
