@@ -4195,6 +4195,8 @@ func toggleCurrentPlayback() {
 	if action == playbackTogglePause {
 		app.mu.Lock()
 		key := app.currentKey
+		app.playSeq++
+		reqSeq := app.playSeq
 		app.playing = false
 		app.metadataSeq++
 		app.mu.Unlock()
@@ -4202,20 +4204,27 @@ func toggleCurrentPlayback() {
 		invalidate()
 		if currentAudioBackend() != audioBackendNone {
 			safeGo("audio-pause-control", func() {
-				if err := audioPause(); err != nil {
+				if err := audioPauseForRequest(reqSeq); err != nil {
+					if errors.Is(err, errPlayRequestSuperseded) {
+						return
+					}
 					logError("audio-pause", err)
 					// If pause cannot be delivered to the active backend, stop
-					// playback so audible and visible state cannot diverge.
-					audioStop()
+					// playback so audible and visible state cannot diverge. Keep
+					// the same generation token so a newer Play/Next always wins.
+					audioStopForRequest(reqSeq)
 					app.mu.Lock()
-					if app.currentKey == key {
+					stillCurrent := app.playSeq == reqSeq && app.currentKey == key
+					if stillCurrent {
 						app.audioStopped = true
 						app.playing = false
 						app.metadataSeq++
 					}
 					app.mu.Unlock()
-					setStatus("Reprodukcija je zaustavljena")
-					postUI()
+					if stillCurrent {
+						setStatus("Reprodukcija je zaustavljena")
+						postUI()
+					}
 				}
 			})
 		}
@@ -4236,7 +4245,10 @@ func toggleCurrentPlayback() {
 	setStatus("Nastavljam reprodukciju…")
 	invalidate()
 	safeGo("audio-resume-control", func() {
-		if err := audioResume(); err != nil {
+		if err := audioResumeForRequest(reqSeq); err != nil {
+			if errors.Is(err, errPlayRequestSuperseded) {
+				return
+			}
 			logError("audio-resume", err)
 			app.mu.RLock()
 			stillCurrent := app.playSeq == reqSeq && !app.audioStopped
@@ -7831,8 +7843,15 @@ func audioSendForRequest(line string, reqSeq uint64) error {
 	return nil
 }
 func audioSendExisting(line string) error {
+	return audioSendExistingForRequest(line, 0)
+}
+
+func audioSendExistingForRequest(line string, reqSeq uint64) error {
 	app.audioMu.Lock()
 	defer app.audioMu.Unlock()
+	if !playRequestStillCurrent(reqSeq) {
+		return errPlayRequestSuperseded
+	}
 	if app.audioIn == nil {
 		return errors.New("audio engine nije pokrenut")
 	}
@@ -7840,7 +7859,7 @@ func audioSendExisting(line string) error {
 		resetAudioEngineLocked()
 		return err
 	}
-	return waitAudioAckLocked(audioCommandTimeout(line))
+	return waitAudioAckLockedForRequest(audioCommandTimeout(line), reqSeq)
 }
 func audioShutdown() {
 	deadline := time.Now().Add(750 * time.Millisecond)
@@ -7954,20 +7973,38 @@ func audioPlayRequest(raw string, reqSeq uint64) error {
 }
 
 func mciQueryExisting(cmd string) (string, error) {
+	return mciQueryExistingForRequest(cmd, 0)
+}
+
+func mciQueryExistingForRequest(cmd string, reqSeq uint64) (string, error) {
 	app.audioMu.Lock()
 	defer app.audioMu.Unlock()
+	if !playRequestStillCurrent(reqSeq) {
+		return "", errPlayRequestSuperseded
+	}
 	if currentAudioBackend() != audioBackendMCI {
 		return "", errors.New("MCI backend nije aktivan")
 	}
-	return mciQuery(cmd)
+	result, err := mciQuery(cmd)
+	if err != nil {
+		return result, err
+	}
+	if !playRequestStillCurrent(reqSeq) {
+		return "", errPlayRequestSuperseded
+	}
+	return result, nil
 }
 
 func audioPause() error {
+	return audioPauseForRequest(0)
+}
+
+func audioPauseForRequest(reqSeq uint64) error {
 	switch currentAudioBackend() {
 	case audioBackendWPF:
-		return audioSendExisting("PAUSE")
+		return audioSendExistingForRequest("PAUSE", reqSeq)
 	case audioBackendMCI:
-		_, err := mciQueryExisting("pause radio")
+		_, err := mciQueryExistingForRequest("pause radio", reqSeq)
 		return err
 	default:
 		return errors.New("audio backend nije aktivan")
@@ -7975,11 +8012,15 @@ func audioPause() error {
 }
 
 func audioResume() error {
+	return audioResumeForRequest(0)
+}
+
+func audioResumeForRequest(reqSeq uint64) error {
 	switch currentAudioBackend() {
 	case audioBackendWPF:
-		return audioSendExisting("RESUME")
+		return audioSendExistingForRequest("RESUME", reqSeq)
 	case audioBackendMCI:
-		_, err := mciQueryExisting("resume radio")
+		_, err := mciQueryExistingForRequest("resume radio", reqSeq)
 		return err
 	default:
 		return errors.New("audio backend nije aktivan")
