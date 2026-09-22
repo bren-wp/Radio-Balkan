@@ -278,6 +278,8 @@ def main() -> int:
         "adapter.setSnapshot(new ArrayList<>(), currentKey, playing)",
         "if (isBrowsePageVisible())",
         "hideBrowsePage();",
+        "if (show && isBrowsePageVisible())",
+        "hideBrowsePage();\n            applyFilterAsync();",
         'browsePanel.setContentDescription(countriesMode ? "Pregled zemalja" : "Pregled žanrova")',
     ):
         require(errors, android, needle, "Android MainActivity")
