@@ -1,5 +1,24 @@
 # Izdavanja
 
+## 0.0.41
+
+Izdanje 0.0.41 je quality/UI/runtime hardening release nakon v0.0.40 startup popravka.
+
+- Windows Početna je kompaktnija i preglednija: manje vertikalnog praznog prostora, jasnije discovery sekcije i manje ponavljanja kartica
+- akcija **Sve hrvatske** vodi na zasebnu punu listu hrvatskih stanica umjesto da ponovno aktivira landing ekran
+- Zemlje i Žanrovi koriste dedicated browse prikaze; stvarni Win32 runtime smoke klikće konkretne country i genre kartice te potvrđuje povratak na Početnu
+- sidebar/header/player fallback klikovi usklađeni su s nacrtanim hit-regijama, uključujući volume bounds i resize putanje
+- brojila država/žanrova cacheiraju se izvan paint putanje; uklonjeni su legacy dropdown state, mrtvi render/helper kod i zastarjele audio/UI pomoćne funkcije
+- screenshot capture i validator odbijaju prazne ili vizualno neispravne Windows snimke; Product screenshots ostaje zaseban post-merge QA signal
+- Windows build zadržava Go simbole/build metadata i ne koristi `-s -w` stripping ili packere
+- dodan je in-process MFPlay smoke/proof kao temelj za buduću native audio migraciju; produkcijski playback nije prebačen na nedokazani MFPlay control layer
+- javni Windows Publish ne zahtijeva Authenticode certifikat; Portable i Setup mogu biti unsigned
+- unsigned Windows release i dalje mora proći puni CI, stvarni built-EXE runtime soak, real Balkan live-stream transport, clean-worktree provjeru i SHA-256 manifest
+- Android i browser test/build/lint/player/network gateovi ostaju obavezni prije objave
+
+Cilj v0.0.41 je smanjiti UI i runtime regresijski prostor bez rizičnog feature creepa: svaki glavni klik mora imati stvarni handler i runtime pokrivenost, Početna mora ostati jasna, a release artefakti moraju biti reproducibilni i provjereni i bez obaveznog code-signinga.
+
+
 ## 0.0.40
 
 Izdanje 0.0.40 ispravlja startup navigaciju tako da se aplikacija pri svježem pokretanju uvijek otvara na **Početnoj**, umjesto da vrati zadnju spremljenu kategoriju poput **Strano**, Dijaspora, žanr ili drugi browse prikaz.

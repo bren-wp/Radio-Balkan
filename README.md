@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.40" src="assets/badges/version.svg">
+  <img alt="version 0.0.41" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -15,16 +15,19 @@
 
 Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrvatske i regije bez korisničkog računa, bez telemetry sustava i bez teškog web runtimea u Windows aplikaciji. Projekt objedinjuje nativni Windows klijent, nativni Android klijent i produkcijske ekstenzije za Chrome, Edge, Opera i Firefox.
 
-## Što donosi v0.0.40
+## Što donosi v0.0.41
 
-- **Aplikacija se pri svježem pokretanju uvijek otvara na Početnoj** — prethodno spremljeni prikaz poput Strano, Dijaspora, žanr ili Omiljene više ne zamjenjuje landing ekran.
-- **Windows startup je determinističan** — runtime stanje se postavlja na `all / HR / bez žanra`, dok favorite, recent, glasnoća, health interval, replacement/backup izvori i veličina prozora ostaju sačuvani.
-- **Stvarni Win32 runtime smoke provjerava početni ekran prije prvog klika** — release EXE mora stvarno početi na Početnoj prije nastavka testiranja navigacije i player kontrola.
-- **Android svježe otvaranje također kreće s Početne / Hrvatska**, dok recreation unutar iste sesije, primjerice rotacija, zadržava trenutačni browse prikaz.
-- **Android production UI contract zaključava startup ponašanje**, uz postojeće unit, lint i release build gateove.
-- Playback hardening, latest-click-wins, live-stream sigurnost, pinned public transport i browser session/network zaštite iz v0.0.39 ostaju aktivni.
+- **Početna je preglednija i gušća bez zatrpavanja** — kompaktni uvod odmah vodi u Popularno u Hrvatskoj, Hrvatsku, BiH, Srbiju, ostatak Balkana, Narodnu/Folk i Pop & Rock.
+- **“Sve hrvatske” sada otvara stvarnu punu listu hrvatskih stanica** kroz zaseban `croatia` prikaz umjesto ponovnog ulaska u Početnu.
+- **Zemlje i Žanrovi imaju zasebne browse stranice i stvarne Win32 click testove**; CI klikće konkretne country/genre kartice, ne samo interne funkcije.
+- **Klikovi su usklađeni s onim što je nacrtano** — sidebar, header, player fallback zone, hover stanja i granice glasnoće koriste zajedničku geometriju i regression ugovore.
+- **Windows paint put je lakši** — brojila zemalja/žanrova cacheiraju se izvan paint petlje, a uklonjeni su stari dropdown state, mrtvi helperi i zastarjele UI putanje.
+- **Screenshot QA je stroži** — stvarni Windows screenshot capture ima visual-content validator koji odbija prazne/nekorisne snimke i provjerava minimalnu vizualnu raznolikost.
+- **Dodana je in-process MFPlay provjera kao temelj za buduću native audio migraciju**, ali produkcijski playback u v0.0.41 nije prebačen na nedokazani MFPlay control layer.
+- **Windows public release ne zahtijeva Authenticode** — Portable i Setup mogu biti unsigned, ali i dalje moraju proći puni CI, stvarni runtime soak, live-stream transport, clean-worktree i SHA-256 provjere.
+- **AV/reputation hardening ostaje transparentan** — nema packera, obfuscatora ni `-s -w` strippinga; cilj je smanjivati heuristički rizične obrasce u kodu, a ne skrivati ih.
 
-Dostupnost pojedine third-party radio stanice i dalje ovisi o infrastrukturi same postaje. v0.0.40 ispravlja potvrđenu startup navigacijsku regresiju bez vraćanja prethodnih playback i sigurnosnih zaštita.
+v0.0.41 je prvenstveno quality release: jasnija Početna, provjereniji klikovi, manje mrtvog Windows koda, jači vizualni QA i reproducibilan unsigned release pipeline.
 
 ## Zašto Radio Balkan
 
@@ -64,7 +67,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.40 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.40):
+Gotovi v0.0.41 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.41):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -104,7 +107,7 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.41
+python scripts/bump_version.py 0.0.42
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.

@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "0.0.40",
+    [string]$Version = "0.0.41",
     [string]$Output = (Join-Path $PSScriptRoot "dist"),
     [string]$SigningThumbprint = $env:RADIO_BALKAN_SIGNING_THUMBPRINT,
     [string]$TimestampUrl = "http://timestamp.digicert.com",
