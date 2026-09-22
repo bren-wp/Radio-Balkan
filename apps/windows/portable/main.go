@@ -292,6 +292,20 @@ type HitRegion struct {
 	Value string
 }
 
+type HomeDiscoveryCache struct {
+	Revision     uint64
+	Columns      int
+	Valid        bool
+	CroatiaCount int
+	Popular      []int
+	Croatia      []int
+	Bosnia       []int
+	Serbia       []int
+	Balkan       []int
+	Folk         []int
+	PopRock      []int
+}
+
 type audioBackendKind uint8
 
 const (
@@ -306,6 +320,9 @@ type App struct {
 	stations                                 []RadioStation
 	filtered                                 []int
 	hits                                     []HitRegion
+	catalogRevision                          uint64
+	homeCacheMu                              sync.Mutex
+	homeCache                                HomeDiscoveryCache
 	hoverToken                               string
 	detailKey                                string
 	mu                                       sync.RWMutex
@@ -336,6 +353,7 @@ type App struct {
 	scroll                                   int
 	clientWidth                              int32
 	clientHeight                             int32
+	ciPaintSeq                               uint64
 	current                                  int
 	currentKey                               string
 	playing                                  bool
@@ -547,6 +565,11 @@ func isBalkanCode(code string) bool {
 	}
 	return false
 }
+func isSelectableCatalogCode(code string) bool {
+	code = strings.ToUpper(strings.TrimSpace(code))
+	return code == "" || isRegionalCatalogCode(code) || isSupplementalCatalogCode(code)
+}
+
 func countryNameByCode(code string) string {
 	for _, c := range balkanCountries {
 		if c.Code == code {
@@ -943,7 +966,7 @@ func validateState(st PersistedState, loaded bool) PersistedState {
 	}
 	if !loaded {
 		st.CountryCode = "HR"
-	} else if !isBalkanCode(st.CountryCode) {
+	} else if !isSelectableCatalogCode(st.CountryCode) {
 		st.CountryCode = ""
 	}
 	st.Genre = strings.TrimSpace(st.Genre)
@@ -1143,7 +1166,11 @@ func main() {
 	}
 	// Initialize audio lazily on the first playback command. A backend startup
 	// failure must never delay or block navigation, search, or any UI button.
-	safeGo("load-stations", loadStations)
+	if os.Getenv("RADIO_BALKAN_RUNTIME_TEST") == "1" {
+		safeGo("ci-runtime-catalog", seedCIRuntimeCatalog)
+	} else {
+		safeGo("load-stations", loadStations)
+	}
 	scheduleCIRuntimeSmokeClose()
 	var msg MSG
 	for {
@@ -1192,7 +1219,7 @@ func scheduleCIRuntimeSmokeClose() {
 		runCIAudioSmoke()
 	})
 	safeGo("ci-runtime-smoke-close", func() {
-		timer := time.NewTimer(18 * time.Second)
+		timer := time.NewTimer(24 * time.Second)
 		defer timer.Stop()
 		select {
 		case <-timer.C:
@@ -1214,6 +1241,42 @@ func scheduleCIRuntimeSmokeClose() {
 			}
 		}
 	})
+}
+
+func seedCIRuntimeCatalog() {
+	if os.Getenv("RADIO_BALKAN_RUNTIME_TEST") != "1" {
+		return
+	}
+	codes := []string{"HR", "BA", "RS", "SI", "MK", "AL", "ME", "BG"}
+	list := make([]RadioStation, 0, 6000)
+	for i := 0; i < 6000; i++ {
+		code := codes[i%len(codes)]
+		tags := "pop,regional"
+		if i%3 == 0 {
+			tags = "folk,narodna"
+		}
+		list = append(list, RadioStation{
+			StationUUID: fmt.Sprintf("ci-station-%05d", i),
+			Name:        fmt.Sprintf("CI Radio %05d", i),
+			URLResolved: fmt.Sprintf("https://example.com/radio/%05d.mp3", i),
+			Country:     countryNameByCode(code),
+			CountryCode: code,
+			Tags:        tags,
+			Votes:       100000 - i,
+			LastCheckOK: 1,
+		})
+	}
+	prepareStations(list)
+	app.mu.Lock()
+	app.stations = list
+	app.loading = false
+	app.scroll = 0
+	app.catalogRevision++
+	app.mu.Unlock()
+	rebuildGenres()
+	rebuildFilter()
+	setStatus(fmt.Sprintf("CI katalog spreman · %d stanica", len(list)))
+	postUI()
 }
 
 func runCIInputSmoke() {
@@ -1239,10 +1302,22 @@ func runCIInputSmoke() {
 		packed := uintptr(uint32(uint16(x)) | uint32(uint16(y))<<16)
 		procPostMessage.Call(uintptr(app.hwnd), WM_LBUTTONDOWN, 0, packed)
 	}
-
-	if !waitFor(3*time.Second, func() bool {
+	forcePaint := func(timeout time.Duration) bool {
 		app.mu.RLock()
-		ready := app.hwnd != 0 && app.clientWidth >= 1024 && app.clientHeight > playerHeight
+		before := app.ciPaintSeq
+		app.mu.RUnlock()
+		procPostMessage.Call(uintptr(app.hwnd), WM_APP+5, 0, 0)
+		return waitFor(timeout, func() bool {
+			app.mu.RLock()
+			done := app.ciPaintSeq > before
+			app.mu.RUnlock()
+			return done
+		})
+	}
+
+	if !waitFor(4*time.Second, func() bool {
+		app.mu.RLock()
+		ready := app.hwnd != 0 && app.clientWidth >= 1024 && app.clientHeight > playerHeight && !app.loading && len(app.stations) >= 6000
 		app.mu.RUnlock()
 		return ready
 	}) {
@@ -1281,6 +1356,100 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=home")
 		return
 	}
+
+	app.mu.Lock()
+	app.genre = "rock"
+	app.mu.Unlock()
+	app.stateMu.Lock()
+	app.state.Genre = "rock"
+	app.stateMu.Unlock()
+	postClick(100, 285) // Dijaspora must also clear any stale genre filter
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.country == diasporaCatalogCode && app.genre == ""
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=diaspora")
+		return
+	}
+	postClick(100, 329) // Strano
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.country == foreignCatalogCode
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=foreign")
+		return
+	}
+	postClick(100, 109)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "all" && app.country == "HR"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-after-supplemental")
+		return
+	}
+	// Force the 6000-station home to complete an actual WM_PAINT on the UI
+	// thread. The acknowledgement is incremented only after UpdateWindow returns,
+	// so this cannot pass before the expensive repaint has really completed.
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=post-load-render")
+		return
+	}
+	postClick(100, 153)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "popular"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=post-load-click")
+		return
+	}
+	postClick(100, 109)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "all" && app.country == "HR"
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-after-render")
+		return
+	}
+
+	// Exercise a real rendered station Play hit-region, not only fixed navigation.
+	app.mu.RLock()
+	widthForCard := app.clientWidth
+	beforePlaySeq := app.playSeq
+	app.mu.RUnlock()
+	mainL := sidebarWidth + mainPad
+	mainR := widthForCard - mainPad
+	columns := homeGridColumns(mainR - mainL)
+	cardW := (mainR - mainL - 8*int32(columns-1)) / int32(columns)
+	firstPlayX := mainL + cardW - 22
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-card-paint")
+		return
+	}
+	postClick(firstPlayX, 200)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		advanced := app.playSeq > beforePlaySeq
+		app.mu.RUnlock()
+		return advanced
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=station-play")
+		return
+	}
+	// Cancel the synthetic playback request before the independent local-WAV
+	// audio smoke starts; this keeps the input test deterministic and offline.
+	app.mu.Lock()
+	app.playSeq++
+	app.mu.Unlock()
 
 	// Reproduce the production failure mode deliberately: hold the backend lock,
 	// click volume, then click navigation. Neither click may block the UI thread.
@@ -1964,6 +2133,15 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 	case WM_APP + 4:
 		showNextAlert()
 		return 0
+	case WM_APP + 5:
+		if os.Getenv("RADIO_BALKAN_RUNTIME_TEST") == "1" {
+			procInvalidateRect.Call(uintptr(hwnd), 0, 1)
+			procUpdateWindow.Call(uintptr(hwnd))
+			app.mu.Lock()
+			app.ciPaintSeq++
+			app.mu.Unlock()
+		}
+		return 0
 	case WM_CLOSE:
 		runtimeTestTrace("wm-close-enter")
 		captureWindowSize()
@@ -2566,6 +2744,135 @@ func drawGenreBrowsePage(hdc syscall.Handle, cr RECT) {
 	drawBrowseScrollBar(hdc, cr, browsePageMaxScroll(cr.Bottom, width, "genres"), scroll)
 }
 
+func rankedStationIndices(stations []RadioStation, limit int, excluded map[int]struct{}, predicate func(RadioStation) bool) []int {
+	if limit <= 0 {
+		return nil
+	}
+	best := make([]int, 0, limit)
+	better := func(left, right RadioStation) bool {
+		if left.Votes != right.Votes {
+			return left.Votes > right.Votes
+		}
+		return strings.ToLower(left.Name) < strings.ToLower(right.Name)
+	}
+	for idx, station := range stations {
+		if _, skip := excluded[idx]; skip {
+			continue
+		}
+		if predicate != nil && !predicate(station) {
+			continue
+		}
+		insert := len(best)
+		for pos, current := range best {
+			if better(station, stations[current]) {
+				insert = pos
+				break
+			}
+		}
+		if insert >= limit {
+			continue
+		}
+		best = append(best, 0)
+		copy(best[insert+1:], best[insert:])
+		best[insert] = idx
+		if len(best) > limit {
+			best = best[:limit]
+		}
+	}
+	return best
+}
+
+func buildHomeDiscoverySnapshot(stations []RadioStation, columns int, revision uint64) HomeDiscoveryCache {
+	if columns < 3 {
+		columns = 3
+	}
+	if columns > 6 {
+		columns = 6
+	}
+	out := HomeDiscoveryCache{Revision: revision, Columns: columns, Valid: true}
+	for _, station := range stations {
+		if strings.EqualFold(strings.TrimSpace(station.CountryCode), "HR") {
+			out.CroatiaCount++
+		}
+	}
+	excluded := make(map[int]struct{}, columns*10)
+	out.Popular = rankedStationIndices(stations, columns, excluded, func(st RadioStation) bool {
+		return strings.EqualFold(strings.TrimSpace(st.CountryCode), "HR")
+	})
+	addExcluded(excluded, out.Popular)
+	out.Croatia = rankedStationIndices(stations, columns*3, excluded, func(st RadioStation) bool {
+		return strings.EqualFold(strings.TrimSpace(st.CountryCode), "HR")
+	})
+	addExcluded(excluded, out.Croatia)
+	out.Bosnia = rankedStationIndices(stations, columns, excluded, func(st RadioStation) bool {
+		return strings.EqualFold(strings.TrimSpace(st.CountryCode), "BA")
+	})
+	addExcluded(excluded, out.Bosnia)
+	out.Serbia = rankedStationIndices(stations, columns, excluded, func(st RadioStation) bool {
+		return strings.EqualFold(strings.TrimSpace(st.CountryCode), "RS")
+	})
+	addExcluded(excluded, out.Serbia)
+	out.Balkan = rankedStationIndices(stations, columns*2, excluded, func(st RadioStation) bool {
+		code := strings.ToUpper(strings.TrimSpace(st.CountryCode))
+		return code != "HR" && code != "BA" && code != "RS" && isRegionalCatalogCode(code)
+	})
+	addExcluded(excluded, out.Balkan)
+	out.Folk = rankedStationIndices(stations, columns, excluded, func(st RadioStation) bool {
+		tags := st.TagsIndex
+		if tags == "" {
+			tags = foldText(st.Tags)
+		}
+		return isRegionalCatalogCode(st.CountryCode) && matchesGenre(tags, "folk")
+	})
+	addExcluded(excluded, out.Folk)
+	out.PopRock = rankedStationIndices(stations, columns, excluded, func(st RadioStation) bool {
+		tags := st.TagsIndex
+		if tags == "" {
+			tags = foldText(st.Tags)
+		}
+		return isRegionalCatalogCode(st.CountryCode) && matchesGenre(tags, "pop")
+	})
+	return out
+}
+
+func cachedHomeDiscovery(columns int) HomeDiscoveryCache {
+	if columns < 3 {
+		columns = 3
+	}
+	if columns > 6 {
+		columns = 6
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		app.mu.RLock()
+		revision := app.catalogRevision
+		app.mu.RUnlock()
+		app.homeCacheMu.Lock()
+		if app.homeCache.Valid && app.homeCache.Revision == revision && app.homeCache.Columns == columns {
+			cached := app.homeCache
+			app.homeCacheMu.Unlock()
+			return cached
+		}
+		app.homeCacheMu.Unlock()
+
+		app.mu.RLock()
+		revision = app.catalogRevision
+		stations := append([]RadioStation(nil), app.stations...)
+		app.mu.RUnlock()
+		built := buildHomeDiscoverySnapshot(stations, columns, revision)
+		app.mu.RLock()
+		stillCurrent := app.catalogRevision == revision
+		app.mu.RUnlock()
+		if !stillCurrent {
+			continue
+		}
+		app.homeCacheMu.Lock()
+		app.homeCache = built
+		app.homeCacheMu.Unlock()
+		return built
+	}
+	return HomeDiscoveryCache{Columns: columns}
+}
+
 func discoveryStations(limit int, excluded map[int]struct{}, predicate func(RadioStation) bool) []int {
 	if limit <= 0 {
 		return nil
@@ -2696,36 +3003,17 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 	if showHome {
 		width := mainR - mainL
 		columns := homeGridColumns(width)
-		excluded := make(map[int]struct{}, columns*8)
-		popular := popularStations(columns)
-		addExcluded(excluded, popular)
-		croatia := discoveryStations(columns*3, excluded, func(st RadioStation) bool {
-			return strings.EqualFold(strings.TrimSpace(st.CountryCode), "HR")
-		})
-		addExcluded(excluded, croatia)
-		bosnia := discoveryStations(columns, excluded, func(st RadioStation) bool {
-			return strings.EqualFold(strings.TrimSpace(st.CountryCode), "BA")
-		})
-		addExcluded(excluded, bosnia)
-		serbia := discoveryStations(columns, excluded, func(st RadioStation) bool {
-			return strings.EqualFold(strings.TrimSpace(st.CountryCode), "RS")
-		})
-		addExcluded(excluded, serbia)
-		balkan := discoveryStations(columns*2, excluded, func(st RadioStation) bool {
-			code := strings.ToUpper(strings.TrimSpace(st.CountryCode))
-			return code != "HR" && code != "BA" && code != "RS" && isRegionalCatalogCode(code)
-		})
-		addExcluded(excluded, balkan)
-		folk := discoveryStations(columns, excluded, func(st RadioStation) bool {
-			return isRegionalCatalogCode(st.CountryCode) && matchesGenre(st.TagsIndex, "folk")
-		})
-		addExcluded(excluded, folk)
-		popRock := discoveryStations(columns, excluded, func(st RadioStation) bool {
-			return isRegionalCatalogCode(st.CountryCode) && matchesGenre(st.TagsIndex, "pop")
-		})
+		home := cachedHomeDiscovery(columns)
+		popular := home.Popular
+		croatia := home.Croatia
+		bosnia := home.Bosnia
+		serbia := home.Serbia
+		balkan := home.Balkan
+		folk := home.Folk
+		popRock := home.PopRock
+		croatiaCount := home.CroatiaCount
 
 		app.mu.RLock()
-		croatiaCount := len(app.filtered)
 		scroll := app.scroll
 		app.mu.RUnlock()
 
@@ -3994,6 +4282,159 @@ func playAdjacent(delta int) {
 	playStation(next)
 }
 
+func selectTabValue(value string) {
+	if strings.HasPrefix(value, "country:") {
+		code := strings.ToUpper(strings.TrimSpace(strings.TrimPrefix(value, "country:")))
+		if !isRegionalCatalogCode(code) {
+			return
+		}
+		app.mu.Lock()
+		app.detailKey = ""
+		app.tab = "all"
+		app.country = code
+		app.genre = ""
+		app.scroll = 0
+		app.countryMenuOpen = false
+		app.genreMenuOpen = false
+		app.mu.Unlock()
+		app.stateMu.Lock()
+		app.state.Tab = "all"
+		app.state.CountryCode = code
+		app.state.Genre = ""
+		app.stateMu.Unlock()
+		rebuildGenres()
+		rebuildFilter()
+		scheduleStateSave()
+		invalidate()
+		return
+	}
+	if strings.HasPrefix(value, "genre:") {
+		g := strings.TrimSpace(strings.TrimPrefix(value, "genre:"))
+		app.mu.Lock()
+		app.detailKey = ""
+		app.tab = "all"
+		app.country = ""
+		app.genre = g
+		app.scroll = 0
+		app.countryMenuOpen = false
+		app.genreMenuOpen = false
+		app.mu.Unlock()
+		app.stateMu.Lock()
+		app.state.Tab = "all"
+		app.state.CountryCode = ""
+		app.state.Genre = g
+		app.stateMu.Unlock()
+		rebuildGenres()
+		rebuildFilter()
+		scheduleStateSave()
+		invalidate()
+		return
+	}
+	app.mu.Lock()
+	app.detailKey = ""
+	app.tab = value
+	app.country = ""
+	if value == "all" {
+		app.country = "HR"
+	}
+	app.genre = ""
+	app.scroll = 0
+	app.countryMenuOpen = false
+	app.genreMenuOpen = false
+	app.mu.Unlock()
+	app.stateMu.Lock()
+	app.state.Tab = value
+	app.state.CountryCode = ""
+	if value == "all" {
+		app.state.CountryCode = "HR"
+	}
+	app.state.Genre = ""
+	app.stateMu.Unlock()
+	scheduleStateSave()
+	rebuildGenres()
+	rebuildFilter()
+	invalidate()
+}
+
+func handleCoreClickFallback(x, y int32) bool {
+	app.mu.RLock()
+	width, height := app.clientWidth, app.clientHeight
+	app.mu.RUnlock()
+	if width <= 0 || height <= 0 {
+		return false
+	}
+
+	if x >= 16 && x <= sidebarWidth-14 {
+		switch {
+		case y >= 91 && y <= 127:
+			selectTabValue("all")
+			return true
+		case y >= 135 && y <= 171:
+			selectTabValue("popular")
+			return true
+		case y >= 179 && y <= 215:
+			selectTabValue("countries")
+			return true
+		case y >= 223 && y <= 259:
+			selectTabValue("genres")
+			return true
+		case y >= 267 && y <= 303:
+			selectCountry(diasporaCatalogCode)
+			return true
+		case y >= 311 && y <= 347:
+			selectCountry(foreignCatalogCode)
+			return true
+		case y >= 437 && y <= 473:
+			selectTabValue("favorites")
+			return true
+		case y >= 479 && y <= 515:
+			selectTabValue("recent")
+			return true
+		}
+	}
+
+	_, _, countryL, countryR, genreL, genreR, _, _, refreshL, refreshR := headerLayout(width)
+	if y >= 20 && y <= 72 {
+		switch {
+		case x >= countryL && x <= countryR:
+			selectTabValue("countries")
+			return true
+		case x >= genreL && x <= genreR:
+			selectTabValue("genres")
+			return true
+		case x >= refreshL && x <= refreshR:
+			safeGo("refresh-catalog", refreshAll)
+			return true
+		}
+	}
+
+	playerTop := height - playerHeight
+	if y >= playerTop && y <= height {
+		cx := playerTransportCenter(width)
+		switch {
+		case x >= cx-116 && x <= cx-70 && y >= playerTop+17 && y <= playerTop+63:
+			playAdjacent(-1)
+			return true
+		case x >= cx-35 && x <= cx+35 && y >= playerTop+7 && y <= playerTop+76:
+			toggleCurrentPlayback()
+			return true
+		case x >= cx+44 && x <= cx+92 && y >= playerTop+21 && y <= playerTop+69:
+			stopCurrentPlayback()
+			return true
+		case x >= cx+108 && x <= cx+154 && y >= playerTop+17 && y <= playerTop+63:
+			playAdjacent(1)
+			return true
+		case x >= width-200 && x <= width-168 && y >= playerTop+27 && y <= playerTop+59:
+			adjustVolume(-5)
+			return true
+		case x >= width-106 && x <= width-74 && y >= playerTop+27 && y <= playerTop+59:
+			adjustVolume(5)
+			return true
+		}
+	}
+	return false
+}
+
 func handleClick(x, y int32) {
 	app.mu.RLock()
 	menuOpen := app.countryMenuOpen || app.genreMenuOpen
@@ -4032,75 +4473,7 @@ func handleClick(x, y int32) {
 		case hitGenreChoice:
 			selectGenre(h.Value)
 		case hitTab:
-			if strings.HasPrefix(h.Value, "country:") {
-				code := strings.ToUpper(strings.TrimSpace(strings.TrimPrefix(h.Value, "country:")))
-				if !isRegionalCatalogCode(code) {
-					break
-				}
-				app.mu.Lock()
-				app.tab = "all"
-				app.country = code
-				app.genre = ""
-				app.scroll = 0
-				app.countryMenuOpen = false
-				app.genreMenuOpen = false
-				app.mu.Unlock()
-				app.stateMu.Lock()
-				app.state.Tab = "all"
-				app.state.CountryCode = code
-				app.state.Genre = ""
-				app.stateMu.Unlock()
-				rebuildGenres()
-				rebuildFilter()
-				scheduleStateSave()
-				invalidate()
-				break
-			}
-			if strings.HasPrefix(h.Value, "genre:") {
-				g := strings.TrimSpace(strings.TrimPrefix(h.Value, "genre:"))
-				app.mu.Lock()
-				app.tab = "all"
-				app.country = ""
-				app.genre = g
-				app.scroll = 0
-				app.countryMenuOpen = false
-				app.genreMenuOpen = false
-				app.mu.Unlock()
-				app.stateMu.Lock()
-				app.state.Tab = "all"
-				app.state.CountryCode = ""
-				app.state.Genre = g
-				app.stateMu.Unlock()
-				rebuildGenres()
-				rebuildFilter()
-				scheduleStateSave()
-				invalidate()
-				break
-			}
-			app.mu.Lock()
-			app.detailKey = ""
-			app.tab = h.Value
-			app.country = ""
-			if h.Value == "all" {
-				app.country = "HR"
-			}
-			app.genre = ""
-			app.scroll = 0
-			app.countryMenuOpen = false
-			app.genreMenuOpen = false
-			app.mu.Unlock()
-			app.stateMu.Lock()
-			app.state.Tab = h.Value
-			app.state.CountryCode = ""
-			if h.Value == "all" {
-				app.state.CountryCode = "HR"
-			}
-			app.state.Genre = ""
-			app.stateMu.Unlock()
-			scheduleStateSave()
-			rebuildGenres()
-			rebuildFilter()
-			invalidate()
+			selectTabValue(h.Value)
 		case hitPlay:
 			if idx := stationIndexFromHit(h); idx >= 0 {
 				activateStation(idx)
@@ -4174,6 +4547,9 @@ func handleClick(x, y int32) {
 		}
 		return
 	}
+	if !menuOpen && handleCoreClickFallback(x, y) {
+		return
+	}
 	if menuOpen {
 		app.mu.Lock()
 		app.countryMenuOpen = false
@@ -4186,13 +4562,15 @@ func handleClick(x, y int32) {
 func hwndOrZero() syscall.Handle { return app.hwnd }
 
 func selectCountry(code string) {
-	if !isBalkanCode(code) {
+	code = strings.ToUpper(strings.TrimSpace(code))
+	if !isSelectableCatalogCode(code) {
 		code = ""
 	}
 	app.mu.Lock()
 	app.detailKey = ""
 	app.tab = "all"
 	app.country = code
+	app.genre = ""
 	app.scroll = 0
 	app.countryMenuOpen = false
 	app.genreMenuOpen = false
@@ -4200,6 +4578,7 @@ func selectCountry(code string) {
 	app.stateMu.Lock()
 	app.state.Tab = "all"
 	app.state.CountryCode = code
+	app.state.Genre = ""
 	app.stateMu.Unlock()
 	scheduleStateSave()
 	rebuildGenres()
@@ -5021,6 +5400,7 @@ func refreshAll() {
 	keepPlaying := false
 	app.mu.Lock()
 	app.stations = list
+	app.catalogRevision++
 	app.loading = false
 	app.scroll = 0
 	app.current = -1
@@ -5053,6 +5433,7 @@ func loadStations() {
 		prepareStations(cached)
 		app.mu.Lock()
 		app.stations = cached
+		app.catalogRevision++
 		app.loading = false
 		app.mu.Unlock()
 		postGenres()
@@ -5075,7 +5456,7 @@ func loadStations() {
 		setStatus("Nema mreže · koristi se zadnji spremljeni popis")
 		postUI()
 		if !app.safeMode {
-			safeGo("health-startup-cache", func() { healthCheckQuick(32) })
+			scheduleStartupHealth(20)
 		}
 		safeGo("health-periodic", periodicHealthLoop)
 		return
@@ -5084,6 +5465,7 @@ func loadStations() {
 	prepareStations(list)
 	app.mu.Lock()
 	app.stations = list
+	app.catalogRevision++
 	app.loading = false
 	app.scroll = 0
 	app.mu.Unlock()
@@ -5093,7 +5475,7 @@ func loadStations() {
 	setStatus(fmt.Sprintf("Učitano %d stanica iz %d država", len(list), countCountries(list)))
 	postUI()
 	if !app.safeMode {
-		safeGo("health-startup", func() { healthCheckQuick(48) })
+		scheduleStartupHealth(24)
 	}
 	safeGo("health-periodic", periodicHealthLoop)
 }

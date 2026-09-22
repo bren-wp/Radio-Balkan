@@ -185,6 +185,13 @@ func TestValidateStateDefaultsToCroatiaOnlyOnFirstLaunch(t *testing.T) {
 	if savedSerbia.CountryCode != "RS" {
 		t.Fatalf("saved country = %q; want RS", savedSerbia.CountryCode)
 	}
+
+	for _, code := range []string{diasporaCatalogCode, foreignCatalogCode} {
+		saved := validateState(PersistedState{CountryCode: code, Volume: 80, Tab: "all"}, true)
+		if saved.CountryCode != code {
+			t.Fatalf("saved supplemental country = %q; want %q", saved.CountryCode, code)
+		}
+	}
 }
 
 func TestValidateStateDropsUnsafeReplacementURLs(t *testing.T) {
@@ -592,6 +599,70 @@ func TestHomeGridColumnsStayWithinDenseThreeToSixColumnContract(t *testing.T) {
 		if got := homeGridColumns(tc.width); got != tc.want {
 			t.Fatalf("homeGridColumns(%d) = %d; want %d", tc.width, got, tc.want)
 		}
+	}
+}
+
+func TestSelectableCatalogCodesIncludeSupplementalGroups(t *testing.T) {
+	for _, code := range []string{"", "HR", "BA", diasporaCatalogCode, foreignCatalogCode} {
+		if !isSelectableCatalogCode(code) {
+			t.Fatalf("catalog code %q should be selectable", code)
+		}
+	}
+	for _, code := range []string{"ZZ", "LOCAL", "127"} {
+		if isSelectableCatalogCode(code) {
+			t.Fatalf("unsupported catalog code %q unexpectedly selectable", code)
+		}
+	}
+}
+
+func TestHomeDiscoverySnapshotScalesToFullCatalogWithoutDuplicates(t *testing.T) {
+	codes := []string{"HR", "BA", "RS", "SI", "MK", "AL", "ME", "BG"}
+	stations := make([]RadioStation, 0, 6000)
+	for i := 0; i < 6000; i++ {
+		code := codes[i%len(codes)]
+		tags := "pop,regional"
+		if i%3 == 0 {
+			tags = "folk,narodna"
+		}
+		stations = append(stations, RadioStation{
+			StationUUID: fmt.Sprintf("scale-%05d", i),
+			Name:        fmt.Sprintf("Scale Radio %05d", i),
+			CountryCode: code,
+			Tags:        tags,
+			TagsIndex:   foldText(tags),
+			Votes:       100000 - i,
+		})
+	}
+	start := time.Now()
+	snapshot := buildHomeDiscoverySnapshot(stations, 6, 77)
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("6000-station home discovery took %s; paint-safe snapshot must stay bounded", elapsed)
+	}
+	if !snapshot.Valid || snapshot.Revision != 77 || snapshot.Columns != 6 {
+		t.Fatalf("unexpected snapshot metadata: %+v", snapshot)
+	}
+	if snapshot.CroatiaCount != 750 {
+		t.Fatalf("Croatia count = %d; want 750", snapshot.CroatiaCount)
+	}
+	groups := [][]int{
+		snapshot.Popular, snapshot.Croatia, snapshot.Bosnia, snapshot.Serbia,
+		snapshot.Balkan, snapshot.Folk, snapshot.PopRock,
+	}
+	seen := map[int]bool{}
+	for groupIndex, group := range groups {
+		for _, idx := range group {
+			if idx < 0 || idx >= len(stations) {
+				t.Fatalf("group %d contains invalid station index %d", groupIndex, idx)
+			}
+			if seen[idx] {
+				t.Fatalf("station index %d is duplicated across home discovery groups", idx)
+			}
+			seen[idx] = true
+		}
+	}
+	if len(snapshot.Popular) != 6 || len(snapshot.Croatia) != 18 || len(snapshot.Bosnia) != 6 || len(snapshot.Serbia) != 6 {
+		t.Fatalf("unexpected primary group sizes: popular=%d HR=%d BA=%d RS=%d",
+			len(snapshot.Popular), len(snapshot.Croatia), len(snapshot.Bosnia), len(snapshot.Serbia))
 	}
 }
 
