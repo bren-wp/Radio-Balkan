@@ -106,7 +106,7 @@ const (
 	WM_APP             = 0x8000
 	WM_USER            = 0x0400
 
-	EN_CHANGE  = 0x0310
+	EN_CHANGE  = 0x0300
 	BN_CLICKED = 0
 
 	DT_LEFT         = 0x00000000
@@ -2231,7 +2231,7 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 	case WM_COMMAND:
 		id := loWord(wParam)
 		code := hiWord(wParam)
-		if id == 1001 && code == EN_CHANGE {
+		if id == 1001 && code == EN_CHANGE && lParam == uintptr(app.edit) {
 			app.mu.Lock()
 			app.search = getWindowText(app.edit)
 			app.scroll = 0
