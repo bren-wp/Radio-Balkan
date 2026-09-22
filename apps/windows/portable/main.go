@@ -1755,6 +1755,37 @@ func runCIInputSmoke() {
 		runtimeTestTrace("input-smoke-fail token=" + token + " step=stop-station")
 		return
 	}
+	// Exercise the real rendered Stop hit-region while playback is still pending
+	// and no station has been committed as current yet. This guards the startup
+	// race where Stop used to be unavailable until Play finished opening media.
+	app.current = -1
+	app.currentKey = ""
+	app.playing = false
+	app.audioStopped = false
+	app.pendingPlaySeq = app.playSeq
+	pendingStopSeq := app.playSeq
+	app.audioBackend = audioBackendNone
+	app.mu.Unlock()
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=pending-stop-paint")
+		return
+	}
+	app.mu.RLock()
+	pendingStopWidth, pendingStopHeight := app.clientWidth, app.clientHeight
+	app.mu.RUnlock()
+	pendingStopCX := playerTransportCenter(pendingStopWidth)
+	postClick(pendingStopCX+68, pendingStopHeight-playerHeight+45)
+	if !waitFor(700*time.Millisecond, func() bool {
+		app.mu.RLock()
+		stopped := app.audioStopped && !app.playing && app.pendingPlaySeq == 0 && app.playSeq > pendingStopSeq
+		app.mu.RUnlock()
+		return stopped
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=pending-player-stop")
+		return
+	}
+
+	app.mu.Lock()
 	app.current = 0
 	app.currentKey = stationKey(app.stations[0])
 	app.playing = true
