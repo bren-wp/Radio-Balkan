@@ -163,7 +163,7 @@
     const area = stationCountry(station) || 'područja Radio Balkan kataloga';
     const genre = firstUsefulTag(station);
     const language = String(station?.language || '').trim();
-    let text = `${station.name} je radio stanica iz područja ${area}. Slušanje se pokreće kroz sigurni Radio Balkan player s ograničenim timeoutom te fallback i recovery postupkom kada je dostupan.`;
+    let text = `${station.name} je radio stanica iz područja ${area}. Slušanje se pokreće kroz Radio Balkan player, uz automatski pokušaj ponovnog povezivanja ako je stanica privremeno nedostupna.`;
     if (genre) text += ` Na programu je istaknuta kategorija ${genre}.`;
     if (language) text += ` Jezik programa: ${language}.`;
     return text;
