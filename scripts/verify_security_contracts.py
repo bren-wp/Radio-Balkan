@@ -553,6 +553,16 @@ def main() -> None:
         "Windows Setup go build nije uspio.",
     )
     require(
+        ".github/workflows/publish.yml",
+        "RADIO_BALKAN_WINDOWS_PFX_B64",
+        "RADIO_BALKAN_WINDOWS_PFX_PASSWORD",
+        "Import-PfxCertificate",
+        "1.3.6.1.5.5.7.3.3",
+        "-RequireSignature",
+        "Verify published Windows artifacts are Authenticode-signed",
+        "Get-AuthenticodeSignature -FilePath $path",
+    )
+    require(
         "apps/windows/portable/main.go",
         "procCopyMemory.Call(uintptr(unsafe.Pointer(&info)), lParam, unsafe.Sizeof(info))",
         "procCopyMemory.Call(lParam, uintptr(unsafe.Pointer(&info)), unsafe.Sizeof(info))",
