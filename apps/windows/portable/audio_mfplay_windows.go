@@ -5,6 +5,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
 	"runtime"
 	"syscall"
 	"unsafe"
@@ -20,11 +21,13 @@ var (
 	mfplatDLL              = syscall.NewLazyDLL("mfplat.dll")
 	mfplayDLL              = syscall.NewLazyDLL("mfplay.dll")
 	ole32DLL               = syscall.NewLazyDLL("ole32.dll")
+	oleaut32DLL             = syscall.NewLazyDLL("oleaut32.dll")
 	procMFStartup          = mfplatDLL.NewProc("MFStartup")
 	procMFShutdown         = mfplatDLL.NewProc("MFShutdown")
 	procMFPCreateMediaPlayer = mfplayDLL.NewProc("MFPCreateMediaPlayer")
 	procCoInitializeEx     = ole32DLL.NewProc("CoInitializeEx")
 	procCoUninitialize     = ole32DLL.NewProc("CoUninitialize")
+	procDispCallFunc        = oleaut32DLL.NewProc("DispCallFunc")
 )
 
 func hresultError(name string, hr uintptr) error {
@@ -62,6 +65,45 @@ func comCall(object unsafe.Pointer, index int, args ...uintptr) error {
 	callArgs = append(callArgs, args...)
 	hr, _, _ := syscall.SyscallN(method, callArgs...)
 	return hresultError(fmt.Sprintf("COM method %d", index), hr)
+}
+
+type variantArg struct {
+	VT        uint16
+	Reserved1 uint16
+	Reserved2 uint16
+	Reserved3 uint16
+	Value     uint64
+}
+
+const (
+	vtR4      = 4
+	vtHRESULT = 25
+	ccStdcall = 4
+)
+
+func comCallFloat32(object unsafe.Pointer, index int, value float32) error {
+	if object == nil {
+		return errors.New("COM object is nil")
+	}
+	arg := variantArg{VT: vtR4, Value: uint64(math.Float32bits(value))}
+	argTypes := [1]uint16{vtR4}
+	argPointers := [1]unsafe.Pointer{unsafe.Pointer(&arg)}
+	var result variantArg
+
+	hr, _, _ := procDispCallFunc.Call(
+		uintptr(object),
+		uintptr(index)*unsafe.Sizeof(uintptr(0)),
+		ccStdcall,
+		vtHRESULT,
+		1,
+		uintptr(unsafe.Pointer(&argTypes[0])),
+		uintptr(unsafe.Pointer(&argPointers[0])),
+		uintptr(unsafe.Pointer(&result)),
+	)
+	if err := hresultError("DispCallFunc", hr); err != nil {
+		return err
+	}
+	return hresultError(fmt.Sprintf("COM float method %d", index), uintptr(uint32(result.Value)))
 }
 
 func comRelease(object unsafe.Pointer) {
@@ -148,7 +190,19 @@ func mfplaySmokeOpen(rawURL string) error {
 			result <- err
 			return
 		}
+		if err := comCallFloat32(player, 20, 0.25); err != nil { // SetVolume
+			result <- err
+			return
+		}
 		if err := comCall(player, 3); err != nil { // Play
+			result <- err
+			return
+		}
+		if err := comCall(player, 4); err != nil { // Pause
+			result <- err
+			return
+		}
+		if err := comCall(player, 3); err != nil { // Resume
 			result <- err
 			return
 		}
