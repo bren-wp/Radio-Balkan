@@ -564,9 +564,10 @@ func TestAudioAckTimeoutDiscardsStaleChannel(t *testing.T) {
 
 func TestLatestPlayRequestCancelsStaleAckWait(t *testing.T) {
 	app = App{
-		done:     make(chan struct{}),
-		audioAck: make(chan string),
-		playSeq:  41,
+		done:         make(chan struct{}),
+		audioAck:     make(chan string),
+		playSeq:      41,
+		audioBackend: audioBackendWPF,
 	}
 
 	go func() {
@@ -581,6 +582,7 @@ func TestLatestPlayRequestCancelsStaleAckWait(t *testing.T) {
 	err := waitAudioAckLockedForRequest(2*time.Second, 41)
 	cleared := app.audioAck == nil && app.audioCmd == nil && app.audioIn == nil
 	app.audioMu.Unlock()
+	backend := currentAudioBackend()
 
 	if !errors.Is(err, errPlayRequestSuperseded) {
 		t.Fatalf("stale play wait returned %v; want errPlayRequestSuperseded", err)
@@ -590,6 +592,24 @@ func TestLatestPlayRequestCancelsStaleAckWait(t *testing.T) {
 	}
 	if !cleared {
 		t.Fatal("superseded PLAY did not discard the helper/ACK channel")
+	}
+	if backend != audioBackendNone {
+		t.Fatalf("superseded WPF ACK wait left backend %v active; want none before the newer request takes ownership", backend)
+	}
+}
+
+func TestSupersededPlayCannotClearNewerBackend(t *testing.T) {
+	app = App{
+		done:         make(chan struct{}),
+		playSeq:      52,
+		audioBackend: audioBackendWPF,
+	}
+	err := audioPlayRequest("http://93.184.216.34/live.mp3", 51)
+	if !errors.Is(err, errPlayRequestSuperseded) {
+		t.Fatalf("already-superseded Play returned %v; want errPlayRequestSuperseded", err)
+	}
+	if got := currentAudioBackend(); got != audioBackendWPF {
+		t.Fatalf("superseded Play changed newer backend to %v; want WPF", got)
 	}
 }
 
