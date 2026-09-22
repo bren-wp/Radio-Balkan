@@ -788,6 +788,43 @@ func TestBackendFailureWhilePausedForcesReconnectOnNextPlay(t *testing.T) {
 	}
 }
 
+func TestStalePauseFallbackStopCannotClearResumedBackend(t *testing.T) {
+	app = App{
+		done:            make(chan struct{}),
+		playSeq:         22,
+		audioControlSeq: 8,
+		audioBackend:    audioBackendWPF,
+	}
+	// Simulate Pause owning control generation 7, then Resume advancing it to 8
+	// before the fallback Stop obtains audioMu.
+	audioStopForControl(22, 7)
+	if got := currentAudioBackend(); got != audioBackendWPF {
+		t.Fatalf("stale Pause fallback Stop changed resumed backend to %v; want WPF", got)
+	}
+}
+
+func TestClearPendingPlayRequestClearsOnlyMatchingGeneration(t *testing.T) {
+	app = App{
+		done:           make(chan struct{}),
+		playSeq:        32,
+		pendingPlaySeq: 32,
+	}
+	clearPendingPlayRequest(31)
+	app.mu.RLock()
+	pending := app.pendingPlaySeq
+	app.mu.RUnlock()
+	if pending != 32 {
+		t.Fatalf("stale pending cleanup cleared newer request: got %d, want 32", pending)
+	}
+	clearPendingPlayRequest(32)
+	app.mu.RLock()
+	pending = app.pendingPlaySeq
+	app.mu.RUnlock()
+	if pending != 0 {
+		t.Fatalf("matching pending cleanup left generation %d; want 0", pending)
+	}
+}
+
 func TestStaleAsyncStopCannotClearNewPlaybackBackend(t *testing.T) {
 	app = App{
 		done:         make(chan struct{}),
