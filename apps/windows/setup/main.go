@@ -66,6 +66,15 @@ const (
 	MB_YESNO             = 4
 	IDYES                = 6
 	SW_SHOW              = 5
+
+	DWMWA_USE_IMMERSIVE_DARK_MODE  = 20
+	DWMWA_WINDOW_CORNER_PREFERENCE = 33
+	DWMWA_BORDER_COLOR             = 34
+	DWMWA_CAPTION_COLOR            = 35
+	DWMWA_TEXT_COLOR               = 36
+	DWMWA_SYSTEMBACKDROP_TYPE      = 38
+	DWMWCP_ROUND                   = 2
+	DWMSBT_MAINWINDOW              = 2
 )
 
 var appVersion = "0.0.41"
@@ -297,9 +306,9 @@ func initGDI() {
 	st.icon = createIconFromICO(setupIconBytes, 64)
 	st.bg = brush(color(25, 20, 17))
 	st.panel = brush(color(31, 25, 22))
-	st.font = font(16, 400, "Segoe UI")
-	st.bold = font(17, 700, "Segoe UI")
-	st.title = font(29, 700, "Segoe UI")
+	st.font = font(16, 400, "Segoe UI Variable Text")
+	st.bold = font(17, 700, "Segoe UI Variable Text")
+	st.title = font(29, 700, "Segoe UI Variable Display")
 }
 func cleanup() {
 	for _, h := range []syscall.Handle{st.bg, st.panel, st.font, st.bold, st.title} {
@@ -362,9 +371,25 @@ func font(h, w int32, f string) syscall.Handle {
 	r, _, _ := createFontP.Call(uintptr(int32(-h)), 0, 0, 0, uintptr(w), 0, 0, 0, 1, 0, 0, 5, 0, uintptr(unsafe.Pointer(u16(f))))
 	return syscall.Handle(r)
 }
+func setupDwmInt32(hwnd syscall.Handle, attribute uintptr, value int32) {
+	if hwnd == 0 {
+		return
+	}
+	dwmAttr.Call(uintptr(hwnd), attribute, uintptr(unsafe.Pointer(&value)), unsafe.Sizeof(value))
+}
+func setupDwmColor(hwnd syscall.Handle, attribute uintptr, value uint32) {
+	if hwnd == 0 {
+		return
+	}
+	dwmAttr.Call(uintptr(hwnd), attribute, uintptr(unsafe.Pointer(&value)), unsafe.Sizeof(value))
+}
 func dark(hwnd syscall.Handle) {
-	v := int32(1)
-	dwmAttr.Call(uintptr(hwnd), 20, uintptr(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	setupDwmInt32(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, 1)
+	setupDwmInt32(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND)
+	setupDwmInt32(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_MAINWINDOW)
+	setupDwmColor(hwnd, DWMWA_BORDER_COLOR, color(62, 51, 44))
+	setupDwmColor(hwnd, DWMWA_CAPTION_COLOR, color(25, 20, 17))
+	setupDwmColor(hwnd, DWMWA_TEXT_COLOR, color(242, 237, 232))
 }
 func invalidate() {
 	if st.hwnd != 0 {
