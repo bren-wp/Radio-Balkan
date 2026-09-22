@@ -175,13 +175,17 @@ def main() -> int:
 
     android = read("apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java")
     for needle in (
+        "if (savedInstanceState == null) {",
         "country = StateStore.DEFAULT_COUNTRY;",
         'genre = "";',
         'tab = "all";',
         "state.setCountry(country);",
         "state.setGenre(genre);",
         "state.setTab(tab);",
-        'navSelection = "all";',
+        "} else {",
+        "country = state.country();",
+        "genre = state.genre();",
+        "tab = validTab(state.tab()) ? state.tab() : \"all\";",
     ):
         require(errors, android, needle, "Android startup home")
 
