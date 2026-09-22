@@ -77,7 +77,11 @@ const (
 	ES_AUTOHSCROLL      = 0x0080
 	ES_PASSWORD         = 0x0020
 	EM_SETCUEBANNER     = 0x1501
+	EM_SETMARGINS       = 0x00D3
 	EM_SETSEL           = 0x00B1
+	BS_OWNERDRAW        = 0x0000000B
+	ODS_SELECTED        = 0x0001
+	ODS_FOCUS           = 0x0010
 
 	SW_SHOW       = 5
 	SW_RESTORE    = 9
@@ -86,6 +90,7 @@ const (
 	WM_CREATE          = 0x0001
 	WM_DESTROY         = 0x0002
 	WM_PAINT           = 0x000F
+	WM_DRAWITEM        = 0x002B
 	WM_ERASEBKGND      = 0x0014
 	WM_KEYDOWN         = 0x0100
 	WM_CHAR            = 0x0102
@@ -155,6 +160,15 @@ const (
 	APPCOMMAND_MEDIA_STOP          = 13
 	APPCOMMAND_MEDIA_PLAY_PAUSE    = 14
 	WS_EX_DLGMODALFRAME            = 0x00000001
+
+	DWMWA_USE_IMMERSIVE_DARK_MODE  = 20
+	DWMWA_WINDOW_CORNER_PREFERENCE = 33
+	DWMWA_BORDER_COLOR             = 34
+	DWMWA_CAPTION_COLOR            = 35
+	DWMWA_TEXT_COLOR               = 36
+	DWMWA_SYSTEMBACKDROP_TYPE      = 38
+	DWMWCP_ROUND                   = 2
+	DWMSBT_MAINWINDOW              = 2
 )
 
 var appVersion = "0.0.41"
@@ -191,6 +205,17 @@ type PAINTSTRUCT struct {
 	RcPaint              RECT
 	FRestore, FIncUpdate int32
 	RgbReserved          [32]byte
+}
+type DRAWITEMSTRUCT struct {
+	CtlType    uint32
+	CtlID      uint32
+	ItemID     uint32
+	ItemAction uint32
+	ItemState  uint32
+	HwndItem   syscall.Handle
+	HDC        syscall.Handle
+	RcItem     RECT
+	ItemData   uintptr
 }
 type RGBQUAD struct{ Blue, Green, Red, Reserved byte }
 type BITMAPINFOHEADER struct {
@@ -1916,10 +1941,10 @@ func initGDI() {
 	app.bgBrush = createBrush(color(9, 14, 20))
 	app.panelBrush = createBrush(color(11, 16, 23))
 	app.editBrush = createBrush(color(17, 25, 35))
-	app.hFont = createFont(17, 400, "Segoe UI")
-	app.hFontBold = createFont(17, 700, "Segoe UI")
-	app.hFontSmall = createFont(14, 400, "Segoe UI")
-	app.hFontTitle = createFont(28, 700, "Segoe UI")
+	app.hFont = createFont(17, 400, "Segoe UI Variable Text")
+	app.hFontBold = createFont(17, 700, "Segoe UI Variable Text")
+	app.hFontSmall = createFont(14, 400, "Segoe UI Variable Text")
+	app.hFontTitle = createFont(28, 700, "Segoe UI Variable Display")
 }
 func cleanupGDI() {
 	for _, h := range []syscall.Handle{app.bgBrush, app.panelBrush, app.editBrush, app.hFont, app.hFontBold, app.hFontSmall, app.hFontTitle} {
@@ -2286,10 +2311,27 @@ func createMainWindow() error {
 	return nil
 }
 
+func setDwmInt32(hwnd syscall.Handle, attribute uintptr, value int32) {
+	if hwnd == 0 {
+		return
+	}
+	procDwmSetWindowAttribute.Call(uintptr(hwnd), attribute, uintptr(unsafe.Pointer(&value)), unsafe.Sizeof(value))
+}
+func setDwmColor(hwnd syscall.Handle, attribute uintptr, value uint32) {
+	if hwnd == 0 {
+		return
+	}
+	procDwmSetWindowAttribute.Call(uintptr(hwnd), attribute, uintptr(unsafe.Pointer(&value)), unsafe.Sizeof(value))
+}
 func enableImmersiveDark(hwnd syscall.Handle) {
-	// DWMWA_USE_IMMERSIVE_DARK_MODE 20 on current Win10/11.
-	v := int32(1)
-	procDwmSetWindowAttribute.Call(uintptr(hwnd), 20, uintptr(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	// All attributes are best-effort. Unsupported Windows versions simply ignore
+	// the newer Windows 11 surface hints while retaining the custom client UI.
+	setDwmInt32(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, 1)
+	setDwmInt32(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND)
+	setDwmInt32(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_MAINWINDOW)
+	setDwmColor(hwnd, DWMWA_BORDER_COLOR, uint32(color(50, 57, 68)))
+	setDwmColor(hwnd, DWMWA_CAPTION_COLOR, uint32(color(9, 14, 20)))
+	setDwmColor(hwnd, DWMWA_TEXT_COLOR, uint32(color(238, 241, 245)))
 }
 
 func wndProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) (ret uintptr) {
@@ -2328,6 +2370,7 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 		app.edit = syscall.Handle(e)
 		procSendMessage.Call(e, 0x0030, uintptr(app.hFont), 1)
 		procSendMessage.Call(e, EM_SETCUEBANNER, 1, uintptr(unsafe.Pointer(u16("Pretraži stanice, gradove i žanrove…"))))
+		procSendMessage.Call(e, EM_SETMARGINS, 3, uintptr(12)|uintptr(12)<<16)
 		procSetWindowTheme.Call(e, uintptr(unsafe.Pointer(u16("DarkMode_CFD"))), 0)
 		app.mu.Lock()
 		app.genreOptions = []string{"Svi žanrovi"}
@@ -8458,6 +8501,39 @@ func ensureInputDialogClass() error {
 	return inputDialogClassErr
 }
 
+func drawDialogActionButton(dis DRAWITEMSTRUCT) {
+	if dis.HDC == 0 || (dis.CtlID != 2101 && dis.CtlID != 2102) {
+		return
+	}
+	primary := dis.CtlID == 2101
+	selected := dis.ItemState&ODS_SELECTED != 0
+	focused := dis.ItemState&ODS_FOCUS != 0
+
+	fill := color(28, 34, 43)
+	border := color(63, 72, 84)
+	textColor := rgb(226, 231, 237)
+	if primary {
+		fill = color(235, 113, 38)
+		border = color(255, 160, 78)
+		textColor = rgb(20, 22, 25)
+	}
+	if selected {
+		if primary {
+			fill = color(201, 87, 24)
+		} else {
+			fill = color(42, 49, 59)
+		}
+	}
+	if focused {
+		border = color(255, 190, 92)
+	}
+	drawRounded(dis.HDC, dis.RcItem.Left, dis.RcItem.Top, dis.RcItem.Right, dis.RcItem.Bottom, 10, fill, border)
+	procSetBkMode.Call(uintptr(dis.HDC), TRANSPARENT)
+	selectFont(dis.HDC, app.hFontSmall)
+	label := getWindowText(dis.HwndItem)
+	text(dis.HDC, label, dis.RcItem.Left+10, dis.RcItem.Top, dis.RcItem.Right-10, dis.RcItem.Bottom, textColor, DT_CENTER|DT_VCENTER|DT_SINGLELINE)
+}
+
 func inputDialogWndProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) (ret uintptr) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -8466,6 +8542,15 @@ func inputDialogWndProc(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr)
 		}
 	}()
 	switch msg {
+	case WM_DRAWITEM:
+		if lParam != 0 {
+			var dis DRAWITEMSTRUCT
+			procCopyMemory.Call(uintptr(unsafe.Pointer(&dis)), lParam, unsafe.Sizeof(dis))
+			if dis.CtlID == 2101 || dis.CtlID == 2102 {
+				drawDialogActionButton(dis)
+				return 1
+			}
+		}
 	case WM_COMMAND:
 		id := loWord(wParam)
 		if id == 2101 {
@@ -8551,15 +8636,16 @@ func passwordDialog(parent syscall.Handle, title, prompt string) (string, bool) 
 	enableImmersiveDark(st.hwnd)
 
 	label, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("STATIC"))), uintptr(unsafe.Pointer(u16(prompt))), WS_CHILD|WS_VISIBLE, 24, 22, 566, 92, h, 0, hInst, 0)
-	edit, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("EDIT"))), uintptr(unsafe.Pointer(u16(""))), WS_CHILD|WS_VISIBLE|WS_TABSTOP|WS_BORDER|ES_AUTOHSCROLL|ES_PASSWORD, 24, 122, 566, 34, h, 2201, hInst, 0)
-	cancelBtn, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("BUTTON"))), uintptr(unsafe.Pointer(u16("Odustani"))), WS_CHILD|WS_VISIBLE|WS_TABSTOP, 382, 180, 96, 38, h, 2102, hInst, 0)
-	okBtn, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("BUTTON"))), uintptr(unsafe.Pointer(u16("Prijavi se"))), WS_CHILD|WS_VISIBLE|WS_TABSTOP, 488, 180, 102, 38, h, 2101, hInst, 0)
+	edit, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("EDIT"))), uintptr(unsafe.Pointer(u16(""))), WS_CHILD|WS_VISIBLE|WS_TABSTOP|ES_AUTOHSCROLL|ES_PASSWORD, 24, 122, 566, 34, h, 2201, hInst, 0)
+	cancelBtn, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("BUTTON"))), uintptr(unsafe.Pointer(u16("Odustani"))), WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW, 382, 180, 96, 38, h, 2102, hInst, 0)
+	okBtn, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("BUTTON"))), uintptr(unsafe.Pointer(u16("Prijavi se"))), WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW, 488, 180, 102, 38, h, 2101, hInst, 0)
 	if edit == 0 || label == 0 || cancelBtn == 0 || okBtn == 0 {
 		logError("password-dialog-controls", errors.New("nije moguće izraditi sve kontrole dijaloga"))
 		procDestroyWindow.Call(h)
 		return "", false
 	}
 	st.edit = syscall.Handle(edit)
+	procSendMessage.Call(edit, EM_SETMARGINS, 3, uintptr(10)|uintptr(10)<<16)
 	for _, ch := range []uintptr{label, edit, cancelBtn, okBtn} {
 		procSendMessage.Call(ch, 0x0030, uintptr(app.hFontSmall), 1)
 		procSetWindowTheme.Call(ch, uintptr(unsafe.Pointer(u16("DarkMode_CFD"))), 0)
@@ -8641,9 +8727,9 @@ func inputDialog(parent syscall.Handle, title, prompt, def string) (string, bool
 	enableImmersiveDark(st.hwnd)
 
 	label, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("STATIC"))), uintptr(unsafe.Pointer(u16(prompt))), WS_CHILD|WS_VISIBLE, 24, 22, 566, 92, h, 0, hInst, 0)
-	edit, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("EDIT"))), uintptr(unsafe.Pointer(u16(def))), WS_CHILD|WS_VISIBLE|WS_TABSTOP|WS_BORDER|ES_AUTOHSCROLL, 24, 122, 566, 34, h, 2201, hInst, 0)
-	cancelBtn, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("BUTTON"))), uintptr(unsafe.Pointer(u16("Odustani"))), WS_CHILD|WS_VISIBLE|WS_TABSTOP, 382, 180, 96, 38, h, 2102, hInst, 0)
-	okBtn, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("BUTTON"))), uintptr(unsafe.Pointer(u16("Spremi"))), WS_CHILD|WS_VISIBLE|WS_TABSTOP, 488, 180, 102, 38, h, 2101, hInst, 0)
+	edit, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("EDIT"))), uintptr(unsafe.Pointer(u16(def))), WS_CHILD|WS_VISIBLE|WS_TABSTOP|ES_AUTOHSCROLL, 24, 122, 566, 34, h, 2201, hInst, 0)
+	cancelBtn, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("BUTTON"))), uintptr(unsafe.Pointer(u16("Odustani"))), WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW, 382, 180, 96, 38, h, 2102, hInst, 0)
+	okBtn, _, _ := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(u16("BUTTON"))), uintptr(unsafe.Pointer(u16("Spremi"))), WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW, 488, 180, 102, 38, h, 2101, hInst, 0)
 	if edit == 0 || label == 0 || cancelBtn == 0 || okBtn == 0 {
 		logError("input-dialog-controls", errors.New("nije moguće izraditi sve kontrole dijaloga"))
 		procDestroyWindow.Call(h)
@@ -8651,6 +8737,7 @@ func inputDialog(parent syscall.Handle, title, prompt, def string) (string, bool
 		return "", false
 	}
 	st.edit = syscall.Handle(edit)
+	procSendMessage.Call(edit, EM_SETMARGINS, 3, uintptr(10)|uintptr(10)<<16)
 	for _, ch := range []uintptr{label, edit, cancelBtn, okBtn} {
 		procSendMessage.Call(ch, 0x0030, uintptr(app.hFontSmall), 1)
 		procSetWindowTheme.Call(ch, uintptr(unsafe.Pointer(u16("DarkMode_CFD"))), 0)
