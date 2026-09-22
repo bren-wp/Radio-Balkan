@@ -83,7 +83,7 @@ jobs:
       - name: Validate Windows PowerShell tooling
         shell: pwsh
         run: |
-          foreach ($path in @('scripts/capture-windows.ps1', 'scripts/test-windows-runtime.ps1')) {
+          foreach ($path in @('scripts/capture-windows.ps1', 'scripts/validate-screenshot.ps1', 'scripts/test-windows-runtime.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(
@@ -96,6 +96,60 @@ jobs:
               throw "$path contains PowerShell syntax errors."
             }
           }
+      - name: Test screenshot visual-content validator
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $blank = Join-Path $env:RUNNER_TEMP 'radio-balkan-blank.png'
+          $valid = Join-Path $env:RUNNER_TEMP 'radio-balkan-valid.png'
+          $blankBitmap = [Drawing.Bitmap]::new(640, 360)
+          try {
+            $blankBitmap.Save($blank, [Drawing.Imaging.ImageFormat]::Png)
+          } finally {
+            $blankBitmap.Dispose()
+          }
+          $validBitmap = [Drawing.Bitmap]::new(640, 360)
+          try {
+            $graphics = [Drawing.Graphics]::FromImage($validBitmap)
+            try {
+              $graphics.Clear([Drawing.Color]::FromArgb(16, 23, 31))
+              $orange = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(235, 83, 35))
+              $white = [Drawing.SolidBrush]::new([Drawing.Color]::White)
+              $gold = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(255, 190, 92))
+              $blue = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(54, 95, 145))
+              $green = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(60, 140, 96))
+              $gray = [Drawing.SolidBrush]::new([Drawing.Color]::FromArgb(110, 120, 132))
+              try {
+                $graphics.FillRectangle($orange, 40, 40, 260, 120)
+                $graphics.FillRectangle($white, 340, 190, 220, 80)
+                $graphics.FillRectangle($gold, 340, 40, 92, 54)
+                $graphics.FillRectangle($blue, 446, 40, 92, 54)
+                $graphics.FillRectangle($green, 40, 190, 110, 64)
+                $graphics.FillRectangle($gray, 168, 190, 110, 64)
+              } finally {
+                $orange.Dispose()
+                $white.Dispose()
+                $gold.Dispose()
+                $blue.Dispose()
+                $green.Dispose()
+                $gray.Dispose()
+              }
+            } finally {
+              $graphics.Dispose()
+            }
+            $validBitmap.Save($valid, [Drawing.Imaging.ImageFormat]::Png)
+          } finally {
+            $validBitmap.Dispose()
+          }
+          $blankRejected = $false
+          try {
+            ./scripts/validate-screenshot.ps1 -Path @($blank) -Quiet
+          } catch {
+            $blankRejected = $true
+          }
+          if (-not $blankRejected) { throw 'Blank screenshot unexpectedly passed validation.' }
+          ./scripts/validate-screenshot.ps1 -Path @($valid) -Quiet
+          Remove-Item $blank,$valid -Force -ErrorAction SilentlyContinue
       - name: Test and build Windows release
         working-directory: apps/windows
         shell: pwsh
