@@ -1768,7 +1768,7 @@ func runCIInputSmoke() {
 	secondPlayX := firstPlayX
 	secondPlayY := int32(200)
 	if columns > 1 {
-		secondPlayX = mainL + (cardW+8) + cardW - 22
+		secondPlayX = mainL + (cardW + 8) + cardW - 22
 	} else {
 		secondPlayY = 200 + 82
 	}
