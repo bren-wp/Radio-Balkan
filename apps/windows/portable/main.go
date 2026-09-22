@@ -1916,12 +1916,14 @@ func runCIAudioSmoke() {
 	defer ln.Close()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/tone.wav", func(w http.ResponseWriter, r *http.Request) {
+	serveWAV := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "audio/wav")
 		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(wav)
-	})
+	}
+	mux.HandleFunc("/tone-a.wav", serveWAV)
+	mux.HandleFunc("/tone-b.wav", serveWAV)
 	server := &http.Server{Handler: mux}
 	serveDone := make(chan struct{})
 	go func() {
@@ -1940,10 +1942,45 @@ func runCIAudioSmoke() {
 		}
 	}()
 
-	streamURL := "http://" + ln.Addr().String() + "/tone.wav"
-	if err := mfplaySmokeOpen(streamURL); err != nil {
-		upper := strings.ToUpper(err.Error())
-		if strings.Contains(upper, "0XC00D11BA") || strings.Contains(upper, "0XC00D36B0") {
+	streamA := "http://" + ln.Addr().String() + "/tone-a.wav"
+	streamB := "http://" + ln.Addr().String() + "/tone-b.wav"
+
+	// Exercise the actual production backend lifecycle that handles station
+	// switching. A successful first PLAY followed by a second PLAY in the same
+	// app process is the regression case reported by users.
+	app.mu.Lock()
+	app.playSeq++
+	seqA := app.playSeq
+	app.mu.Unlock()
+	if err := audioPlayRequest(streamA, seqA); err != nil {
+		if isExpectedHeadlessAudioError(err) {
+			runtimeTestTrace("production-audio-switch-no-device token=" + token)
+		} else {
+			logError("runtime-test-production-audio-a", err)
+			return
+		}
+	} else {
+		app.mu.Lock()
+		app.playSeq++
+		seqB := app.playSeq
+		app.mu.Unlock()
+		if err := audioPlayRequest(streamB, seqB); err != nil {
+			if isExpectedHeadlessAudioError(err) {
+				runtimeTestTrace("production-audio-switch-no-device token=" + token)
+				audioStopForRequest(seqB)
+			} else {
+				logError("runtime-test-production-audio-b", err)
+				audioStopForRequest(seqB)
+				return
+			}
+		} else {
+			runtimeTestTrace("production-audio-switch-ok token=" + token)
+			audioStopForRequest(seqB)
+		}
+	}
+
+	if err := mfplaySmokeOpen(streamA); err != nil {
+		if isExpectedHeadlessAudioError(err) {
 			runtimeTestTrace("audio-smoke-no-device token=" + token)
 			return
 		}
@@ -1951,6 +1988,14 @@ func runCIAudioSmoke() {
 		return
 	}
 	runtimeTestTrace("audio-smoke-ok token=" + token)
+}
+
+func isExpectedHeadlessAudioError(err error) bool {
+	if err == nil {
+		return false
+	}
+	upper := strings.ToUpper(err.Error())
+	return strings.Contains(upper, "0XC00D11BA") || strings.Contains(upper, "0XC00D36B0")
 }
 
 func makeCISmokeWAV() []byte {
