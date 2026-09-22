@@ -600,7 +600,6 @@ def main() -> None:
         "startAudioEngineLockedForRequest(reqSeq)",
         "func abortAudioEngineStartup(cmd *exec.Cmd, in io.Closer)",
         "_ = cmd.Wait()", 
-        "func warmAudioEngine()",
         "Initialize audio lazily on the first playback command.",
         "audio engine startup timeout",
         "MediaOpened",
@@ -620,6 +619,8 @@ def main() -> None:
         'safeGo("ci-runtime-smoke-suite", func() {',
         "func runCIInputSmoke()",
         "input-smoke-ok token=",
+        "step=home-croatia-list",
+        "step=home-after-croatia-list",
         "step=volume-blocked",
         "step=navigation-blocked",
         "audioStopped",
@@ -676,6 +677,7 @@ def main() -> None:
     forbid(
         "apps/windows/portable/main.go",
         'safeGo("audio-warmup", warmAudioEngine)',
+        "func warmAudioEngine()",
         'logError("audio-engine", err)\n\t\tapp.audioMu.Lock()',
     )
     forbid(

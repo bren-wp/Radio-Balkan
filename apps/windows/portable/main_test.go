@@ -171,7 +171,7 @@ func TestSafeHTTPURLAcceptsPublicHTTPStreams(t *testing.T) {
 }
 
 func TestNavigationTabsIncludeInAppCountryAndGenrePages(t *testing.T) {
-	for _, tab := range []string{"all", "popular", "countries", "genres", "favorites", "recent"} {
+	for _, tab := range []string{"all", "croatia", "popular", "countries", "genres", "favorites", "recent"} {
 		if !isValidTab(tab) {
 			t.Fatalf("tab %q must be valid", tab)
 		}
@@ -879,6 +879,9 @@ func TestHomeCatalogEnabledAtMinimumWindowHeight(t *testing.T) {
 	if homeCatalogEnabled(720, "popular", "", "", "HR") {
 		t.Fatal("non-home tabs must use the library view")
 	}
+	if homeCatalogEnabled(720, "croatia", "", "", "HR") {
+		t.Fatal("full Croatia list must use the library view, not the landing page")
+	}
 	if homeCatalogEnabled(720, "all", "radio", "", "HR") {
 		t.Fatal("search results must use the library view")
 	}
@@ -929,6 +932,18 @@ func TestHomeGridColumnsStayWithinDenseThreeToSixColumnContract(t *testing.T) {
 		if got := homeGridColumns(tc.width); got != tc.want {
 			t.Fatalf("homeGridColumns(%d) = %d; want %d", tc.width, got, tc.want)
 		}
+	}
+}
+
+func TestCroatiaListIsDistinctFromHomeLanding(t *testing.T) {
+	if !isValidTab("croatia") {
+		t.Fatal("croatia list tab must be a valid internal navigation state")
+	}
+	if homeCatalogEnabled(760, "croatia", "", "", "HR") {
+		t.Fatal("croatia list must not re-enter the home landing page")
+	}
+	if !homeCatalogEnabled(760, "all", "", "", "HR") {
+		t.Fatal("home landing page contract changed unexpectedly")
 	}
 }
 
@@ -990,9 +1005,9 @@ func TestHomeDiscoverySnapshotScalesToFullCatalogWithoutDuplicates(t *testing.T)
 			seen[idx] = true
 		}
 	}
-	if len(snapshot.Popular) != 6 || len(snapshot.Croatia) != 18 || len(snapshot.Bosnia) != 6 || len(snapshot.Serbia) != 6 {
-		t.Fatalf("unexpected primary group sizes: popular=%d HR=%d BA=%d RS=%d",
-			len(snapshot.Popular), len(snapshot.Croatia), len(snapshot.Bosnia), len(snapshot.Serbia))
+	if len(snapshot.Popular) != 6 || len(snapshot.Croatia) != 12 || len(snapshot.Bosnia) != 6 || len(snapshot.Serbia) != 6 || len(snapshot.Balkan) != 6 {
+		t.Fatalf("unexpected primary group sizes: popular=%d HR=%d BA=%d RS=%d Balkan=%d",
+			len(snapshot.Popular), len(snapshot.Croatia), len(snapshot.Bosnia), len(snapshot.Serbia), len(snapshot.Balkan))
 	}
 }
 

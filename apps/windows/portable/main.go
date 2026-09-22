@@ -276,10 +276,7 @@ const (
 	hitVolumeDown
 	hitVolumeUp
 	hitCopyNowPlaying
-	hitCountryDropdown
-	hitGenreDropdown
 	hitCountryChoice
-	hitGenreChoice
 	hitAbout
 	hitAdmin
 	hitStationDetails
@@ -342,10 +339,6 @@ type App struct {
 	genre                                    string
 	country                                  string
 	genreOptions                             []string
-	countryMenuOpen                          bool
-	genreMenuOpen                            bool
-	countryMenuIndex                         int
-	genreMenuIndex                           int
 	safeMode                                 bool
 	adminMode                                bool
 	adminFailures                            int
@@ -642,17 +635,6 @@ func setAudioBackend(backend audioBackendKind) {
 	app.mu.Unlock()
 }
 
-func currentStationSnapshot() (RadioStation, string, int, bool) {
-	app.mu.RLock()
-	defer app.mu.RUnlock()
-	idx := currentStationIndexLocked()
-	if idx < 0 || idx >= len(app.stations) {
-		return RadioStation{}, "", -1, false
-	}
-	st := app.stations[idx]
-	return st, stationKey(st), idx, true
-}
-
 var (
 	user32   = syscall.NewLazyDLL("user32.dll")
 	gdi32    = syscall.NewLazyDLL("gdi32.dll")
@@ -756,12 +738,6 @@ func setStatus(v string) {
 	app.mu.Lock()
 	app.status = v
 	app.mu.Unlock()
-}
-func getStatus() string {
-	app.mu.RLock()
-	v := app.status
-	app.mu.RUnlock()
-	return v
 }
 func safeGo(name string, fn func()) {
 	if shuttingDown() {
@@ -943,7 +919,7 @@ func safeDialContext(ctx context.Context, network, address string) (net.Conn, er
 
 func isValidTab(tab string) bool {
 	switch tab {
-	case "all", "popular", "countries", "genres", "favorites", "recent", "replaced", "broken":
+	case "all", "croatia", "popular", "countries", "genres", "favorites", "recent", "replaced", "broken":
 		return true
 	default:
 		return false
@@ -1194,10 +1170,7 @@ func main() {
 				}
 				continue
 			}
-			app.mu.RLock()
-			menuOpen := app.countryMenuOpen || app.genreMenuOpen
-			app.mu.RUnlock()
-			if menuOpen || key == VK_F5 {
+			if key == VK_F5 {
 				handleKeyDown(key)
 				continue
 			}
@@ -1339,6 +1312,36 @@ func runCIInputSmoke() {
 		return
 	}
 
+	// Exercise a real Home section action before sidebar navigation. This
+	// specifically guards the former "Sve hrvatske" no-op that re-entered Home.
+	if !forcePaint(700 * time.Millisecond) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-croatia-paint")
+		return
+	}
+	app.mu.RLock()
+	homeWidth := app.clientWidth
+	app.mu.RUnlock()
+	postClick(homeWidth-mainPad-72, 260)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "croatia" && app.country == "HR" && app.genre == ""
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-croatia-list")
+		return
+	}
+	postClick(100, 109)
+	if !waitFor(time.Second, func() bool {
+		app.mu.RLock()
+		ok := app.tab == "all" && app.country == "HR" && app.genre == ""
+		app.mu.RUnlock()
+		return ok
+	}) {
+		runtimeTestTrace("input-smoke-fail token=" + token + " step=home-after-croatia-list")
+		return
+	}
+
 	// Exercise the real Win32 mouse-message -> hit-region -> state path.
 	postClick(100, 153) // Top
 	if !waitFor(time.Second, func() bool {
@@ -1400,7 +1403,7 @@ func runCIInputSmoke() {
 	postClick(100, 241) // Žanrovi
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
-		ok := app.tab == "genres" && !app.countryMenuOpen && !app.genreMenuOpen
+		ok := app.tab == "genres"
 		app.mu.RUnlock()
 		return ok
 	}) {
@@ -1425,7 +1428,7 @@ func runCIInputSmoke() {
 	postClick((countryL+countryR)/2, 46)
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
-		ok := app.tab == "countries" && !app.countryMenuOpen && !app.genreMenuOpen
+		ok := app.tab == "countries"
 		app.mu.RUnlock()
 		return ok
 	}) {
@@ -1435,7 +1438,7 @@ func runCIInputSmoke() {
 	postClick((genreL+genreR)/2, 46)
 	if !waitFor(time.Second, func() bool {
 		app.mu.RLock()
-		ok := app.tab == "genres" && !app.countryMenuOpen && !app.genreMenuOpen
+		ok := app.tab == "genres"
 		app.mu.RUnlock()
 		return ok
 	}) {
@@ -2289,8 +2292,6 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 			app.mu.Lock()
 			app.search = getWindowText(app.edit)
 			app.scroll = 0
-			app.countryMenuOpen = false
-			app.genreMenuOpen = false
 			app.mu.Unlock()
 			scheduleSearchFilter()
 			return 0
@@ -2318,15 +2319,6 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 			return r
 		}
 		return 1
-	case WM_ACTIVATEAPP:
-		if wParam == 0 {
-			app.mu.Lock()
-			app.countryMenuOpen = false
-			app.genreMenuOpen = false
-			app.mu.Unlock()
-			invalidate()
-		}
-		return 0
 	case WM_MOUSEMOVE:
 		x := int32(int16(loWord(lParam)))
 		y := int32(int16(hiWord(lParam)))
@@ -2341,10 +2333,6 @@ func wndProcCore(hwnd syscall.Handle, msg uint32, wParam, lParam uintptr) uintpt
 	case WM_MOUSEWHEEL:
 		d := int(signedHiWord(wParam))
 		app.mu.Lock()
-		if app.countryMenuOpen || app.genreMenuOpen {
-			app.mu.Unlock()
-			return 0
-		}
 		app.scroll -= d / 4
 		clampScrollLocked()
 		app.mu.Unlock()
@@ -2653,116 +2641,6 @@ func drawIconButton(hdc syscall.Handle, l, t, r, b int32, label string, accent b
 	text(hdc, label, l, t, r, b, tc, DT_CENTER|DT_VCENTER|DT_SINGLELINE)
 }
 
-func drawSelectBox(hdc syscall.Handle, l, t, r, b int32, label string, open bool) {
-	fill, border := color(17, 25, 35), color(43, 53, 66)
-	if open {
-		border = color(151, 99, 41)
-	}
-	drawRounded(hdc, l, t, r, b, 13, fill, border)
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, label, l+14, t, r-32, b, rgb(225, 229, 234), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	arrow := "⌄"
-	if open {
-		arrow = "⌃"
-	}
-	text(hdc, arrow, r-28, t, r-8, b, rgb(146, 156, 168), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-}
-
-func drawCountrySelectBox(hdc syscall.Handle, l, t, r, b int32, code, label string, open bool) {
-	fill, border := color(17, 25, 35), color(43, 53, 66)
-	if open {
-		border = color(151, 99, 41)
-	}
-	drawRounded(hdc, l, t, r, b, 13, fill, border)
-	drawCountryFlag(hdc, l+12, t+18, l+38, t+34, code)
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, label, l+46, t, r-32, b, rgb(225, 229, 234), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-	arrow := "⌄"
-	if open {
-		arrow = "⌃"
-	}
-	text(hdc, arrow, r-28, t, r-8, b, rgb(146, 156, 168), DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-}
-
-func drawDropdownOverlay(hdc syscall.Handle, cr RECT) {
-	app.mu.RLock()
-	countryOpen, genreOpen := app.countryMenuOpen, app.genreMenuOpen
-	selectedCountry, selectedGenre := app.country, app.genre
-	countryFocus, genreFocus := app.countryMenuIndex, app.genreMenuIndex
-	genres := append([]string(nil), app.genreOptions...)
-	app.mu.RUnlock()
-	if !countryOpen && !genreOpen {
-		return
-	}
-	_, _, countryL, countryR, genreL, genreR, _, _, _, _ := headerLayout(cr.Right)
-	if countryOpen {
-		items := append([]CountryDef(nil), balkanCountries...)
-		drawCountryMenu(hdc, countryL, countryR, 76, items, selectedCountry, countryFocus)
-	}
-	if genreOpen {
-		if len(genres) == 0 {
-			genres = []string{"Svi žanrovi"}
-		}
-		drawGenreMenu(hdc, genreL, genreR, 76, genres, selectedGenre, genreFocus)
-	}
-}
-
-func drawCountryMenu(hdc syscall.Handle, l, r, top int32, items []CountryDef, selected string, focus int) {
-	rowH := int32(30)
-	bottom := top + int32(len(items))*rowH + 10
-	drawRounded(hdc, l, top, r, bottom, 10, color(15, 21, 29), color(54, 64, 77))
-	counts := countryCountsSnapshot()
-	for i, item := range items {
-		t := top + 5 + int32(i)*rowH
-		sel := strings.EqualFold(item.Code, selected)
-		foc := i == focus
-		if sel || foc {
-			fill, border := color(45, 34, 24), color(125, 82, 36)
-			if foc && !sel {
-				fill, border = color(27, 35, 45), color(69, 81, 96)
-			}
-			drawRounded(hdc, l+5, t, r-5, t+rowH-2, 7, fill, border)
-		}
-		drawCountryFlag(hdc, l+11, t+7, l+35, t+21, item.Code)
-		selectFont(hdc, app.hFontSmall)
-		text(hdc, item.Name, l+43, t, r-48, t+rowH-2, rgb(232, 224, 218), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-		count := counts[strings.ToUpper(item.Code)]
-		if item.Code == "" {
-			count = counts[""]
-		}
-		text(hdc, fmt.Sprintf("%d", count), r-45, t, r-12, t+rowH-2, rgb(126, 113, 106), DT_RIGHT|DT_VCENTER|DT_SINGLELINE)
-		app.hits = append(app.hits, HitRegion{R: RECT{l + 5, t, r - 5, t + rowH - 2}, Kind: hitCountryChoice, Value: item.Code})
-	}
-}
-
-func drawGenreMenu(hdc syscall.Handle, l, r, top int32, items []string, selected string, focus int) {
-	if len(items) > 15 {
-		items = items[:15]
-	}
-	rowH := int32(30)
-	bottom := top + int32(len(items))*rowH + 10
-	drawRounded(hdc, l, top, r, bottom, 10, color(15, 21, 29), color(54, 64, 77))
-	for i, label := range items {
-		t := top + 5 + int32(i)*rowH
-		value := label
-		if label == "Svi žanrovi" {
-			value = ""
-		}
-		sel := strings.EqualFold(value, selected)
-		foc := i == focus
-		if sel || foc {
-			fill, border := color(45, 34, 24), color(125, 82, 36)
-			if foc && !sel {
-				fill, border = color(27, 35, 45), color(69, 81, 96)
-			}
-			drawRounded(hdc, l+5, t, r-5, t+rowH-2, 7, fill, border)
-		}
-		selectFont(hdc, app.hFontSmall)
-		text(hdc, label, l+12, t, r-12, t+rowH-2, rgb(232, 224, 218), DT_LEFT|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-		app.hits = append(app.hits, HitRegion{R: RECT{l + 5, t, r - 5, t + rowH - 2}, Kind: hitGenreChoice, Value: value})
-	}
-}
-
 func genreDisplayName(g string) string {
 	switch strings.ToLower(strings.TrimSpace(g)) {
 	case "domaca":
@@ -2925,7 +2803,7 @@ func drawCountryBrowsePage(hdc syscall.Handle, cr RECT) {
 			continue
 		}
 		fill, border := color(16, 23, 31), color(45, 56, 69)
-		if hovered(hitCountryChoice, -1, item.Code) {
+		if hovered(hitTab, -1, "country:"+item.Code) {
 			fill, border = color(31, 31, 33), color(132, 87, 38)
 		}
 		drawRounded(hdc, l, t, r, b, 13, fill, border)
@@ -2975,7 +2853,7 @@ func drawGenreBrowsePage(hdc syscall.Handle, cr RECT) {
 			continue
 		}
 		fill, border := color(16, 23, 31), color(45, 56, 69)
-		if hovered(hitGenreChoice, -1, item.Value) {
+		if hovered(hitTab, -1, "genre:"+item.Value) {
 			fill, border = color(31, 31, 33), color(132, 87, 38)
 		}
 		drawRounded(hdc, l, t, r, b, 13, fill, border)
@@ -3047,7 +2925,7 @@ func buildHomeDiscoverySnapshot(stations []RadioStation, columns int, revision u
 		return strings.EqualFold(strings.TrimSpace(st.CountryCode), "HR")
 	})
 	addExcluded(excluded, out.Popular)
-	out.Croatia = rankedStationIndices(stations, columns*3, excluded, func(st RadioStation) bool {
+	out.Croatia = rankedStationIndices(stations, columns*2, excluded, func(st RadioStation) bool {
 		return strings.EqualFold(strings.TrimSpace(st.CountryCode), "HR")
 	})
 	addExcluded(excluded, out.Croatia)
@@ -3059,7 +2937,7 @@ func buildHomeDiscoverySnapshot(stations []RadioStation, columns int, revision u
 		return strings.EqualFold(strings.TrimSpace(st.CountryCode), "RS")
 	})
 	addExcluded(excluded, out.Serbia)
-	out.Balkan = rankedStationIndices(stations, columns*2, excluded, func(st RadioStation) bool {
+	out.Balkan = rankedStationIndices(stations, columns, excluded, func(st RadioStation) bool {
 		code := strings.ToUpper(strings.TrimSpace(st.CountryCode))
 		return code != "HR" && code != "BA" && code != "RS" && isRegionalCatalogCode(code)
 	})
@@ -3120,35 +2998,6 @@ func cachedHomeDiscovery(columns int) HomeDiscoveryCache {
 	return HomeDiscoveryCache{Columns: columns}
 }
 
-func discoveryStations(limit int, excluded map[int]struct{}, predicate func(RadioStation) bool) []int {
-	if limit <= 0 {
-		return nil
-	}
-	app.mu.RLock()
-	items := make([]int, 0, limit*3)
-	for idx, station := range app.stations {
-		if _, skip := excluded[idx]; skip {
-			continue
-		}
-		if predicate != nil && !predicate(station) {
-			continue
-		}
-		items = append(items, idx)
-	}
-	sort.SliceStable(items, func(i, j int) bool {
-		left, right := app.stations[items[i]], app.stations[items[j]]
-		if left.Votes != right.Votes {
-			return left.Votes > right.Votes
-		}
-		return strings.ToLower(left.Name) < strings.ToLower(right.Name)
-	})
-	app.mu.RUnlock()
-	if len(items) > limit {
-		items = items[:limit]
-	}
-	return items
-}
-
 func addExcluded(excluded map[int]struct{}, ids []int) {
 	for _, idx := range ids {
 		excluded[idx] = struct{}{}
@@ -3156,10 +3005,9 @@ func addExcluded(excluded map[int]struct{}, ids []int) {
 }
 
 func homeCatalogContentHeight() int {
-	// Compact intro plus country-led discovery sections with ten dense card rows.
-	// Keep this in sync with drawStations so the final rows remain reachable
-	// even at the minimum supported client height.
-	return 980
+	// Compact intro plus eight dense discovery rows. Keep this in sync with
+	// drawStations so the final genre row remains reachable at minimum height.
+	return 842
 }
 
 func homeCatalogEnabled(clientHeight int32, tab, search, genre, country string) bool {
@@ -3190,38 +3038,6 @@ func homeGridColumns(width int32) int {
 	default:
 		return 3
 	}
-}
-
-func popularStations(limit int) []int {
-	if limit <= 0 {
-		return nil
-	}
-	app.mu.RLock()
-	defer app.mu.RUnlock()
-	country := strings.ToUpper(strings.TrimSpace(app.country))
-	best := make([]int, 0, limit)
-	for i, st := range app.stations {
-		if country != "" && strings.ToUpper(st.CountryCode) != country {
-			continue
-		}
-		insert := len(best)
-		for j, idx := range best {
-			if st.Votes > app.stations[idx].Votes {
-				insert = j
-				break
-			}
-		}
-		if insert >= limit {
-			continue
-		}
-		best = append(best, 0)
-		copy(best[insert+1:], best[insert:])
-		best[insert] = i
-		if len(best) > limit {
-			best = best[:limit]
-		}
-	}
-	return best
 }
 
 func drawStations(hdc syscall.Handle, cr RECT) {
@@ -3325,13 +3141,13 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 		}
 
 		y := contentTop + 52
-		y = drawSection("Popularno u Hrvatskoj", "Top", hitTab, "popular", popular, y, 1)
-		y = drawSection("Hrvatska", "Sve hrvatske", hitTab, "all", croatia, y, 3)
-		y = drawSection("Bosna i Hercegovina", "Sve zemlje", hitTab, "country:BA", bosnia, y, 1)
-		y = drawSection("Srbija", "Sve zemlje", hitTab, "country:RS", serbia, y, 1)
-		y = drawSection("Ostatak Balkana", "Zemlje", hitTab, "countries", balkan, y, 2)
-		y = drawSection("Narodna / Folk", "Žanrovi", hitTab, "genre:folk", folk, y, 1)
-		_ = drawSection("Pop & Rock", "Žanrovi", hitTab, "genre:pop", popRock, y, 1)
+		y = drawSection("Popularno u Hrvatskoj", "Top kataloga", hitTab, "popular", popular, y, 1)
+		y = drawSection("Hrvatska", "Sve hrvatske", hitTab, "croatia", croatia, y, 2)
+		y = drawSection("Bosna i Hercegovina", "Sve iz BiH", hitTab, "country:BA", bosnia, y, 1)
+		y = drawSection("Srbija", "Sve iz Srbije", hitTab, "country:RS", serbia, y, 1)
+		y = drawSection("Ostatak Balkana", "Pregled zemalja", hitTab, "countries", balkan, y, 1)
+		y = drawSection("Narodna / Folk", "Sve Folk", hitTab, "genre:folk", folk, y, 1)
+		_ = drawSection("Pop & Rock", "Sve Pop & Rock", hitTab, "genre:pop", popRock, y, 1)
 		return
 	}
 	// Library/search/filter pages use the efficient virtualized two-column grid.
@@ -3345,6 +3161,8 @@ func drawStations(hdc syscall.Handle, cr RECT) {
 	filteredCount := len(app.filtered)
 	app.mu.RUnlock()
 	switch tab {
+	case "croatia":
+		title = "Hrvatske stanice"
 	case "popular":
 		title = "Popularne stanice"
 	case "favorites":
@@ -4126,36 +3944,6 @@ func drawRounded(hdc syscall.Handle, l, t, r, b, rad int32, fill, border uint32)
 	procDeleteObject.Call(uintptr(br))
 	procDeleteObject.Call(pen)
 }
-func drawButton(hdc syscall.Handle, l, t, r, b int32, label string, primary bool) {
-	fill := uint32(0x2c221c)
-	border := uint32(0x49372d)
-	tc := rgb(235, 229, 224)
-	if primary {
-		fill = 0x3b2a1e
-		border = 0x8c4a20
-		tc = rgb(255, 173, 103)
-	}
-	drawRounded(hdc, l, t, r, b, 10, fill, border)
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, label, l+8, t, r-8, b, tc, DT_CENTER|DT_VCENTER|DT_SINGLELINE|DT_END_ELLIPSIS)
-}
-func drawSmallButton(hdc syscall.Handle, l, t, r, b int32, label string, accent bool) {
-	drawButton(hdc, l, t, r, b, label, accent)
-}
-func drawPill(hdc syscall.Handle, l, t, r, b int32, label string, selected bool) {
-	fill := uint32(0x211a16)
-	border := uint32(0x3d2f27)
-	tc := rgb(181, 170, 162)
-	if selected {
-		fill = 0x39251a
-		border = 0x75411f
-		tc = rgb(255, 165, 94)
-	}
-	drawRounded(hdc, l, t, r, b, 18, fill, border)
-	selectFont(hdc, app.hFontSmall)
-	text(hdc, label, l+12, t, r-12, b, tc, DT_CENTER|DT_VCENTER|DT_SINGLELINE)
-}
-func textButtonWidth(s string) int { return 34 + len([]rune(s))*8 }
 func selectFont(hdc syscall.Handle, h syscall.Handle) {
 	procSelectObject.Call(uintptr(hdc), uintptr(h))
 }
@@ -4165,10 +3953,6 @@ func text(hdc syscall.Handle, s string, l, t, r, b int32, color uintptr, flags u
 	procSetTextColor.Call(uintptr(hdc), color)
 	procDrawText.Call(uintptr(hdc), uintptr(unsafe.Pointer(u16(s))), ^uintptr(0), uintptr(unsafe.Pointer(&rc)), uintptr(flags))
 }
-func textRect(hdc syscall.Handle, s string, rc RECT, color uintptr, flags uint32) {
-	text(hdc, s, rc.Left, rc.Top, rc.Right, rc.Bottom, color, flags)
-}
-
 func stationIndexFromHit(h HitRegion) int {
 	app.mu.RLock()
 	defer app.mu.RUnlock()
@@ -4204,104 +3988,9 @@ func updateHover(x, y int32) {
 	}
 }
 
-func countryIndexLocked(code string) int {
-	for i, c := range balkanCountries {
-		if strings.EqualFold(c.Code, code) {
-			return i
-		}
-	}
-	return 0
-}
-
-func genreIndexLocked(genre string) int {
-	if len(app.genreOptions) == 0 {
-		return 0
-	}
-	for i, label := range app.genreOptions {
-		value := label
-		if label == "Svi žanrovi" {
-			value = ""
-		}
-		if strings.EqualFold(value, genre) {
-			return i
-		}
-	}
-	return 0
-}
-
 func handleKeyDown(key uint32) {
-	app.mu.RLock()
-	countryOpen := app.countryMenuOpen
-	genreOpen := app.genreMenuOpen
-	app.mu.RUnlock()
-	if !countryOpen && !genreOpen {
-		if key == VK_F5 {
-			safeGo("refresh-hotkey", refreshAll)
-		}
-		return
-	}
-	if key == VK_ESCAPE {
-		app.mu.Lock()
-		app.countryMenuOpen = false
-		app.genreMenuOpen = false
-		app.mu.Unlock()
-		invalidate()
-		return
-	}
-	if countryOpen {
-		app.mu.Lock()
-		max := len(balkanCountries) - 1
-		switch key {
-		case VK_UP:
-			if app.countryMenuIndex > 0 {
-				app.countryMenuIndex--
-			}
-		case VK_DOWN:
-			if app.countryMenuIndex < max {
-				app.countryMenuIndex++
-			}
-		case VK_RETURN:
-			idx := app.countryMenuIndex
-			app.mu.Unlock()
-			if idx >= 0 && idx < len(balkanCountries) {
-				selectCountry(balkanCountries[idx].Code)
-			}
-			return
-		}
-		app.mu.Unlock()
-		invalidate()
-		return
-	}
-	if genreOpen {
-		app.mu.Lock()
-		limit := len(app.genreOptions)
-		if limit > 15 {
-			limit = 15
-		}
-		switch key {
-		case VK_UP:
-			if app.genreMenuIndex > 0 {
-				app.genreMenuIndex--
-			}
-		case VK_DOWN:
-			if app.genreMenuIndex+1 < limit {
-				app.genreMenuIndex++
-			}
-		case VK_RETURN:
-			idx := app.genreMenuIndex
-			var value string
-			if idx >= 0 && idx < limit {
-				value = app.genreOptions[idx]
-				if value == "Svi žanrovi" {
-					value = ""
-				}
-			}
-			app.mu.Unlock()
-			selectGenre(value)
-			return
-		}
-		app.mu.Unlock()
-		invalidate()
+	if key == VK_F5 {
+		safeGo("refresh-hotkey", refreshAll)
 	}
 }
 
@@ -4555,8 +4244,6 @@ func selectTabValue(value string) {
 		app.country = code
 		app.genre = ""
 		app.scroll = 0
-		app.countryMenuOpen = false
-		app.genreMenuOpen = false
 		app.mu.Unlock()
 		app.stateMu.Lock()
 		app.state.Tab = "all"
@@ -4577,8 +4264,6 @@ func selectTabValue(value string) {
 		app.country = ""
 		app.genre = g
 		app.scroll = 0
-		app.countryMenuOpen = false
-		app.genreMenuOpen = false
 		app.mu.Unlock()
 		app.stateMu.Lock()
 		app.state.Tab = "all"
@@ -4595,18 +4280,16 @@ func selectTabValue(value string) {
 	app.detailKey = ""
 	app.tab = value
 	app.country = ""
-	if value == "all" {
+	if value == "all" || value == "croatia" {
 		app.country = "HR"
 	}
 	app.genre = ""
 	app.scroll = 0
-	app.countryMenuOpen = false
-	app.genreMenuOpen = false
 	app.mu.Unlock()
 	app.stateMu.Lock()
 	app.state.Tab = value
 	app.state.CountryCode = ""
-	if value == "all" {
+	if value == "all" || value == "croatia" {
 		app.state.CountryCode = "HR"
 	}
 	app.state.Genre = ""
@@ -4697,32 +4380,14 @@ func handleCoreClickFallback(x, y int32) bool {
 }
 
 func handleClick(x, y int32) {
-	app.mu.RLock()
-	menuOpen := app.countryMenuOpen || app.genreMenuOpen
-	app.mu.RUnlock()
-
 	for i := len(app.hits) - 1; i >= 0; i-- {
 		h := app.hits[i]
 		if !inRect(x, y, h.R) {
 			continue
 		}
-		if menuOpen && h.Kind != hitCountryChoice && h.Kind != hitGenreChoice && h.Kind != hitCountryDropdown && h.Kind != hitGenreDropdown {
-			app.mu.Lock()
-			app.countryMenuOpen = false
-			app.genreMenuOpen = false
-			app.mu.Unlock()
-			invalidate()
-			return
-		}
 		switch h.Kind {
-		case hitCountryDropdown:
-			selectTabValue("countries")
-		case hitGenreDropdown:
-			selectTabValue("genres")
 		case hitCountryChoice:
 			selectCountry(h.Value)
-		case hitGenreChoice:
-			selectGenre(h.Value)
 		case hitTab:
 			selectTabValue(h.Value)
 		case hitPlay:
@@ -4790,23 +4455,12 @@ func handleClick(x, y int32) {
 		case hitBrendigo:
 			shellOpen("https://brendigo.com/")
 		case hitRefresh:
-			app.mu.Lock()
-			app.countryMenuOpen = false
-			app.genreMenuOpen = false
-			app.mu.Unlock()
 			safeGo("refresh-catalog", refreshAll)
 		}
 		return
 	}
-	if !menuOpen && handleCoreClickFallback(x, y) {
+	if handleCoreClickFallback(x, y) {
 		return
-	}
-	if menuOpen {
-		app.mu.Lock()
-		app.countryMenuOpen = false
-		app.genreMenuOpen = false
-		app.mu.Unlock()
-		invalidate()
 	}
 }
 
@@ -4823,8 +4477,6 @@ func selectCountry(code string) {
 	app.country = code
 	app.genre = ""
 	app.scroll = 0
-	app.countryMenuOpen = false
-	app.genreMenuOpen = false
 	app.mu.Unlock()
 	app.stateMu.Lock()
 	app.state.Tab = "all"
@@ -4833,25 +4485,6 @@ func selectCountry(code string) {
 	app.stateMu.Unlock()
 	scheduleStateSave()
 	rebuildGenres()
-	rebuildFilter()
-	invalidate()
-}
-
-func selectGenre(genre string) {
-	genre = strings.TrimSpace(genre)
-	app.mu.Lock()
-	app.detailKey = ""
-	app.tab = "all"
-	app.genre = genre
-	app.scroll = 0
-	app.countryMenuOpen = false
-	app.genreMenuOpen = false
-	app.mu.Unlock()
-	app.stateMu.Lock()
-	app.state.Tab = "all"
-	app.state.Genre = genre
-	app.stateMu.Unlock()
-	scheduleStateSave()
 	rebuildFilter()
 	invalidate()
 }
@@ -5028,10 +4661,6 @@ func playbackWatchdog(idx int, stationID string) {
 		}
 	}
 }
-func ensureStream(idx int) (string, bool) {
-	return ensureStreamKey(idx, "")
-}
-
 func ensureStreamKey(idx int, expectedKey string) (string, bool) {
 	app.mu.RLock()
 	if expectedKey != "" {
@@ -5259,8 +4888,6 @@ func openStationDetails(idx int) {
 		return
 	}
 	app.detailKey = stationKey(app.stations[idx])
-	app.countryMenuOpen = false
-	app.genreMenuOpen = false
 	app.mu.Unlock()
 	invalidate()
 }
@@ -6990,7 +6617,6 @@ func rebuildGenres() {
 	}
 }
 
-func clampScroll() { app.mu.Lock(); defer app.mu.Unlock(); clampScrollLocked() }
 func clampScrollLocked() {
 	if homeCatalogEnabled(app.clientHeight, app.tab, app.search, app.genre, app.country) {
 		viewport := int(app.clientHeight) - int(playerHeight) - 16 - 92
@@ -7198,10 +6824,6 @@ func addRecentLocked(id string) {
 }
 
 const audioEngineStartupTimeout = 20 * time.Second
-
-func startAudioEngineLocked() error {
-	return startAudioEngineLockedForRequest(0)
-}
 
 func waitAudioEngineStartupSignal(ack <-chan string, reqSeq uint64, timeout time.Duration) (string, bool, error) {
 	if timeout <= 0 {
@@ -7987,18 +7609,6 @@ func audioSendExisting(line string) error {
 	}
 	return waitAudioAckLocked(audioCommandTimeout(line))
 }
-func warmAudioEngine() {
-	if shuttingDown() {
-		return
-	}
-	app.audioMu.Lock()
-	err := startAudioEngineLocked()
-	app.audioMu.Unlock()
-	if err != nil && !shuttingDown() {
-		logError("audio-warmup", err)
-	}
-}
-
 func audioShutdown() {
 	deadline := time.Now().Add(750 * time.Millisecond)
 	for !app.audioMu.TryLock() {
@@ -8017,10 +7627,6 @@ func audioShutdown() {
 	audioStopMCI()
 	setAudioBackend(audioBackendNone)
 	app.audioMu.Unlock()
-}
-
-func audioPlay(raw string) error {
-	return audioPlayRequest(raw, 0)
 }
 
 func audioPlayRequest(raw string, reqSeq uint64) error {
@@ -8293,11 +7899,6 @@ func postUI() {
 func postGenres() {
 	if app.hwnd != 0 && !shuttingDown() {
 		procPostMessage.Call(uintptr(app.hwnd), WM_APP+2, 0, 0)
-	}
-}
-func postFilterUI() {
-	if app.hwnd != 0 && !shuttingDown() {
-		procPostMessage.Call(uintptr(app.hwnd), WM_APP+3, 0, 0)
 	}
 }
 func messageBox(hwnd syscall.Handle, title, msg string, flags uintptr) int {
