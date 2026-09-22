@@ -7128,6 +7128,8 @@ func addRecentLocked(id string) {
 	}
 	app.state.Recent = out
 }
+const audioEngineStartupTimeout = 20 * time.Second
+
 func startAudioEngineLocked() error {
 	if app.audioCmd != nil && app.audioCmd.Process != nil {
 		return nil
@@ -7383,7 +7385,7 @@ try { $p.Dispose() } catch {}`
 			}
 			return errors.New("audio engine se nije ispravno inicijalizirao")
 		}
-	case <-time.After(20 * time.Second):
+	case <-time.After(audioEngineStartupTimeout):
 		_ = in.Close()
 		if cmd.Process != nil {
 			_ = cmd.Process.Kill()
