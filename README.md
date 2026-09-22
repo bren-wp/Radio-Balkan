@@ -7,7 +7,7 @@
 <p align="center"><strong>Radio iz Hrvatske i regije. Jedan brend. Windows, Android i preglednici.</strong></p>
 
 <p align="center">
-  <img alt="version 0.0.38" src="assets/badges/version.svg">
+  <img alt="version 0.0.39" src="assets/badges/version.svg">
   <img alt="Windows x64" src="assets/badges/windows.svg">
   <img alt="Android 8+" src="assets/badges/android.svg">
   <img alt="4 browser ekstenzije" src="assets/badges/browsers.svg">
@@ -15,8 +15,12 @@
 
 Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrvatske i regije bez korisničkog računa, bez telemetry sustava i bez teškog web runtimea u Windows aplikaciji. Projekt objedinjuje nativni Windows klijent, nativni Android klijent i produkcijske ekstenzije za Chrome, Edge, Opera i Firefox.
 
-## Što donosi v0.0.38
+## Što donosi v0.0.39
 
+- **Klikovi se testiraju kroz stvarni Win32 input put** — sidebar, header, Search, Favorite, details/back, Play i Stop prolaze kroz izgrađeni EXE, a ne samo kroz unit funkcije.
+- **Latest-click-wins playback** — novi Play/Next prekida zastarjeli media-open, ACK i cold-start zahtjev; superseded PowerShell/WPF proces se uredno gasi i reap-a.
+- **Playback liveness nakon otvaranja streama** — WPF prosljeđuje kasni MediaFailed/MediaEnded, MCI koristi backend-native status, a Stop/Next/noviji Play uvijek pobjeđuju nad odgođenim reconnectom.
+- **Sigurniji real-network gate** — Balkan MP3/AAC/HTTPS/redirect/playlist streamovi testiraju se uz blokadu privatnih adresa, DNS-rebinding-safe pinned javne IP adrese i multi-address failover bez ponovnog DNS lookup-a.
 - **Play klik je stvarno testiran** — Windows runtime smoke nakon učitavanja velikog kataloga fizički šalje Win32 klik na renderiranu Play ikonicu stanice i zahtijeva da playback request stvarno krene.
 - **Uklonjen je glavni UI freeze nakon učitavanja kataloga** — početna više ne skenira i sortira tisuće stanica pri svakom WM_PAINT i hover događaju.
 - **Home discovery je cacheiran po revisionu kataloga** — skupi ranking radi se kontrolirano, a refresh, cache i supplemental katalog pravilno invalidiraju snapshot.
@@ -29,7 +33,7 @@ Radio Balkan je lagani radio player napravljen za brzo slušanje stanica iz Hrva
 - **Playback i UI release gate ostaju povezani** — Windows build, stvarni click/input smoke, HTTP audio-open smoke, Android, browser i versions moraju svi biti zeleni prije objave.
 - **v0.0.37 playback hardening ostaje aktivan** — WPF/MCI backend tracking, bounded shutdown i direktni stream playback nisu vraćeni unatrag.
 
-Dostupnost pojedine third-party radio stanice i dalje ovisi o infrastrukturi same postaje. v0.0.38 uklanja potvrđeni aplikacijski uzrok zbog kojeg su nakon učitavanja kataloga Play i ostali gumbi mogli izgledati potpuno mrtvi.
+Dostupnost pojedine third-party radio stanice i dalje ovisi o infrastrukturi same postaje. v0.0.39 uklanja potvrđeni aplikacijski uzrok zbog kojeg su nakon učitavanja kataloga Play i ostali gumbi mogli izgledati potpuno mrtvi.
 
 ## Zašto Radio Balkan
 
@@ -69,7 +73,7 @@ GitHub workflow `Product screenshots` pokreće stvarni Windows binary. Browser s
 
 ## Preuzimanje
 
-Gotovi v0.0.38 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.38):
+Gotovi v0.0.39 artefakti objavljuju se izravno kroz [GitHub Releases](https://github.com/bren-wp/Radio-Balkan/releases/tag/v0.0.39):
 
 - Windows Portable x64
 - Windows Setup x64
@@ -109,7 +113,7 @@ python scripts/test_version_tools.py
 Za sljedeće izdanje koristi se jedan kanonski version-bump korak, primjerice:
 
 ```bash
-python scripts/bump_version.py 0.0.39
+python scripts/bump_version.py 0.0.40
 ```
 
 Prije stvarnog writea isti alat može se pokrenuti s opcijom `--dry-run`. Version bump odbija istu ili nižu SemVer verziju, preflighta sve markere, koristi atomske writeove te vraća originalne datoteke ako završna provjera ne prođe.
