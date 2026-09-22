@@ -1767,7 +1767,7 @@ func runCIAudioSmoke() {
 
 	streamURL := "http://" + ln.Addr().String() + "/tone.wav"
 	encoded := base64.StdEncoding.EncodeToString([]byte(streamURL))
-	if err := audioSend(fmt.Sprintf("PLAY %s %.2f", encoded, 0.0)); err != nil {
+	if err := audioSend(audioPlayCommand(0, encoded, 0.0)); err != nil {
 		if strings.Contains(strings.ToUpper(err.Error()), "0XC00D11BA") {
 			runtimeTestTrace("audio-smoke-no-device token=" + token)
 			return
@@ -7785,6 +7785,10 @@ func resetAudioEngineLocked() {
 	}
 }
 
+func audioPlayCommand(reqSeq uint64, encoded string, volume float64) string {
+	return fmt.Sprintf("PLAY %d %s %.2f", reqSeq, encoded, volume)
+}
+
 func audioCommandTimeout(line string) time.Duration {
 	if strings.HasPrefix(line, "PLAY ") {
 		return 9 * time.Second
@@ -7990,7 +7994,7 @@ func audioPlayRequest(raw string, reqSeq uint64) error {
 		vol = 1
 	}
 	enc := base64.StdEncoding.EncodeToString([]byte(raw))
-	if err := audioSendForRequest(fmt.Sprintf("PLAY %d %s %.2f", reqSeq, enc, vol), reqSeq); err == nil {
+	if err := audioSendForRequest(audioPlayCommand(reqSeq, enc, vol), reqSeq); err == nil {
 		return nil
 	} else {
 		if errors.Is(err, errPlayRequestSuperseded) {
