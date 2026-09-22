@@ -1023,6 +1023,30 @@ func validateState(st PersistedState, loaded bool) PersistedState {
 	return st
 }
 
+func startupHomeState(st PersistedState) PersistedState {
+	st.Tab = "all"
+	st.CountryCode = "HR"
+	st.Genre = ""
+	return st
+}
+
+func applyStartupHomeState() {
+	app.stateMu.Lock()
+	app.state = startupHomeState(app.state)
+	app.stateMu.Unlock()
+
+	app.mu.Lock()
+	app.detailKey = ""
+	app.tab = "all"
+	app.country = "HR"
+	app.genre = ""
+	app.search = ""
+	app.scroll = 0
+	app.countryMenuOpen = false
+	app.genreMenuOpen = false
+	app.mu.Unlock()
+}
+
 func sessionMarkerPath() string { return filepath.Join(stateDir(), "session.lock") }
 
 func detectAndMarkUncleanStartup() bool {
@@ -1144,16 +1168,8 @@ func main() {
 	app = App{tab: "all", current: -1, loading: true, status: "Učitavanje radio stanica…", repairLocks: map[string]*repairGuard{}, http: client, ctx: appCtx, cancel: appCancel, streamSem: make(chan struct{}, 2), done: make(chan struct{})}
 	state, stateLoaded := loadState()
 	app.state = validateState(state, stateLoaded)
+	applyStartupHomeState()
 	app.safeMode = detectAndMarkUncleanStartup()
-	app.country = app.state.CountryCode
-	app.genre = app.state.Genre
-	if isValidTab(app.state.Tab) {
-		app.tab = app.state.Tab
-	}
-	if app.tab == "replaced" || app.tab == "broken" {
-		app.tab = "all"
-		app.state.Tab = "all"
-	}
 	if app.safeMode {
 		// A previous launch did not finish cleanly. Start conservatively and avoid
 		// immediate full-network stress until the UI is responsive.
@@ -1166,6 +1182,9 @@ func main() {
 		messageBox(0, "Greška", err.Error(), MB_ICONERROR)
 		return
 	}
+	// Enforce the landing page after native window creation as well, so no
+	// restored category can win between state load and the first catalog paint.
+	applyStartupHomeState()
 	// Initialize audio lazily on the first playback command. A backend startup
 	// failure must never delay or block navigation, search, or any UI button.
 	if os.Getenv("RADIO_BALKAN_RUNTIME_TEST") == "1" {
