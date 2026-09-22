@@ -138,16 +138,32 @@ public final class MainActivity extends Activity implements StationAdapter.Actio
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         state = new StateStore(this);
-        // Browse location is session state: every fresh activity launch opens
-        // Početna instead of restoring Strano/Dijaspora/Žanr from the prior run.
-        // Durable preferences such as favorites, recent stations and volume stay intact.
-        country = StateStore.DEFAULT_COUNTRY;
-        genre = "";
-        tab = "all";
-        state.setCountry(country);
-        state.setGenre(genre);
-        state.setTab(tab);
-        navSelection = "all";
+        // Browse location is session state. A fresh app launch opens Početna,
+        // while Android recreation (for example rotation) keeps the in-session
+        // selection instead of unexpectedly jumping away from the current view.
+        if (savedInstanceState == null) {
+            country = StateStore.DEFAULT_COUNTRY;
+            genre = "";
+            tab = "all";
+            state.setCountry(country);
+            state.setGenre(genre);
+            state.setTab(tab);
+        } else {
+            country = state.country();
+            if (!country.isEmpty() && !RadioRepository.isSupportedCountry(country)) {
+                country = "";
+                state.setCountry("");
+            }
+            genre = state.genre();
+            tab = validTab(state.tab()) ? state.tab() : "all";
+            if ("replaced".equals(tab) || "broken".equals(tab)) {
+                tab = "all";
+                state.setTab("all");
+            }
+        }
+        navSelection = "all".equals(tab)
+                ? (("HR".equalsIgnoreCase(country) && genre.isEmpty()) ? "all" : ((!country.isEmpty() || !genre.isEmpty()) ? "filter" : "all"))
+                : navSelectionForTab(tab);
         images = new ImageLoader();
         repository = new RadioRepository(this);
         buildUi();
