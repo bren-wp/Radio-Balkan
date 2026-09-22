@@ -174,6 +174,17 @@ def main() -> int:
     require(errors, state_store, 'prefs.getString("country", DEFAULT_COUNTRY)', "Android StateStore")
 
     android = read("apps/android/app/src/main/java/net/radiobalkan/app/MainActivity.java")
+    for needle in (
+        "country = StateStore.DEFAULT_COUNTRY;",
+        'genre = "";',
+        'tab = "all";',
+        "state.setCountry(country);",
+        "state.setGenre(genre);",
+        "state.setTab(tab);",
+        'navSelection = "all";',
+    ):
+        require(errors, android, needle, "Android startup home")
+
     adapter = read("apps/android/app/src/main/java/net/radiobalkan/app/StationAdapter.java")
     station_details = read("apps/android/app/src/main/java/net/radiobalkan/app/StationDetailsActivity.java")
     station_presentation = read("apps/android/app/src/main/java/net/radiobalkan/app/StationPresentation.java")
