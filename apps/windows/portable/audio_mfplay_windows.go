@@ -229,6 +229,10 @@ func mfplaySmokeOpen(rawURL string) error {
 			result <- err
 			return
 		}
+		if err := waitMFPlayState(player, 1, 6*time.Second); err != nil { // Stopped after async media-item set
+			result <- err
+			return
+		}
 		if err := comCallFloat32(player, 20, 0.25); err != nil { // SetVolume
 			result <- err
 			return
